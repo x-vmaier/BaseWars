@@ -18,6 +18,10 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#ifdef near
+#undef near
+#endif
+
 namespace {
 
 namespace fs = std::filesystem;
@@ -695,7 +699,7 @@ struct App {
         float wh = GetMouseWheelMove();
         if (wh != 0 && !ui) {
             Vector2 b = GetScreenToWorld2D(m, cam);
-            cam.zoom = std::clamp(cam.zoom * (1 + wh * .1f), .4f, 2.2f);
+            cam.zoom = std::clamp(cam.zoom * (1 + wh * .1f), .2f, 2.2f);
             Vector2 a = GetScreenToWorld2D(m, cam);
             cam.target.x += b.x - a.x;
             cam.target.y += b.y - a.y;
