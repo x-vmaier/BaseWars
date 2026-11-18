@@ -1491,19 +1491,19 @@ struct App {
         float sw = float(GetScreenWidth()), sh = float(GetScreenHeight());
         int ctx2 = int(std::floor(cam.target.x / TILE)), cty = int(std::floor(cam.target.y / TILE));
         bool snow = biomeAt(ctx2, cty) == B_Snow;
-        bool near = false;
+        bool nearFire = false;
         std::vector<float> lights;
         int lc = 0;
         reg.view<Info, Goal>().each([&](const Info& i, const Goal& g) {
             if (!isBuilding(i.kind) || i.prog < 100 || !alliedWith(i.owner)) return;
             bool fire = i.kind == K_Campfire;
             if (!fire && i.kind != K_TownHall && i.kind != K_Outpost) return;
-            if (fire && std::hypot(g.x - cam.target.x / TILE, g.y - cam.target.y / TILE) < WARMTH_RADIUS) near = true;
+            if (fire && std::hypot(g.x - cam.target.x / TILE, g.y - cam.target.y / TILE) < WARMTH_RADIUS) nearFire = true;
             Vector2 s = GetWorldToScreen2D({g.x * TILE, g.y * TILE - (fire ? 20.f : 60.f)}, cam);
             if (lc < 16 && s.x > -300 && s.y > -300 && s.x < sw + 300 && s.y < sh + 300) { lights.push_back(s.x); lights.push_back(s.y); lights.push_back((fire ? 190.f : 150.f) * cam.zoom); lc++; }
         });
         float dt = GetFrameTime();
-        float targetCold = snow && !near ? 1.f : 0.f, targetWarm = near && snow ? 1.f : (near ? .45f : 0.f);
+        float targetCold = snow && !nearFire ? 1.f : 0.f, targetWarm = nearFire && snow ? 1.f : (nearFire ? .45f : 0.f);
         coldAmt += (targetCold - coldAmt) * std::min(1.f, 1.5f * dt);
         warmAmt += (targetWarm - warmAmt) * std::min(1.f, 2.f * dt);
         shakeAmt = std::max(0.f, shakeAmt - 28.f * dt);
