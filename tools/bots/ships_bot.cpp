@@ -10,9 +10,9 @@
 struct E{uint32_t id;Kind k;int o;float x,y,hp,mhp;int st,aux,aim,prog,stock;};
 std::unordered_map<int64_t,std::array<uint8_t,256>> terr; std::unordered_map<int64_t,std::array<uint8_t,32>> fog;
 struct ShipI{uint32_t uid;int tier,kinds[5],res[4],voy;}; std::vector<ShipI> shipInfo; std::map<uint32_t,std::vector<IV>> paths; int pathUpd=0;
-std::map<uint32_t,E> ents; float res[4]; int rep[5]; int ulv[5]; int me=0; std::vector<std::string> texts; std::string rosterS;
+uint32_t gSeed=0; std::map<uint32_t,E> ents; float res[4]; int rep[5]; int ulv[5]; int me=0; std::vector<std::string> texts; std::string rosterS;
 void pk(const uint8_t*d,size_t n){ Reader r{d,d+n}; switch(r.get<uint8_t>()){
- case S_Welcome: me=r.get<uint8_t>(); printf("welcome id=%d seed=%u cam=%.1f,%.1f name=%s\n",me,r.get<uint32_t>(),r.get<float>(),r.get<float>(),r.str().c_str());break;
+ case S_Welcome: { me=r.get<uint8_t>(); gSeed=r.get<uint32_t>(); float cx=r.get<float>(), cy=r.get<float>(); std::string nm=r.str(); printf("welcome id=%d seed=%u cam=%.1f,%.1f name=%s\n",me,gSeed,cx,cy,nm.c_str()); break; }
  case S_State:{ for(float&v:res)v=r.get<float>(); for(int f=0;f<5;f++)rep[f]=r.get<int8_t>(); for(int f=0;f<5;f++)ulv[f]=r.get<uint8_t>(); int c=r.get<uint16_t>(); ents.clear(); for(int i=0;i<c;i++){E e;e.id=r.get<uint32_t>();e.k=Kind(r.get<uint8_t>());e.o=r.get<uint8_t>();e.x=r.get<float>();e.y=r.get<float>();e.hp=r.get<uint16_t>();e.mhp=r.get<uint16_t>();e.st=r.get<uint8_t>();e.aux=r.get<uint8_t>();e.aim=r.get<uint8_t>();e.prog=r.get<uint8_t>();e.stock=r.get<uint16_t>();ents[e.id]=e;} break;}
  case S_Fog:{ int nt=r.get<uint16_t>(); for(int i=0;i<nt;i++){int cx=r.get<int32_t>(),cy=r.get<int32_t>();auto b=r.bytes(256);std::array<uint8_t,256>a;memcpy(a.data(),b,256);terr[chunkKey(cx,cy)]=a;} int nf=r.get<uint16_t>(); for(int i=0;i<nf;i++){int cx=r.get<int32_t>(),cy=r.get<int32_t>();auto b=r.bytes(32);std::array<uint8_t,32>a;memcpy(a.data(),b,32);fog[chunkKey(cx,cy)]=a;} break;}
  case S_Text: {std::string s=r.str(); printf("  [text] %s\n",s.c_str()); break;}
@@ -29,7 +29,11 @@ struct PW{ int biome(int x,int y){auto it=terr.find(chunkKey(chunkOf(x),chunkOf(
  bool explored(int x,int y){auto it=fog.find(chunkKey(chunkOf(x),chunkOf(y)));if(it==fog.end())return false;int i=localIdx(x,y);return it->second[i>>3]>>(i&7)&1;}
  bool occupied(int x,int y){for(auto&[i,e]:ents){if(!isBuilding(e.k))continue;int tx=std::lround(e.x-KINFO[e.k].fw*.5f),ty=std::lround(e.y-KINFO[e.k].fh*.5f);if(x>=tx&&x<tx+KINFO[e.k].fw&&y>=ty&&y<ty+KINFO[e.k].fh)return true;}return false;}
  template<class F> void anchors(F f){for(auto&[i,e]:ents)if(e.k==K_TownHall||e.k==K_Outpost)f(Pos{e.x,e.y},e.k,e.o==me,false);} };
-bool place(Kind k,float cx,float cy,int r0,int r1){ PW w; for(int r=r0;r<=r1;r++)for(int dy=-r;dy<=r;dy++)for(int dx=-r;dx<=r;dx++){ if(std::max(abs(dx),abs(dy))!=r)continue; int tx=(int)cx+dx,ty=(int)cy+dy; if(checkPlace(w,k,tx,ty))continue; Writer b;b.put<uint8_t>(C_Build).put<uint8_t>(k).put<int32_t>(tx).put<int32_t>(ty);snd(b);pump(400);printf("placed %s at %d,%d\n",KINFO[k].name,tx,ty);return true;} printf("no tile for %s\n",KINFO[k].name); return false;}
+bool place(Kind k,float cx,float cy,int r0,int r1){ PW w; for(int r=r0;r<=r1;r++)for(int dy=-r;dy<=r;dy++)for(int dx=-r;dx<=r;dx++){ if(std::max(abs(dx),abs(dy))!=r)continue; int tx=(int)cx+dx,ty=(int)cy+dy; if(checkPlace(w,k,tx,ty))continue;
+    // surface trees / rocks / gold veins under the footprint must be cleared first (as a player has to)
+    std::vector<IV> blocked; for(int y=ty;y<ty+KINFO[k].fh;y++)for(int x=tx;x<tx+KINFO[k].fw;x++) if(featureBlocks(featureAt(x,y,w.biome(x,y),gSeed))) blocked.push_back({x,y});
+    if(!blocked.empty()){ Writer c; c.put<uint8_t>(C_Clear).put<uint8_t>(uint8_t(blocked.size())); for(auto t:blocked) c.put<int32_t>(t.x).put<int32_t>(t.y); snd(c); pump(7000); }
+    Writer b;b.put<uint8_t>(C_Build).put<uint8_t>(k).put<int32_t>(tx).put<int32_t>(ty);snd(b);pump(400);printf("placed %s at %d,%d (%zu features cleared)\n",KINFO[k].name,tx,ty,blocked.size());return true;} printf("no tile for %s\n",KINFO[k].name); return false;}
 uint32_t firstOf(Kind k){for(auto&[i,e]:ents)if(e.o==me&&e.k==k)return i;return 0;}
 std::vector<uint32_t> ships(){std::vector<uint32_t> v;for(auto&[i,e]:ents)if(e.o==me&&e.k==K_Ship)v.push_back(i);return v;}
 std::vector<uint32_t> troops(){std::vector<uint32_t> v;for(auto&[i,e]:ents)if(e.o==me&&isTroop(e.k)&&!(e.st&0x80))v.push_back(i);return v;}
