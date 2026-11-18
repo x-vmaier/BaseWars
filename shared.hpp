@@ -35,7 +35,9 @@ enum Kind : uint8_t { K_TownHall, K_Outpost, K_Harbour, K_Storage, K_Mine, K_Lum
                       K_Pawn, K_Warrior, K_Archer, K_Lancer, K_Monk, K_Ship, K_Sheep, K_Count };       // units / NPCs
 enum Msg : uint8_t { C_Hello, C_Build, C_Train, C_Move, C_Attack, C_AttackMove, C_Ally, C_Upgrade, C_Cam,
                      C_ClanCreate, C_ClanJoin, C_ClanLeave, C_Transfer, C_Donate, C_SetHaul, C_UpgradeUnit, C_Chat, C_ClanLeader,
-                     S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map, S_Chat };
+                     C_Board, C_Disembark,
+                     S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map, S_Chat,
+                     S_Paths, S_ShipInfo };
 enum EffectType : uint8_t { E_Explosion, E_Dust, E_Splash, E_Arrow, E_Heal, E_Fire };
 enum UnitState : uint8_t { US_Idle, US_Move, US_Attack, US_Work, US_Heal, US_Extinguish };
 // Bit registry for the `state` byte of a state record (units: low 3 bits are the UnitState; buildings: only the flags below).
@@ -76,6 +78,18 @@ inline constexpr KindInfo KINFO[K_Count] = {
     {"Sheep", false, 1, 1, {0, 0, 0, 0}, 12, 0.9f, 0, 0, 0, 0}};
 inline constexpr float START_RES[R_Count] = {300, 200, 150, 150};
 inline constexpr int MAX_LEVEL = 3;
+
+// ---------------------------------------------------------------- naval transport (ships are empty boats; the Harbour level at build time is the tier)
+// Strict capacities per tier (1..3). Ship state fields in S_State: Info.level = tier (aux), prog = troops aboard, stock = resources aboard.
+// Units aboard a ship are sent to allies with prog == UNIT_ABOARD_PROG (clients hide them) and are not sent to anyone else.
+inline constexpr int SHIP_TROOP_CAP[3] = {6, 12, 20};
+inline constexpr int SHIP_RES_CAP[3] = {400, 900, 1600};
+inline constexpr const char* SHIP_NAME[3] = {"Small Boat", "Longship", "Galleon"};
+inline constexpr uint8_t UNIT_ABOARD_PROG = 255;
+inline int shipTier(int level) { return std::clamp(level, 1, 3); }
+inline int shipTroopCap(int level) { return SHIP_TROOP_CAP[shipTier(level) - 1]; }
+inline int shipResCap(int level) { return SHIP_RES_CAP[shipTier(level) - 1]; }
+inline float shipHpMul(int level) { return 1.f + .6f * float(shipTier(level) - 1); }
 
 inline bool isBuilding(Kind k) { return KINFO[k].building; }
 inline bool isResourceBuilding(Kind k) { return k == K_Mine || k == K_Lumber || k == K_Harbour; }

@@ -38,7 +38,7 @@ struct AMove { Pos dest; };
 struct Worker { uint32_t home; uint8_t phase = 0; float cargo[R_Count]{}; float timer = 0; uint32_t dest = 0; };  // 0 wait, 1 loading, 2 carry, 3 return
 struct Wander { float timer; };
 struct Convoy { uint8_t from, to; float cargo[R_Count]; float repath = 0, bestDist = 1e9f; int stuck = 0; };   // tribute pawn walking to a clan mate
-struct Haul { uint32_t storage; uint8_t phase = 0; float cargo[R_Count]{}; float repath = 0, bestDist = 1e9f; int stuck = 0; };   // pawn troop fetching stock from an outpost / storage house
+struct Haul { uint32_t storage; uint8_t phase = 0; float cargo[R_Count]{}; float repath = 0, bestDist = 1e9f; int stuck = 0; uint8_t boatPhase = 255; };   // pawn troop fetching stock from an outpost / storage house
 struct Raider { uint8_t target; double until; float repath = 0; };                                                         // faction raiding party
 struct Home { float x, y, helpUntil = 0; };                                                                    // faction units idle around their town
 struct TownTag { uint16_t town; };
@@ -266,6 +266,8 @@ struct Server {
         return e;
     }
     void destroyNow(entt::entity e) {
+        if (!reg.valid(e)) return;
+        if (reg.all_of<Ship>(e)) shipDestroyed(e);
         uint32_t uid = reg.get<Uid>(e).id;
         if (reg.all_of<Building>(e)) {
             const auto& b = reg.get<Building>(e);
@@ -328,6 +330,7 @@ struct Server {
     void spawnBase(int id, const std::vector<uint64_t>& friends = {}) {
         Pos anchor;
         IV c = spawnAnchor(id, friends, anchor) ? findClearing(&anchor) : findClearing();
+        testSpawn(c);   // BW_SPAWN test hook
         auto th = makeBuilding(K_TownHall, uint8_t(id), c.x - 2, c.y - 1, true);
         Pos p = posOf(th);
         pl[id].cam = p;
@@ -336,7 +339,7 @@ struct Server {
         fx(E_Dust, p.x, p.y);
     }
     void resetProfile(int id) {
-        for (int r = 0; r < R_Count; r++) pl[id].res[r] = START_RES[r];
+        for (int r = 0; r < R_Count; r++) pl[id].res[r] = START_RES[r] * (std::getenv("BW_RICH") ? 20.f : 1.f);   // BW_RICH: test hook
     }
 
     // ---------------------------------------------------------------- pathfinding (A*, 8-dir, bounded, partial paths allowed)
@@ -529,7 +532,7 @@ struct Server {
         entt::entity best = entt::null;
         float bd = range;
         reg.view<Owner, Info>().each([&](entt::entity e, const Owner& o, const Info& i) {
-            if (!hostile(owner, o.id) || (isBuilding(i.kind) && !buildings) || dying.count(reg.get<Uid>(e).id)) return;
+            if (!hostile(owner, o.id) || (isBuilding(i.kind) && !buildings) || dying.count(reg.get<Uid>(e).id) || reg.all_of<Aboard>(e)) return;
             float d = rectDist(p, e);
             if (d < bd) { bd = d; best = e; }
         });
@@ -673,9 +676,11 @@ struct Server {
             int n = r.get<uint8_t>();
             for (int i = 0; i < n; i++) {
                 auto e = find(r.get<uint32_t>());
-                if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e)) continue;
+                if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e) || reg.all_of<Aboard>(e)) continue;   // units aboard a ship cannot be commanded
                 Kind k = reg.get<Info>(e).kind;
                 if (combatOnly && (k == K_Ship || k == K_Monk)) continue;
+                reg.remove<Boarding>(e);                         // any new order cancels embarking
+                if (k == K_Ship) cancelVoyage(e);                // ... and takes a ship off a supply run
                 us.push_back(e);
             }
             return us;
@@ -709,6 +714,7 @@ struct Server {
             if (!spawnSpot(be, k == K_Ship, at)) { say(id, k == K_Ship ? "No free ocean tile next to the harbour." : "No room to spawn units."); return; }
             spend(id, KINFO[k].cost);
             auto u = makeUnit(k, uint8_t(id), at.x, at.y);
+            if (k == K_Ship) initShip(u, reg.get<Info>(be).level);   // empty boat, tier = harbour level
             if (k == K_Ship) fx(E_Splash, at.x, at.y);
             else fx(E_Dust, at.x, at.y);
             if (k == K_Pawn) {                                   // new pawns join the least staffed resource building as hauler
@@ -919,7 +925,7 @@ struct Server {
             sendRoster();
             break;
         }
-        default: break;
+        default: shipPacket(id, type, r); break;
         }
     }
     void breakAlliance(int a, int b) {
@@ -1174,6 +1180,7 @@ struct Server {
         }
     }
     void runHaul(entt::entity e, Unit& u, Haul& h, float dt) {
+        if (auto* bd = reg.try_get<Boarding>(e)) { runBoarding(e, u, *bd, dt); return; }   // walking to a ferry
         Pos p = reg.get<Pos>(e);
         int ow = reg.get<Owner>(e).id;
         auto st = find(h.storage);
@@ -1206,6 +1213,11 @@ struct Server {
         h.repath -= dt;
         if (u.path.empty() && h.repath <= 0) {
             h.repath = 3.f;
+            if (h.boatPhase != h.phase) {                               // long trip: would one of our ships be clearly faster?
+                int ferry = tryFerryHaul(e, h, target);
+                if (ferry == 2) { h.repath = .6f; return; }
+                if (ferry == 1) return;
+            }
             if (d < h.bestDist - 2.f) { h.bestDist = d; h.stuck = 0; }
             else if (++h.stuck >= 8) { giveUp(); return; }
             if (!order(e, posOf(target), reg.get<Uid>(target).id, 40000)) h.stuck += 2;
@@ -1327,7 +1339,7 @@ struct Server {
 
         // units
         for (auto e : units) {
-            if (!reg.valid(e) || dying.count(reg.get<Uid>(e).id)) continue;
+            if (!reg.valid(e) || dying.count(reg.get<Uid>(e).id) || reg.all_of<Aboard>(e)) continue;
             auto& u = reg.get<Unit>(e);
             Kind k = reg.get<Info>(e).kind;
             int ow = reg.get<Owner>(e).id;
@@ -1348,12 +1360,13 @@ struct Server {
             if (auto* wk = reg.try_get<Worker>(e)) { runWorker(e, u, *wk, dt); }
             else if (auto* cv = reg.try_get<Convoy>(e)) { runConvoy(e, u, *cv, dt); }
             else if (auto* hl = reg.try_get<Haul>(e)) { runHaul(e, u, *hl, dt); }
+            else if (auto* bd = reg.try_get<Boarding>(e)) { runBoarding(e, u, *bd, dt); }
             else if (auto* rd = reg.try_get<Raider>(e)) { runRaider(e, u, *rd, dt); if (reg.valid(e) && KINFO[k].dps > 0) combat(e, u, k, ow, p, dt); }
             else if (k == K_Monk) {                                  // heal the most wounded friendly unit in range
                 entt::entity best = entt::null;
                 float bn = 1e9f;
                 for (auto o : units) {
-                    if (o == e || !reg.valid(o) || !allied(ow, reg.get<Owner>(o).id)) continue;
+                    if (o == e || !reg.valid(o) || reg.all_of<Aboard>(o) || !allied(ow, reg.get<Owner>(o).id)) continue;
                     auto& h = reg.get<Health>(o);
                     if (h.hp >= h.maxhp - .5f) continue;
                     Pos q = reg.get<Pos>(o);
@@ -1390,6 +1403,8 @@ struct Server {
             if (d <= step) { p = t; u.i++; }
             else { p.x += dx / d * step; p.y += dy / d * step; }
         }
+
+        shipsTick(dt);
 
         if (tick % 20 == 0) {
             // cold attrition in the snow unless a campfire warms the spot
@@ -1453,6 +1468,8 @@ struct Server {
         for (int id = 1; id <= MAX_PLAYERS; id++) {
             if (!pl[id].online) continue;
             if (tick % 2 == 0) sendState(id);
+            if (tick % 8 == 0) sendPaths(id);
+            if (tick % 10 == 3 && pl[id].online) sendShipInfo(id);
             if (tick % 10 == 0) sendFog(id);
         }
         if (tick % 2 == 0) effects.clear();
@@ -1466,7 +1483,7 @@ struct Server {
         if (auto* a = reg.try_get<Attack>(e)) {
             tg = find(a->target);
             explicitOrder = true;
-            if (tg == entt::null || dying.count(a->target) || allied(ow, reg.get<Owner>(tg).id)) { reg.remove<Attack>(e); tg = entt::null; explicitOrder = false; }
+            if (tg == entt::null || dying.count(a->target) || allied(ow, reg.get<Owner>(tg).id) || reg.all_of<Aboard>(tg)) { reg.remove<Attack>(e); tg = entt::null; explicitOrder = false; }
         }
         bool amove = reg.all_of<AMove>(e);
         if (tg == entt::null && (isArmy(k) || amove) && u.repath <= 0) {
@@ -1605,6 +1622,7 @@ struct Server {
                 for (float s : b.stock) tot += s;
                 stock = uint16_t(std::min(tot, 65000.f));
             }
+            if (!shipStateHook(id, e, o.id, in, aux, prog, stock)) return;
             w.put<uint32_t>(uid.id).put<uint8_t>(in.kind).put<uint8_t>(o.id).put<float>(ps.x).put<float>(ps.y);
             w.put<uint16_t>(uint16_t(std::max(0.f, h.hp))).put<uint16_t>(uint16_t(h.maxhp));
             w.put<uint8_t>(state).put<uint8_t>(aux).put<uint8_t>(aim).put<uint8_t>(prog).put<uint16_t>(stock);
@@ -1619,6 +1637,8 @@ struct Server {
         std::memcpy(&w.b[ep], &ne, 2);
         net.send(p.conn, w);
     }
+
+#include "server_ships.inc"
 };
 
 void Server::sendFog(int id) {
@@ -1770,6 +1790,7 @@ void Server::save() {
             if (hl) { w.put<uint32_t>(hl->storage).put<uint8_t>(hl->phase); for (float c : hl->cargo) w.put<float>(c); }
         }
     });
+    shipsSave(w);   // append-only ship passenger section
     std::string tmp = savePath + ".tmp";
     {
         std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
@@ -1886,6 +1907,7 @@ bool Server::load() {
         }
     }
     if (!r.ok) { std::puts("Savegame is truncated; starting fresh."); return false; }
+    shipsLoad(r);
     return true;
 }
 
