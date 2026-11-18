@@ -35,7 +35,9 @@ enum Kind : uint8_t { K_TownHall, K_Outpost, K_Harbour, K_Storage, K_Mine, K_Lum
                       K_Pawn, K_Warrior, K_Archer, K_Lancer, K_Monk, K_Ship, K_Sheep, K_Count };       // units / NPCs
 enum Msg : uint8_t { C_Hello, C_Build, C_Train, C_Move, C_Attack, C_AttackMove, C_Ally, C_Upgrade, C_Cam,
                      C_ClanCreate, C_ClanJoin, C_ClanLeave, C_Transfer, C_Donate, C_SetHaul, C_UpgradeUnit, C_Chat, C_ClanLeader,
-                     S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map, S_Chat };
+                     C_Clear,   // [world] clear surface features: u8 n, n x (i32 x, i32 y)
+                     S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map, S_Chat,
+                     S_Cleared, S_ClearJobs, S_Drop };   // [world] cleared-tile list/delta, clearing progress, resource drop effect
 enum EffectType : uint8_t { E_Explosion, E_Dust, E_Splash, E_Arrow, E_Heal, E_Fire };
 enum UnitState : uint8_t { US_Idle, US_Move, US_Attack, US_Work, US_Heal, US_Extinguish };
 // Bit registry for the `state` byte of a state record (units: low 3 bits are the UnitState; buildings: only the flags below).
@@ -132,6 +134,7 @@ inline float fbm(float x, float y, uint32_t s, int oct = 4) {
     for (int o = 0; o < oct; o++) { v += a * vnoise(x, y, s + uint32_t(o) * 131u); t += a; x *= 2; y *= 2; a *= 0.5f; }
     return v / t;
 }
+inline constexpr float OCEAN_LEVEL = .43f, ISLAND_DEPTH = .06f, ISLAND_GATE = .68f, ISLAND_BLOB = .74f;   // below OCEAN_LEVEL: ocean (rare islands excepted)
 inline float stretch(float v) { return std::clamp((v - .5f) * 2.1f + .5f, 0.f, 1.f); }
 
 // ---------------------------------------------------------------- world generation (infinite, deterministic)
@@ -143,7 +146,14 @@ inline uint8_t genBiome(int x, int y, uint32_t seed) {
     float d = fbm(fx * .09f, fy * .09f, seed + 37, 3);
     float f = fbm(fx * .045f, fy * .045f, seed + 53, 3);
     e += (d - .5f) * .07f;
-    if (e < .37f) return B_Ocean;
+    if (e < OCEAN_LEVEL) {
+        // rare small islands in open (deep) ocean: a regional gate keeps them scattered, a finer noise shapes 1-3 chunk wide blobs
+        if (e > OCEAN_LEVEL - ISLAND_DEPTH) return B_Ocean;
+        float gate = vnoise(fx * .021f + 17.f, fy * .021f - 41.f, seed + 91);
+        float blob = vnoise(fx * .033f - 9.f, fy * .033f + 23.f, seed + 93) * .88f + vnoise(fx * .12f, fy * .12f, seed + 95) * .12f;
+        if (gate < ISLAND_GATE || blob < ISLAND_BLOB) return B_Ocean;
+        e = .5f;                                                      // classify the island like ordinary lowland
+    }
     if (e > .80f) return B_Highlands;
     if (t < .27f) return B_Snow;
     if (t > .62f && m < .52f) return B_Desert;
@@ -169,9 +179,7 @@ inline Yield yieldOf(Kind k, int biome, bool coastal) {
     if (k == K_Lumber) {
         switch (biome) {
         case B_Forest: y.r[R_Wood] = 2.6f; break;
-        case B_Plains: case B_Flowers: y.r[R_Wood] = .5f; y.r[R_Meat] = 1.1f; break;
-        case B_Snow: y.r[R_Wood] = .5f; y.r[R_Meat] = 1.3f; break;     // furs & game
-        default: y.r[R_Wood] = .4f; break;
+        default: y.r[R_Wood] = .45f; break;                             // lumberjacks thrive in forests only; elsewhere a trickle (meat comes from hunting)
         }
     } else if (k == K_Mine) {
         switch (biome) {
@@ -190,6 +198,43 @@ inline bool preferredBiome(Kind k, int biome) {
 }
 inline constexpr float OFFLINE_PROD = 0.12f;
 inline constexpr float COLD_UNIT_DPS = 2.f, COLD_BUILDING_FRAC = .01f, WARMTH_RADIUS = 6.5f;
+
+// ---------------------------------------------------------------- [world] surface features, clearing, gold bonus (server + client)
+enum Feat : uint8_t { F_None, F_Pine, F_Oak, F_Bush, F_Rock, F_Gold };
+inline uint8_t featureAt(int x, int y, int b, uint32_t seed) {
+    uint32_t h = hash2(x, y, seed + 777) % 1000;
+    switch (b) {
+    case B_Forest: return h < 250 ? (hash2(x, y, 3) % 100 < 30 ? F_Oak : F_Pine) : (h < 290 ? F_Bush : (h < 315 ? F_Rock : F_None));
+    case B_Plains: return h < 35 ? F_Oak : (h < 80 ? F_Bush : (h < 92 ? F_Rock : F_None));
+    case B_Flowers: return h < 110 ? F_Bush : (h < 125 ? F_Oak : F_None);
+    case B_Desert: return h < 30 ? F_Gold : (h < 65 ? F_Rock : F_None);
+    case B_Highlands: return h < 110 ? F_Rock : (h < 122 ? F_Gold : F_None);
+    case B_Snow: return h < 140 ? F_Pine : (h < 158 ? F_Rock : F_None);
+    default: return F_None;
+    }
+}
+inline bool featureBlocks(uint8_t f) { return f == F_Pine || f == F_Oak || f == F_Rock || f == F_Gold; }   // bushes are decoration only
+inline float clearSeconds(uint8_t f) { return f == F_Gold ? 5.f : (f == F_Rock ? 3.5f : 2.5f); }
+inline int clearCostWood(uint8_t f) { return f == F_Gold ? 8 : (f == F_Rock ? 5 : 3); }              // paid up front by the player
+inline Res dropRes(uint8_t f) { return f == F_Gold ? R_Gold : (f == F_Rock ? R_Stone : R_Wood); }      // what the cleared feature yields
+inline int dropAmount(uint8_t f) { return f == F_Gold ? 14 : (f == F_Rock ? 8 : 10); }
+inline constexpr int MAX_CLEAR_TILES = 24;                                                              // per C_Clear request
+// Gold deposits near a Mine raise its output: +GOLD_BONUS_EACH per deposit within GOLD_RADIUS tiles of its centre, capped.
+inline constexpr float GOLD_RADIUS = 4.5f, GOLD_BONUS_EACH = .2f, GOLD_BONUS_CAP = 1.f;
+inline float goldBonusOf(int deposits) { return std::min(GOLD_BONUS_CAP, GOLD_BONUS_EACH * float(deposits)); }
+// W: int biome(x,y); bool cleared(x,y); uint32_t seedValue()
+template <class W> int goldNear(W& w, Pos c) {
+    int n = 0, cx = int(std::floor(c.x)), cy = int(std::floor(c.y)), r = int(std::ceil(GOLD_RADIUS));
+    for (int y = cy - r; y <= cy + r; y++)
+        for (int x = cx - r; x <= cx + r; x++) {
+            float dx = float(x) + .5f - c.x, dy = float(y) + .5f - c.y;
+            if (dx * dx + dy * dy > GOLD_RADIUS * GOLD_RADIUS) continue;
+            int b = w.biome(x, y);
+            if (b != B_Highlands && b != B_Desert) continue;
+            if (featureAt(x, y, b, w.seedValue()) == F_Gold && !w.cleared(x, y)) n++;
+        }
+    return n;
+}
 
 // ---------------------------------------------------------------- placement rules (identical on server & client)
 enum PlaceErr { P_OK, P_Unexplored, P_Terrain, P_Occupied, P_Territory, P_Coast, P_TooClose, P_Enemy, P_Count };

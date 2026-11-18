@@ -68,19 +68,6 @@ void onLog(const LogEvent& e) {
     if (logs.size() > 7) logs.erase(logs.begin());
 }
 
-enum Feat : uint8_t { F_None, F_Pine, F_Oak, F_Bush, F_Rock, F_Gold };
-uint8_t featureAt(int x, int y, int b, uint32_t seed) {
-    uint32_t h = hash2(x, y, seed + 777) % 1000;
-    switch (b) {
-    case B_Forest: return h < 250 ? (hash2(x, y, 3) % 100 < 30 ? F_Oak : F_Pine) : (h < 290 ? F_Bush : (h < 315 ? F_Rock : F_None));
-    case B_Plains: return h < 35 ? F_Oak : (h < 80 ? F_Bush : (h < 92 ? F_Rock : F_None));
-    case B_Flowers: return h < 110 ? F_Bush : (h < 125 ? F_Oak : F_None);
-    case B_Desert: return h < 30 ? F_Gold : (h < 65 ? F_Rock : F_None);
-    case B_Highlands: return h < 110 ? F_Rock : (h < 122 ? F_Gold : F_None);
-    case B_Snow: return h < 140 ? F_Pine : (h < 158 ? F_Rock : F_None);
-    default: return F_None;
-    }
-}
 
 // ---------------------------------------------------------------- the application
 struct App {

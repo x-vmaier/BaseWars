@@ -262,6 +262,7 @@ struct Server {
         reg.emplace<Building>(e, Building{tx, ty, done ? 1.f : 0.f, {0, 0, 0, 0}, 0.f, 0.f});
         for (int y = ty; y < ty + KINFO[k].fh; y++)
             for (int x = tx; x < tx + KINFO[k].fw; x++) occ[tkey(x, y)] = reg.get<Uid>(e).id;
+        markFootprint(k, tx, ty);                                       // [world] a footprint never needs clearing again
         if (done) reveal(owner, int(std::floor(footCenter(k, tx, ty).x)), int(std::floor(footCenter(k, tx, ty).y)), KINFO[k].vision);
         return e;
     }
@@ -270,6 +271,7 @@ struct Server {
         if (reg.all_of<Building>(e)) {
             const auto& b = reg.get<Building>(e);
             Kind k = reg.get<Info>(e).kind;
+            markFootprint(k, b.tx, b.ty);                               // [world] rubble does not regrow trees
             for (int y = b.ty; y < b.ty + KINFO[k].fh; y++)
                 for (int x = b.tx; x < b.tx + KINFO[k].fw; x++) occ.erase(tkey(x, y));
         }
@@ -490,7 +492,8 @@ struct Server {
             if (const Worker* w = reg.try_get<Worker>(e)) raid(w->cargo);
             if (const Convoy* c = reg.try_get<Convoy>(e)) raid(c->cargo);
             if (const Haul* hl = reg.try_get<Haul>(e)) raid(hl->cargo);
-            if (k == K_Sheep && isPlayer(killer)) { pl[killer].res[R_Meat] += 12; say(killer, "Hunted a sheep: +12 meat."); }
+            if (k == K_Sheep && isPlayer(killer) && !huntKill(e, killer)) { pl[killer].res[R_Meat] += 12; say(killer, "Hunted a sheep: +12 meat."); }
+            worldOnKill(e, k, owner, killer, p);                         // [world] patrol loot + retaliation
             if (isFactionOwner(owner) && isPlayer(killer)) addRep(killer, owner - FACTION_BASE, k == K_TownHall ? -40.f : (isBuilding(k) ? -10.f : -4.f));
             uint16_t town = reg.all_of<TownTag>(e) ? reg.get<TownTag>(e).town : uint16_t(0);
             destroyNow(e);
@@ -606,6 +609,7 @@ struct Server {
         w.str(p.name);
         net.send(conn, w);
         sendFog(id);
+        sendClearedFull(id);                                     // [world] cleared surface features
         sendRoster();
         say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu." : "Welcome back, " + p.name + "! Your base is just as you left it.");
         std::printf("%s (%d) %s\n", p.name.c_str(), id, fresh ? "joined" : "rejoined");
@@ -676,6 +680,7 @@ struct Server {
                 if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e)) continue;
                 Kind k = reg.get<Info>(e).kind;
                 if (combatOnly && (k == K_Ship || k == K_Monk)) continue;
+                if (k == K_Pawn) huntPause(e);                          // [world] a commanded pawn stops hunting for a while
                 us.push_back(e);
             }
             return us;
@@ -690,6 +695,7 @@ struct Server {
             PlaceWorld w{*this, id};
             int err = checkPlace(w, k, tx, ty);
             if (err) { say(id, std::string("Cannot build here: ") + PLACE_TEXT[err] + "."); return; }
+            if (!worldBuildOk(id, k, tx, ty)) return;                    // [world] surface features must be cleared first
             if (!afford(id, KINFO[k].cost)) { say(id, "Not enough resources."); return; }
             spend(id, KINFO[k].cost);
             auto e = makeBuilding(k, uint8_t(id), tx, ty, false);
@@ -711,16 +717,7 @@ struct Server {
             auto u = makeUnit(k, uint8_t(id), at.x, at.y);
             if (k == K_Ship) fx(E_Splash, at.x, at.y);
             else fx(E_Dust, at.x, at.y);
-            if (k == K_Pawn) {                                   // new pawns join the least staffed resource building as hauler
-                entt::entity bestB = entt::null;
-                int bw = 3;
-                reg.view<Info, Building, Owner, Uid>().each([&](entt::entity e, const Info& i, const Building& b, const Owner& o, const Uid& uid) {
-                    if (o.id != id || !isResourceBuilding(i.kind) || b.progress < 1.f) return;
-                    int c = workersOf(uid.id);
-                    if (c < bw) { bw = c; bestB = e; }
-                });
-                if (bestB != entt::null) reg.emplace<Worker>(u, Worker{reg.get<Uid>(bestB).id});
-            }
+            // [world] trained pawns are free pawns (they hunt); only building-owned workers haul resources
             break;
         }
         case C_ClanCreate: {
@@ -919,6 +916,7 @@ struct Server {
             sendRoster();
             break;
         }
+        case C_Clear: onClear(id, r); break;                            // [world]
         default: break;
         }
     }
@@ -1018,7 +1016,7 @@ struct Server {
         for (auto& t : towns) {
             if (!t.alive) { if (clock >= t.respawnAt) buildTown(t); continue; }
             int army = 0;
-            reg.view<TownTag, Info>().each([&](const TownTag& g, const Info& i) { if (g.town == t.id && isArmy(i.kind)) army++; });
+            reg.view<TownTag, Info>().each([&](entt::entity pe, const TownTag& g, const Info& i) { if (g.town == t.id && isArmy(i.kind) && !isPatrol(pe)) army++; });
             int desired = std::min(9, 5 + int(facDonated[t.faction] / 300.f));
             if (army < desired && clock >= t.nextSpawn) { spawnTownUnit(t, hash2(t.id, int(clock), seed) & 1 ? K_Warrior : K_Archer, army); t.nextSpawn = clock + 25; }
         }
@@ -1297,7 +1295,7 @@ struct Server {
             }
             if (isResourceBuilding(in.kind) && isPlayer(ow)) {
                 Yield y = yieldOf(in.kind, biome(int(std::floor(c.x)), int(std::floor(c.y))), in.kind == K_Harbour);
-                float f = levelMul(in.level) * (pl[ow].online ? 1.f : OFFLINE_PROD) * dt, tot = 0;
+                float f = levelMul(in.level) * mineMul(e, in.kind, c) * (pl[ow].online ? 1.f : OFFLINE_PROD) * dt, tot = 0;   // [world] gold deposits boost mines
                 for (int r = 0; r < R_Count; r++) tot += b.stock[r];
                 if (tot < 150) for (int r = 0; r < R_Count; r++) b.stock[r] += y.r[r] * f;
                 int cnt = workerCount[reg.get<Uid>(e).id];
@@ -1349,6 +1347,8 @@ struct Server {
             else if (auto* cv = reg.try_get<Convoy>(e)) { runConvoy(e, u, *cv, dt); }
             else if (auto* hl = reg.try_get<Haul>(e)) { runHaul(e, u, *hl, dt); }
             else if (auto* rd = reg.try_get<Raider>(e)) { runRaider(e, u, *rd, dt); if (reg.valid(e) && KINFO[k].dps > 0) combat(e, u, k, ow, p, dt); }
+            else if (k == K_Pawn && isPlayer(ow) && huntTick(e, u, ow, p, dt)) {}   // [world] free pawns hunt sheep
+            else if (isPatrol(e)) { runPatrol(e, u, reg.get<Patrol>(e), dt); if (reg.valid(e) && KINFO[k].dps > 0) combat(e, u, k, ow, p, dt); }   // [world] faction patrol
             else if (k == K_Monk) {                                  // heal the most wounded friendly unit in range
                 entt::entity best = entt::null;
                 float bn = 1e9f;
@@ -1450,6 +1450,7 @@ struct Server {
                 reveal(ow, int(std::floor(c.x)), int(std::floor(c.y)), KINFO[reg.get<Info>(e).kind].vision);
             }
 
+        worldTick(dt);                                                  // [world] clearing jobs, sheep repopulation, patrols
         for (int id = 1; id <= MAX_PLAYERS; id++) {
             if (!pl[id].online) continue;
             if (tick % 2 == 0) sendState(id);
@@ -1595,7 +1596,7 @@ struct Server {
                 if (const Worker* wk = reg.try_get<Worker>(e)) {
                     float best = 0;
                     for (int r = 0; r < R_Count; r++) if (wk->cargo[r] > best) { best = wk->cargo[r]; aux = uint8_t(r + 1); }
-                }
+                } else aux = worldAux(e);                               // [world] hunter pawns carrying meat
             } else {
                 const Building& b = reg.get<Building>(e);
                 aux = in.level;
@@ -1619,6 +1620,8 @@ struct Server {
         std::memcpy(&w.b[ep], &ne, 2);
         net.send(p.conn, w);
     }
+
+#include "server_world.inc"
 };
 
 void Server::sendFog(int id) {
@@ -1747,10 +1750,10 @@ void Server::save() {
     w.put<uint32_t>(uint32_t(spawned.size()));
     for (auto k : spawned) w.put<int64_t>(k);
     uint32_t saved = 0;
-    reg.view<Uid>().each([&](entt::entity e, const Uid&) { if (!reg.all_of<Raider>(e)) saved++; });
+    reg.view<Uid>().each([&](entt::entity e, const Uid&) { if (!ephemeral(e)) saved++; });
     w.put<uint32_t>(saved);
     reg.view<Uid, Owner, Info, Health>().each([&](entt::entity e, const Uid& uid, const Owner& o, const Info& in, const Health& h) {
-        if (reg.all_of<Raider>(e)) return;
+        if (ephemeral(e)) return;
         w.put<uint32_t>(uid.id).put<uint8_t>(in.kind).put<uint8_t>(o.id).put<uint8_t>(in.level).put<float>(h.hp).put<float>(h.maxhp);
         w.put<uint16_t>(reg.all_of<TownTag>(e) ? reg.get<TownTag>(e).town : uint16_t(0));
         if (const Building* b = reg.try_get<Building>(e)) {
@@ -1770,6 +1773,7 @@ void Server::save() {
             if (hl) { w.put<uint32_t>(hl->storage).put<uint8_t>(hl->phase); for (float c : hl->cargo) w.put<float>(c); }
         }
     });
+    worldSave(w);                                                       // [world] appended section: cleared tiles
     std::string tmp = savePath + ".tmp";
     {
         std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
@@ -1885,6 +1889,7 @@ bool Server::load() {
             }
         }
     }
+    worldLoad(r);                                                       // [world] optional appended section
     if (!r.ok) { std::puts("Savegame is truncated; starting fresh."); return false; }
     return true;
 }
