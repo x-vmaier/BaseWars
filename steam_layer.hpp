@@ -76,7 +76,7 @@ inline bool serverInit(uint16_t port, const std::string& name, std::deque<NetEve
     gs->SetGameTags("basewars");
     gs->LogOnAnonymous();
     gs->SetAdvertiseServerActive(true);
-    SteamGameServerNetworkingUtils()->InitRelayNetworkAccess();
+    SteamNetworkingUtils()->InitRelayNetworkAccess();
     g_serverSide = true;
     g_q = &q;
     SteamNetworkingConfigValue_t opt;

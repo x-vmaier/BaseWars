@@ -21,10 +21,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#ifdef near
-#undef near
-#endif
-
 namespace {
 
 constexpr float TILE = 64.f;

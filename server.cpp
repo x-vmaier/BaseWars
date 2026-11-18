@@ -17,10 +17,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#ifdef near
-#undef near
-#endif
-
 namespace {
 
 volatile std::sig_atomic_t g_quit = 0;
