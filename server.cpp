@@ -1,4 +1,5 @@
 // Authoritative server: infinite biome world, persistence, economy with physical supply lines, combat, naval units, alliances.
+#include "net.hpp"
 #include "shared.hpp"
 
 #include <entt/entt.hpp>
@@ -24,7 +25,7 @@ namespace {
 
 volatile std::sig_atomic_t g_quit = 0;
 using Bits = std::array<uint8_t, 32>;
-constexpr uint32_t SAVE_MAGIC = 0x34535742u;  // "BWS4"
+constexpr uint32_t SAVE_MAGIC = 0x35535742u;  // "BWS5"
 
 struct Uid { uint32_t id; };
 struct Owner { uint8_t id; };                                   // 0 = neutral
@@ -47,7 +48,8 @@ struct Town { uint16_t id; uint8_t faction; int cx, cy; uint32_t th; bool alive;
 
 struct Profile {
     bool used = false, online = false;
-    ENetPeer* peer = nullptr;
+    uint64_t conn = 0;                                           // transport connection id (ENet peer or Steam connection)
+    uint64_t steamId = 0;
     std::string uuid, name;
     uint64_t lastSeen = 0;
     float res[R_Count]{};
@@ -69,7 +71,9 @@ uint64_t nowSec() { return uint64_t(std::chrono::duration_cast<std::chrono::seco
 int64_t tkey(int x, int y) { return chunkKey(x, y); }
 
 struct Server {
-    ENetHost* host = nullptr;
+    ServerNet net;
+    std::unordered_map<uint64_t, int> connPlayer;               // connection -> player id
+    double lastPublish = -100;
     entt::registry reg;
     Profile pl[MAX_PLAYERS + 1];
     std::unordered_map<uint32_t, entt::entity> byUid;
@@ -90,16 +94,12 @@ struct Server {
     struct Spot { double until; uint8_t by; };
     std::unordered_map<uint8_t, std::unordered_map<uint32_t, Spot>> clanSpot;   // clan -> convoys its members have spotted
 
-    Server(uint16_t port, uint32_t sd, std::string path) : seed(sd), rng(sd), savePath(std::move(path)) {
+    Server(uint16_t port, uint32_t sd, std::string path, std::string serverName) : seed(sd), rng(sd), savePath(std::move(path)) {
         bool loaded = load();
-        ENetAddress a{};
-        a.host = ENET_HOST_ANY;
-        a.port = port;
-        host = enet_host_create(&a, MAX_PLAYERS + 4, 2, 0, 0);
-        if (!host) { std::puts("Failed to bind port"); std::exit(1); }
-        std::printf("Server listening on UDP port %d (seed %u, %s)\n", port, seed, loaded ? "savegame loaded" : "fresh world");
+        if (!net.start(port, MAX_PLAYERS + 4, serverName)) { std::puts("Failed to bind port"); std::exit(1); }
+        std::printf("Server listening on UDP port %d (seed %u, %s, steam %s)\n", port, seed, loaded ? "savegame loaded" : "fresh world", net.steamActive() ? "on" : "off");
     }
-    ~Server() { save(); if (host) enet_host_destroy(host); }
+    ~Server() { save(); }
 
     // ---------------------------------------------------------------- terrain
     int biome(int x, int y) {
@@ -171,7 +171,7 @@ struct Server {
         Writer w;
         w.put<uint8_t>(S_Text);
         w.str(s);
-        sendPacket(pl[id].peer, w);
+        net.send(pl[id].conn, w);
     }
     void fx(EffectType t, float x, float y, float x2 = 0, float y2 = 0) { effects.push_back({t, x, y, x2, y2}); }
 
@@ -294,7 +294,13 @@ struct Server {
         });
         return !nearBase;
     }
-    IV findClearing() {
+    IV findClearing(const Pos* anchor = nullptr) {
+        if (anchor)                                                     // new bases appear close to an existing player, but outside their base
+            for (int n = 0; n < 6000; n++) {
+                float ang = float(rng() % 6283) / 1000.f, r = float(SPAWN_MIN_DIST + int(rng() % uint32_t(SPAWN_RADIUS - SPAWN_MIN_DIST)));
+                int x = int(anchor->x + std::cos(ang) * r), y = int(anchor->y + std::sin(ang) * r);
+                if (clearingOk(x, y)) return {x, y};
+            }
         int ths = 0;
         reg.view<Info>().each([&](const Info& i) { if (i.kind == K_TownHall) ths++; });
         for (int pass = 0; pass < 3; pass++)
@@ -305,8 +311,23 @@ struct Server {
             }
         return {0, 0};
     }
-    void spawnBase(int id) {
-        IV c = findClearing();
+    // Where should a newcomer (or a player who lost their base) appear? Near Steam friends, then allies / clan mates, then any player.
+    bool spawnAnchor(int id, const std::vector<uint64_t>& friends, Pos& out) {
+        std::vector<Pos> friendsAt, alliesAt, anyAt;
+        reg.view<Info, Building, Owner>().each([&](const Info& i, const Building& b, const Owner& o) {
+            if (i.kind != K_TownHall || !isPlayer(o.id) || o.id == id) return;
+            Pos c = footCenter(i.kind, b.tx, b.ty);
+            bool isFriend = pl[o.id].steamId != 0 && std::find(friends.begin(), friends.end(), pl[o.id].steamId) != friends.end();
+            (isFriend ? friendsAt : (allied(id, o.id) ? alliesAt : anyAt)).push_back(c);
+        });
+        auto& pick = !friendsAt.empty() ? friendsAt : (!alliesAt.empty() ? alliesAt : anyAt);
+        if (pick.empty()) return false;
+        out = pick[rng() % pick.size()];
+        return true;
+    }
+    void spawnBase(int id, const std::vector<uint64_t>& friends = {}) {
+        Pos anchor;
+        IV c = spawnAnchor(id, friends, anchor) ? findClearing(&anchor) : findClearing();
         auto th = makeBuilding(K_TownHall, uint8_t(id), c.x - 2, c.y - 1, true);
         Pos p = posOf(th);
         pl[id].cam = p;
@@ -523,9 +544,13 @@ struct Server {
     void save();
     void run();
 
-    void onHello(ENetPeer* peer, Reader& r) {
+    void onHello(uint64_t conn, Reader& r) {
         std::string uuid = r.str(), name = r.str();
-        if (!r.ok || uuid.size() < 8 || uuid.size() > 64) { enet_peer_disconnect_now(peer, 0); return; }
+        uint64_t steamId = r.get<uint64_t>();
+        std::vector<uint64_t> friends;
+        int nf = r.get<uint16_t>();
+        for (int i = 0; i < nf && i < 200; i++) friends.push_back(r.get<uint64_t>());
+        if (!r.ok || uuid.size() < 8 || uuid.size() > 64) { net.kick(conn, false); return; }
         for (char& c : name) if (c < 32 || c == 127) c = '?';
         if (name.empty()) name = "Player";
         if (name.size() > 20) name.resize(20);
@@ -533,8 +558,8 @@ struct Server {
         for (int i = 1; i <= MAX_PLAYERS; i++) if (pl[i].used && pl[i].uuid == uuid) id = i;
         if (id && pl[id].online) {
             Writer w; w.put<uint8_t>(S_Text); w.str("This profile is already connected.");
-            sendPacket(peer, w);
-            enet_peer_disconnect_later(peer, 0);
+            net.send(conn, w);
+            net.kick(conn, true);
             return;
         }
         bool fresh = false;
@@ -543,7 +568,7 @@ struct Server {
             if (!id) {                                           // recycle the longest-offline profile
                 uint64_t oldest = UINT64_MAX;
                 for (int i = 1; i <= MAX_PLAYERS; i++) if (!pl[i].online && pl[i].lastSeen < oldest) { oldest = pl[i].lastSeen; id = i; }
-                if (!id) { enet_peer_disconnect_now(peer, 0); return; }
+                if (!id) { net.kick(conn, false); return; }
                 leaveClan(id);
                 removeOwner(id);
                 for (int a = 0; a <= MAX_PLAYERS; a++) pl[a].allied[id] = pl[a].pending[id] = false;
@@ -560,16 +585,17 @@ struct Server {
         Profile& p = pl[id];
         p.name = name;
         p.online = true;
-        p.peer = peer;
+        p.conn = conn;
+        p.steamId = steamId;
+        connPlayer[conn] = id;
         p.lastSeen = nowSec();
         p.sentFog.clear();
         p.sentTerr.clear();
-        peer->data = reinterpret_cast<void*>(uintptr_t(id));
-        if (fresh) spawnBase(id);
+        if (fresh) spawnBase(id, friends);
         else {
             bool hasTH = false;
             reg.view<Info, Owner>().each([&](const Info& i, const Owner& o) { if (i.kind == K_TownHall && o.id == id) hasTH = true; });
-            if (!hasTH) { resetProfile(id); spawnBase(id); say(id, "Your base was destroyed while you were away. You start over."); }
+            if (!hasTH) { resetProfile(id); spawnBase(id, friends); say(id, "Your base was destroyed while you were away. You start over."); }
         }
         if (const char* rv = std::getenv("BW_REVEAL")) {          // test hook: reveal a large disc around the base
             Pos c = p.cam;
@@ -578,18 +604,19 @@ struct Server {
         Writer w;
         w.put<uint8_t>(S_Welcome).put<uint8_t>(uint8_t(id)).put<uint32_t>(seed).put<float>(p.cam.x).put<float>(p.cam.y);
         w.str(p.name);
-        sendPacket(peer, w);
+        net.send(conn, w);
         sendFog(id);
         sendRoster();
         say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu." : "Welcome back, " + p.name + "! Your base is just as you left it.");
         std::printf("%s (%d) %s\n", p.name.c_str(), id, fresh ? "joined" : "rejoined");
     }
-    void onDisconnect(ENetPeer* peer) {
-        int id = int(reinterpret_cast<uintptr_t>(peer->data));
-        peer->data = nullptr;
-        if (id < 1 || id > MAX_PLAYERS) return;
+    void onDisconnect(uint64_t conn) {
+        auto it = connPlayer.find(conn);
+        int id = it == connPlayer.end() ? 0 : it->second;
+        connPlayer.erase(conn);
+        if (id < 1 || id > MAX_PLAYERS || pl[id].conn != conn) return;
         pl[id].online = false;
-        pl[id].peer = nullptr;
+        pl[id].conn = 0;
         pl[id].lastSeen = nowSec();
         std::printf("%s left\n", pl[id].name.c_str());
         sendRoster();
@@ -633,11 +660,12 @@ struct Server {
     }
 
     // ---------------------------------------------------------------- commands
-    void onPacket(ENetPeer* peer, const ENetPacket* pk) {
-        Reader r{pk->data, pk->data + pk->dataLength};
+    void onPacket(uint64_t conn, const std::vector<uint8_t>& data) {
+        Reader r{data.data(), data.data() + data.size()};
         uint8_t type = r.get<uint8_t>();
-        int id = int(reinterpret_cast<uintptr_t>(peer->data));
-        if (type == C_Hello) { if (id < 1) onHello(peer, r); return; }
+        auto cp = connPlayer.find(conn);
+        int id = cp == connPlayer.end() ? 0 : cp->second;
+        if (type == C_Hello) { if (id < 1) onHello(conn, r); return; }
         if (id < 1 || !r.ok) return;
         Profile& p = pl[id];
         auto readUnits = [&](bool combatOnly) {
@@ -773,7 +801,7 @@ struct Server {
             for (int i = 1; i <= MAX_PLAYERS; i++) {
                 if (!pl[i].online) continue;
                 bool to = ch == 0 || i == id || (ch == 1 && pl[i].clan == p.clan) || (ch == 2 && pl[id].allied[i]);
-                if (to) sendPacket(pl[i].peer, w);
+                if (to) net.send(pl[i].conn, w);
             }
             break;
         }
@@ -1589,7 +1617,7 @@ struct Server {
         for (auto& f : effects)
             if (seen(src, f.x, f.y, 3.f) || seen(src, f.x2, f.y2, 3.f)) { w.put<uint8_t>(f.type).put<float>(f.x).put<float>(f.y).put<float>(f.x2).put<float>(f.y2); ne++; }
         std::memcpy(&w.b[ep], &ne, 2);
-        sendPacket(p.peer, w);
+        net.send(p.conn, w);
     }
 };
 
@@ -1624,7 +1652,7 @@ void Server::sendFog(int id) {
     }
     w.put<uint16_t>(uint16_t(fogOut.size()));
     for (auto& [k, b] : fogOut) { w.put<int32_t>(keyCx(k)).put<int32_t>(keyCy(k)); w.bytes(b.data(), 32); }
-    sendPacket(p.peer, w);
+    net.send(p.conn, w);
 }
 
 void Server::sendRoster() {
@@ -1663,7 +1691,7 @@ void Server::sendRoster() {
             nc++;
         }
         w.b[cc] = nc;
-        sendPacket(pl[id].peer, w);
+        net.send(pl[id].conn, w);
     }
 }
 
@@ -1679,7 +1707,7 @@ void Server::sendMap(int id) {                                          // facti
         if (++n == 255) break;
     }
     w.b[cp] = n;
-    sendPacket(pl[id].peer, w);
+    net.send(pl[id].conn, w);
 }
 
 }  // namespace
@@ -1703,6 +1731,7 @@ void Server::save() {
         for (float r : p.res) w.put<float>(r);
         for (int a = 0; a <= MAX_PLAYERS; a++) w.put<uint8_t>(uint8_t((p.allied[a] ? 1 : 0) | (p.pending[a] ? 2 : 0)));
         w.put<float>(p.cam.x).put<float>(p.cam.y);
+        w.put<uint64_t>(p.steamId);
         w.put<uint8_t>(p.clan);
         for (float rp : p.rep) w.put<float>(rp);
         for (int k = K_Pawn; k <= K_Monk; k++) w.put<uint8_t>(uint8_t(std::max<int>(1, p.ulevel[k])));
@@ -1775,6 +1804,7 @@ bool Server::load() {
         for (int a = 0; a <= MAX_PLAYERS; a++) { uint8_t b = r.get<uint8_t>(); p.allied[a] = b & 1; p.pending[a] = b & 2; }
         p.cam.x = r.get<float>();
         p.cam.y = r.get<float>();
+        p.steamId = r.get<uint64_t>();
         p.clan = r.get<uint8_t>();
         for (float& rp : p.rep) rp = r.get<float>();
         for (int k = K_Pawn; k <= K_Monk; k++) p.ulevel[k] = r.get<uint8_t>();
@@ -1864,17 +1894,22 @@ void Server::run() {
     auto next = clk::now();
     const auto step = std::chrono::milliseconds(1000 / TICK_HZ);
     while (!g_quit) {
-        ENetEvent ev;
-        while (enet_host_service(host, &ev, 0) > 0) {
+        NetEvent ev;
+        while (net.poll(ev)) {
             switch (ev.type) {
-            case ENET_EVENT_TYPE_CONNECT: break;
-            case ENET_EVENT_TYPE_RECEIVE: onPacket(ev.peer, ev.packet); enet_packet_destroy(ev.packet); break;
-            case ENET_EVENT_TYPE_DISCONNECT: onDisconnect(ev.peer); break;
-            default: break;
+            case NetEvent::Connect: break;
+            case NetEvent::Receive: onPacket(ev.conn, ev.data); break;
+            case NetEvent::Disconnect: onDisconnect(ev.conn); break;
             }
         }
+        if (clock - lastPublish > 5) {                          // keep the Steam server-browser entry fresh
+            int online = 0;
+            for (int i = 1; i <= MAX_PLAYERS; i++) if (pl[i].online) online++;
+            net.publish(online, MAX_PLAYERS, "Base Wars");
+            lastPublish = clock;
+        }
         update(1.f / TICK_HZ);
-        enet_host_flush(host);
+        net.flush();
         next += step;
         auto now = clk::now();
         if (next < now - std::chrono::seconds(1)) next = now;
@@ -1889,11 +1924,12 @@ int main(int argc, char** argv) {
     int port = argc > 1 ? std::atoi(argv[1]) : DEFAULT_PORT;
     uint32_t seed = argc > 2 ? uint32_t(std::strtoul(argv[2], nullptr, 10)) : std::random_device{}();
     std::string save = argc > 3 ? argv[3] : "savegame.bin";
+    std::string serverName = argc > 4 ? argv[4] : "Base Wars Server";
     if (enet_initialize() != 0) { std::puts("enet_initialize failed"); return 1; }
     std::signal(SIGINT, [](int) { g_quit = 1; });
     std::signal(SIGTERM, [](int) { g_quit = 1; });
     {
-        Server s(uint16_t(port), seed, save);
+        Server s(uint16_t(port), seed, save, serverName);
         s.run();
     }
     enet_deinitialize();

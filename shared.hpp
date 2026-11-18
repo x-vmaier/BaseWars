@@ -18,6 +18,8 @@
 #include <vector>
 
 inline constexpr int MAX_PLAYERS = 16, TICK_HZ = 20, DEFAULT_PORT = 7777, UNIT_CAP = 60, CH = 16, TEAM_COLORS = 5;
+// New bases spawn this far (in tiles) from an existing player: not on top of them, but close enough to find each other.
+inline constexpr int SPAWN_MIN_DIST = 72, SPAWN_RADIUS = 140;
 // NPC factions own villages/towns. Their owner ids live above the player id range.
 inline constexpr int FACTION_BASE = 100, FACTION_COUNT = 5, MAX_CLANS = 16, REGION_CHUNKS = 8;
 inline constexpr int HOSTILE_REP = -25, FRIENDLY_REP = 25;
@@ -35,7 +37,10 @@ enum Msg : uint8_t { C_Hello, C_Build, C_Train, C_Move, C_Attack, C_AttackMove, 
                      C_ClanCreate, C_ClanJoin, C_ClanLeave, C_Transfer, C_Donate, C_SetHaul, C_UpgradeUnit, C_Chat, C_ClanLeader,
                      S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map, S_Chat };
 enum EffectType : uint8_t { E_Explosion, E_Dust, E_Splash, E_Arrow, E_Heal, E_Fire };
-enum UnitState : uint8_t { US_Idle, US_Move, US_Attack, US_Work, US_Heal };
+enum UnitState : uint8_t { US_Idle, US_Move, US_Attack, US_Work, US_Heal, US_Extinguish };
+// Bit registry for the `state` byte of a state record (units: low 3 bits are the UnitState; buildings: only the flags below).
+inline constexpr uint8_t UNIT_SUPPORT_FLAG = 0x40;                          // troop patrol sent to support a clan member (shown on maps)
+inline constexpr uint8_t BLD_BURNING = 1, BLD_DISABLED = 2, BLD_MOVING = 4;  // building flags: on fire / outside any territory / being relocated
 enum AllyAct : uint8_t { AA_Invite, AA_Break };
 
 inline constexpr const char* BIOME_NAME[B_Count] = {"Ocean", "Plains", "Forest", "Highlands", "Desert", "Flower Fields", "Snow"};

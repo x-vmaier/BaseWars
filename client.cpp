@@ -1,5 +1,8 @@
 // Raylib client: Tiny Swords art, Tiled-driven UI panels, biome terrain with autotiled cliffs, shader effects,
 // building placement, context panels, alliances and RTS controls.
+#include "assets.hpp"
+#include "net.hpp"
+#include "settings.hpp"
 #include "shared.hpp"
 
 #include <entt/entt.hpp>
@@ -24,12 +27,8 @@
 
 namespace {
 
-namespace fs = std::filesystem;
 constexpr float TILE = 64.f;
 
-Color rgb(int r, int g, int b, int a = 255) {
-    return Color{(unsigned char)std::clamp(r, 0, 255), (unsigned char)std::clamp(g, 0, 255), (unsigned char)std::clamp(b, 0, 255), (unsigned char)std::clamp(a, 0, 255)};
-}
 const char* COLOR_NAME[TEAM_COLORS] = {"Blue", "Red", "Yellow", "Purple", "Black"};
 Color teamColor(int owner) {
     static const Color c[TEAM_COLORS] = {rgb(70, 130, 235), rgb(225, 70, 70), rgb(240, 205, 60), rgb(165, 95, 205), rgb(95, 95, 110)};
@@ -45,163 +44,6 @@ Color biomeColor(int b) {
     return b >= 0 && b < B_Count ? c[b] : rgb(20, 24, 34);
 }
 float smooth01(float x) { x = std::clamp(x, 0.f, 1.f); return x * x * (3 - 2 * x); }
-
-// ---------------------------------------------------------------- assets
-std::string assetRoot;
-void findAssets() {
-    std::vector<fs::path> bases{fs::path(GetApplicationDirectory()), fs::current_path()};
-    for (auto b : bases) {
-        for (int up = 0; up < 6; up++) {
-            fs::path c = b / "assets";
-            if (fs::exists(c / "Units") && fs::exists(c / "Terrain")) { assetRoot = c.lexically_normal().string(); return; }
-            if (!b.has_parent_path() || b.parent_path() == b) break;
-            b = b.parent_path();
-        }
-    }
-    assetRoot = "assets";
-    TraceLog(LOG_ERROR, "assets directory not found next to the executable or in a parent folder");
-}
-std::string asset(const std::string& rel) { return assetRoot + "/" + rel; }
-
-std::unordered_map<std::string, Texture2D> texCache;
-Texture2D tex(const std::string& rel) {
-    auto it = texCache.find(rel);
-    if (it != texCache.end()) return it->second;
-    Texture2D t = LoadTexture(asset(rel).c_str());
-    if (t.id == 0) TraceLog(LOG_WARNING, "missing texture %s", rel.c_str());
-    else SetTextureFilter(t, TEXTURE_FILTER_POINT);
-    texCache[rel] = t;
-    return t;
-}
-struct Anim { Texture2D t; int fw, fh, n; float fps, footX, footY; };
-Anim mkAnim(const std::string& rel, int fw, int fh, float fps, float fx, float fy) {
-    Texture2D t = tex(rel);
-    return {t, fw, fh, std::max(1, t.width / fw), fps, fx, fy};
-}
-Rectangle frameRect(const Anim& a, int f) { return {float(f % a.n * a.fw), 0, float(a.fw), float(a.fh)}; }
-
-// ---------------------------------------------------------------- tiny JSON (for Tiled .tmj)
-struct J {
-    enum T { Null, Num, Str, Arr, Obj } t = Null;
-    double n = 0;
-    std::string s;
-    std::vector<J> a;
-    std::vector<std::pair<std::string, J>> o;
-    const J* get(const std::string& k) const { for (auto& p : o) if (p.first == k) return &p.second; return nullptr; }
-};
-struct JParser {
-    const std::string& s;
-    size_t i = 0;
-    bool ok = true;
-    void ws() { while (i < s.size() && std::isspace(uint8_t(s[i]))) i++; }
-    std::string str() {
-        std::string r;
-        i++;
-        while (i < s.size() && s[i] != '"') {
-            if (s[i] == '\\' && i + 1 < s.size()) { i++; r += s[i] == 'n' ? '\n' : (s[i] == 't' ? '\t' : s[i]); }
-            else r += s[i];
-            i++;
-        }
-        i++;
-        return r;
-    }
-    J parse() {
-        J v;
-        ws();
-        if (i >= s.size()) { ok = false; return v; }
-        char c = s[i];
-        if (c == '{') {
-            v.t = J::Obj; i++; ws();
-            while (i < s.size() && s[i] != '}') {
-                ws(); std::string k = str(); ws(); if (s[i] == ':') i++;
-                v.o.push_back({k, parse()}); ws(); if (s[i] == ',') i++;
-                ws();
-            }
-            i++;
-        } else if (c == '[') {
-            v.t = J::Arr; i++; ws();
-            while (i < s.size() && s[i] != ']') { v.a.push_back(parse()); ws(); if (s[i] == ',') i++; ws(); }
-            i++;
-        } else if (c == '"') { v.t = J::Str; v.s = str(); }
-        else if (s.compare(i, 4, "true") == 0) { v.t = J::Num; v.n = 1; i += 4; }
-        else if (s.compare(i, 5, "false") == 0) { v.t = J::Num; v.n = 0; i += 5; }
-        else if (s.compare(i, 4, "null") == 0) { i += 4; }
-        else { size_t e = i; while (e < s.size() && (std::isdigit(uint8_t(s[e])) || s[e] == '-' || s[e] == '+' || s[e] == '.' || s[e] == 'e' || s[e] == 'E')) e++; if (e == i) { ok = false; i++; return v; } v.t = J::Num; v.n = std::atof(s.substr(i, e - i).c_str()); i = e; }
-        return v;
-    }
-};
-
-// ---------------------------------------------------------------- Tiled maps used as UI backgrounds
-struct TMap {
-    bool ok = false;
-    int w = 0, h = 0, tw = 64, th = 64, padding = 0;
-    float scale = 1;
-    std::vector<uint32_t> data;
-    struct TS { int first, cols, tw, th; Texture2D t; };
-    std::vector<TS> sets;
-    Vector2 size() const { return {float(w * tw) * scale, float(h * th) * scale}; }
-};
-TMap loadTMap(const std::string& name) {
-    TMap m;
-    std::string path = asset("ui/" + name + ".tmj");
-    std::ifstream f(path);
-    if (!f) { TraceLog(LOG_WARNING, "missing UI map %s", path.c_str()); return m; }
-    std::stringstream ss;
-    ss << f.rdbuf();
-    std::string txt = ss.str();
-    JParser p{txt};
-    J root = p.parse();
-    if (!p.ok || root.t != J::Obj) { TraceLog(LOG_WARNING, "bad UI map %s", path.c_str()); return m; }
-    auto num = [&](const J& j, const char* k, double d) { auto v = j.get(k); return v ? v->n : d; };
-    m.w = int(num(root, "width", 0)); m.h = int(num(root, "height", 0));
-    m.tw = int(num(root, "tilewidth", 64)); m.th = int(num(root, "tileheight", 64));
-    if (auto props = root.get("properties"))
-        for (auto& pr : props->a) {
-            auto nm = pr.get("name"); auto v = pr.get("value");
-            if (!nm || !v) continue;
-            if (nm->s == "scale") m.scale = float(v->n);
-            if (nm->s == "padding") m.padding = int(v->n);
-        }
-    if (auto ts = root.get("tilesets"))
-        for (auto& t : ts->a) {
-            auto img = t.get("image");
-            if (!img) { TraceLog(LOG_WARNING, "%s: external tilesets are not supported; use 'Embed tileset' in Tiled", name.c_str()); continue; }
-            std::string full = (fs::path(asset("ui")) / img->s).lexically_normal().string();
-            Texture2D tx = LoadTexture(full.c_str());
-            if (tx.id == 0) { TraceLog(LOG_WARNING, "missing tileset image %s", full.c_str()); continue; }
-            SetTextureFilter(tx, TEXTURE_FILTER_POINT);
-            m.sets.push_back({int(num(t, "firstgid", 1)), int(num(t, "columns", 1)), int(num(t, "tilewidth", 64)), int(num(t, "tileheight", 64)), tx});
-        }
-    if (auto ls = root.get("layers"))
-        for (auto& l : ls->a) {
-            auto ty = l.get("type"), d = l.get("data");
-            if (!ty || ty->s != "tilelayer" || !d) continue;
-            if (m.data.empty()) m.data.assign(size_t(m.w) * size_t(m.h), 0);
-            for (size_t i = 0; i < d->a.size() && i < m.data.size(); i++) { uint32_t g = uint32_t(d->a[i].n) & 0x1FFFFFFFu; if (g) m.data[i] = g; }
-        }
-    std::sort(m.sets.begin(), m.sets.end(), [](const TMap::TS& a, const TMap::TS& b) { return a.first > b.first; });
-    m.ok = m.w > 0 && m.h > 0 && !m.sets.empty() && !m.data.empty();
-    TraceLog(LOG_INFO, "UI map %s: %dx%d tiles, scale %.2f, ok=%d", name.c_str(), m.w, m.h, m.scale, int(m.ok));
-    return m;
-}
-// Draws the whole map stretched into `dst` (natural size when dst matches size()).
-void drawTMap(const TMap& m, Rectangle dst, Color tint = WHITE) {
-    if (!m.ok) { DrawRectangleRec(dst, rgb(60, 50, 40, 230)); return; }
-    float cw = dst.width / float(m.w), ch = dst.height / float(m.h);
-    for (int y = 0; y < m.h; y++)
-        for (int x = 0; x < m.w; x++) {
-            uint32_t g = m.data[size_t(y * m.w + x)];
-            if (!g) continue;
-            const TMap::TS* ts = nullptr;
-            for (auto& s : m.sets) if (int(g) >= s.first) { ts = &s; break; }
-            if (!ts) continue;
-            int id = int(g) - ts->first;
-            Rectangle src{float(id % ts->cols * ts->tw), float(id / ts->cols * ts->th), float(ts->tw), float(ts->th)};
-            float x0 = std::floor(dst.x + float(x) * cw), x1 = std::floor(dst.x + float(x + 1) * cw);
-            float y0 = std::floor(dst.y + float(y) * ch), y1 = std::floor(dst.y + float(y + 1) * ch);
-            DrawTexturePro(ts->t, src, {x0, y0, x1 - x0, y1 - y0}, {0, 0}, 0, tint);
-        }
-}
 
 // ---------------------------------------------------------------- client state types
 struct NetId { uint32_t id; };
@@ -248,8 +90,10 @@ struct App {
     const BuildEntry buildList[7] = {{K_Outpost}, {K_Harbour}, {K_Storage}, {K_Archery}, {K_Mine}, {K_Lumber}, {K_Campfire}};
 
     // network
-    ENetHost* host = nullptr;
-    ENetPeer* peer = nullptr;
+    Settings settings;
+    int SW() const { return GetScreenWidth(); }          // logical UI size (the UI scale setting will divide these)
+    int SH() const { return GetScreenHeight(); }
+    Vector2 MP() const { return GetMousePosition(); }
     bool connected = false, welcomed = false, lost = false, helloSent = false;
     double startT = 0, lastCam = 0;
     std::string ip, uuid, myName;
@@ -291,6 +135,7 @@ struct App {
     std::vector<std::string> ctxNext;
     std::vector<Kind> ctxNextUnits;
     TMap mTrain;
+#include "client_menu.inc"
     bool socialOpen = false, bigMapOpen = false, textFocus = false, bmDragging = false;
     int socialTab = 0, socialScroll = 0, bmZoom = 4, bmW = 0, bmH = 0;
     std::string searchText;
@@ -317,7 +162,7 @@ struct App {
     bool okOutline = false, okWater = false, okDissolve = false, okPost = false, okBloom = false;
     TMap mHud, mTitle, mBuild, mMini, mCtx, mRoster, mBtn, mBtnP, mBtnR, mBtnRP;
 
-    void send(const Writer& w) { if (peer && connected) sendPacket(peer, w); }
+    void send(const Writer& w) { cnet.send(w); }
     void msg(const std::string& s) { disp.enqueue(LogEvent{s}); }
     bool hasMe() const { return me > 0; }
 
@@ -419,6 +264,8 @@ struct App {
             if (const char* c = std::getenv("BW_CAM")) { float a = 0, b = 0; if (std::sscanf(c, "%f,%f", &a, &b) == 2) cam.target = {a * TILE, b * TILE}; }
             if (const char* z = std::getenv("BW_ZOOM")) cam.zoom = float(std::atof(z));
             welcomed = true;
+            screen = Screen::Playing;
+            SetWindowTitle("Base Wars - connected");
             break;
         }
         case S_State: {
@@ -567,16 +414,18 @@ struct App {
         }
     }
     void pump() {
-        ENetEvent ev;
-        while (enet_host_service(host, &ev, 0) > 0) {
+        NetEvent ev;
+        while (cnet.poll(ev)) {
             switch (ev.type) {
-            case ENET_EVENT_TYPE_CONNECT:
+            case NetEvent::Connect:
                 connected = true;
-                if (!helloSent) { Writer w; w.put<uint8_t>(C_Hello); w.str(uuid); w.str(myName); send(w); helloSent = true; }
+                if (!helloSent) { sendHello(); helloSent = true; }
                 break;
-            case ENET_EVENT_TYPE_RECEIVE: onPacket(ev.packet->data, ev.packet->dataLength); enet_packet_destroy(ev.packet); break;
-            case ENET_EVENT_TYPE_DISCONNECT: connected = false; lost = true; break;
-            default: break;
+            case NetEvent::Receive: onPacket(ev.data.data(), ev.data.size()); break;
+            case NetEvent::Disconnect:
+                connected = false;
+                if (screen != Screen::Menu) backToMenu(welcomed ? "Disconnected from the server." : "The server closed the connection.");
+                break;
             }
         }
     }
@@ -2340,7 +2189,7 @@ struct App {
         shBlur = loadShader("bloom_blur.fs", b2);
         okBloom = b1 && b2 && okPost;
         mHud = loadTMap("hud_resources"); mTitle = loadTMap("title_ribbon"); mBuild = loadTMap("build_menu"); mMini = loadTMap("minimap_frame");
-        mCtx = loadTMap("context_panel"); mRoster = loadTMap("roster_panel"); mSocial = loadTMap("social_menu"); mMapFrame = loadTMap("map_frame"); mTrain = loadTMap("training_panel");
+        mCtx = loadTMap("context_panel"); mRoster = loadTMap("roster_panel"); mSocial = loadTMap("social_menu"); mMapFrame = loadTMap("map_frame"); mTrain = loadTMap("training_panel"); mMenu = loadTMap("main_menu");
         mBtn = loadTMap("button_blue"); mBtnP = loadTMap("button_blue_pressed"); mBtnR = loadTMap("button_red"); mBtnRP = loadTMap("button_red_pressed");
         Image im = GenImageColor(MM, MM, BLACK);
         mmTex = LoadTextureFromImage(im);
@@ -2351,22 +2200,19 @@ struct App {
     const char* shotPath = std::getenv("BW_SHOT");
     int shotFrames = 0, shotAfter = std::getenv("BW_SHOT_FRAMES") ? std::atoi(std::getenv("BW_SHOT_FRAMES")) : 400;
 
-    void run() {
-        host = enet_host_create(nullptr, 1, 2, 0, 0);
-        ENetAddress a{};
-        if (!host || enet_address_set_host(&a, ip.c_str()) != 0) { TraceLog(LOG_ERROR, "Bad server address '%s'", ip.c_str()); return; }
-        a.port = uint16_t(port);
-        peer = enet_host_connect(host, &a, 2, 0);
-        startT = GetTime();
+    void run(const std::string& autoJoin) {
         disp.sink<LogEvent>().connect<&onLog>();
         loadGfx();
-        HideCursor();
-        while (!WindowShouldClose()) {
+        menuRefresh();
+        if (!autoJoin.empty()) { ServerEntry e; e.name = autoJoin; e.address = autoJoin; e.local = true; joinServer(e); }
+        while (!WindowShouldClose() && !wantQuit) {
             float dt = GetFrameTime();
+            steam.run();
             pump();
             disp.update();
             ensureTargets();
-            if (welcomed && !lost) {
+            bool playing = screen == Screen::Playing && welcomed && !lost;
+            if (playing) {
                 input(dt);
                 reg.view<RPos, Goal, Face, Info>().each([&](RPos& p, const Goal& g, Face& f, const Info& in) {
                     float k = std::min(1.f, 12.f * dt);
@@ -2377,30 +2223,9 @@ struct App {
                     else if (std::abs(dx) > .004f) f.left = dx < 0;
                 });
                 updateMinimap();
-            }
-            if (shotPath && welcomed && shotFrames == 25) if (const char* c = std::getenv("BW_CMD")) { std::string cm = c; if (cm.rfind("chat:", 0) == 0) { chatLines.push_back({0, "Tester", cm.substr(5), GetTime()}); chatLines.push_back({1, "Friend", "clan chat line", GetTime()}); }
-                if (cm.rfind("clan:", 0) == 0) cmdClanCreate(cm.substr(5, cm.find(';') == std::string::npos ? std::string::npos : cm.find(';') - 5)); }
-            if (shotPath && welcomed && (shotFrames == 300 || shotFrames == 360) && shotPath && welcomed) if (const char* c = std::getenv("BW_CMD")) { std::string cm = c; auto p = cm.find("xfer:"); if (p != std::string::npos) cmdTransfer(std::atoi(cm.c_str() + p + 5), R_Wood, 60.f); }
-            if (shotPath && welcomed && shotFrames >= 20) {                 // test hooks (screenshots only)
-                if (const char* mp = std::getenv("BW_MOUSE")) { float dx = 0, dy = 0; if (std::sscanf(mp, "%f,%f", &dx, &dy) == 2) SetMousePosition(GetScreenWidth() / 2 + int(dx), GetScreenHeight() / 2 + int(dy)); }
-                if (const char* u = std::getenv("BW_UI")) {
-                    std::string ui = u;
-                    if (ui.find("build") != std::string::npos) buildOpen = true;
-                    if (ui.find("place") != std::string::npos) buildKind = K_Lumber;
-                    if (ui.find("social") != std::string::npos && shotFrames == 20) { socialOpen = true; if (const char* tb = std::getenv("BW_TAB")) socialTab = std::atoi(tb); if (const char* se = std::getenv("BW_SEARCH")) searchText = se; }
-                    if (ui.find("map") != std::string::npos && shotFrames == 20) { openBigMap(); if (const char* z = std::getenv("BW_MAPZ")) bmZoom = std::atoi(z); }
-                    if (ui.find("train") != std::string::npos && !trainOpen)
-                        reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!trainOpen && i.owner == me && i.kind == K_Archery) { trainOpen = true; trainTarget = n.id; if (const char* ts = std::getenv("BW_TSEL")) trainSel = std::atoi(ts); } });
-                    if (ui.find("ctxop") != std::string::npos && !ctxOpen)
-                        reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!ctxOpen && i.owner == me && i.kind == K_Outpost) openContext(n.id, {float(GetScreenWidth()) * .5f, float(GetScreenHeight()) * .15f}); });
-                    if (ui.find("ctxfac") != std::string::npos && !ctxOpen)
-                        reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!ctxOpen && isFactionOwner(i.owner) && i.kind == K_TownHall) openContext(n.id, {float(GetScreenWidth()) * .55f, float(GetScreenHeight()) * .2f}); });
-                    else if (ui.find("ctx") != std::string::npos && ui.find("ctxfac") == std::string::npos && !ctxOpen)
-                        reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (i.owner == me && i.kind == K_TownHall) openContext(n.id, {float(GetScreenWidth()) * .6f, float(GetScreenHeight()) * .25f}); });
-                }
-            }
+            } else menuUpdate();
             float t = float(GetTime());
-            if (welcomed && !lost) {
+            if (playing) {
                 BeginTextureMode(rt);
                 ClearBackground(rgb(20, 22, 30));
                 drawWater(t);
@@ -2412,7 +2237,8 @@ struct App {
             }
             BeginDrawing();
             ClearBackground(rgb(20, 22, 30));
-            if (welcomed && !lost) {
+            if (playing) {
+                HideCursor();
                 if (okPost) { postUniforms(t); BeginShaderMode(shPost); }
                 DrawTextureRec(rt.texture, {0, 0, float(rt.texture.width), -float(rt.texture.height)}, {0, 0}, WHITE);
                 if (okPost) EndShaderMode();
@@ -2428,13 +2254,22 @@ struct App {
                     break;
                 }
             } else {
-                std::string s = lost ? "Disconnected from server." : (GetTime() - startT > 8 && !connected ? "Could not reach " + ip + ":" + std::to_string(port) + " - check config.txt" : "Connecting to " + ip + ":" + std::to_string(port) + " ...");
-                DrawText(s.c_str(), 40, 40, 28, WHITE);
+                ShowCursor();
+                drawMenu(t);
+                if (shotPath && ++shotFrames == shotAfter) {
+                    rlDrawRenderBatchActive();
+                    Image img = LoadImageFromScreen();
+                    ExportImage(img, shotPath);
+                    UnloadImage(img);
+                    EndDrawing();
+                    break;
+                }
             }
             EndDrawing();
         }
-        if (peer && connected) { enet_peer_disconnect(peer, 0); enet_host_flush(host); }
-        enet_host_destroy(host);
+        settings.save(std::string(GetApplicationDirectory()));
+        cnet.close();
+        steam.shutdown();
     }
 };
 
@@ -2462,17 +2297,26 @@ void loadConfig(std::string& ip, int& port, std::string& name) {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
     App app;
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
+    std::string dir = std::string(GetApplicationDirectory());
     loadConfig(app.ip, app.port, app.myName);
-    app.loadProfile();
+    app.settings.load(dir);
+    if (app.myName.empty()) app.myName = app.settings.name;
     if (enet_initialize() != 0) { TraceLog(LOG_ERROR, "enet_initialize failed"); return 1; }
+    app.steam.init();
+    if (app.myName.empty() && app.steam.ok) app.myName = app.steam.name;
+    app.loadProfile();
+    app.directAddr = app.settings.lastServer;
     InitWindow(1280, 720, "Base Wars");
     SetTargetFPS(60);
     SetExitKey(KEY_NULL);
     findAssets();
-    app.run();
+    std::string autoJoin;                                              // "--connect host:port" joins immediately; screenshot runs join the configured server
+    for (int i = 1; i + 1 < argc; i++) if (std::string(argv[i]) == "--connect") autoJoin = argv[i + 1];
+    if (autoJoin.empty() && std::getenv("BW_SHOT") && !std::getenv("BW_MENU")) autoJoin = app.ip + ":" + std::to_string(app.port);
+    app.run(autoJoin);
     CloseWindow();
     enet_deinitialize();
 }
