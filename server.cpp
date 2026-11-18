@@ -229,12 +229,12 @@ struct Server {
             }
         for (int a = 1; a <= MAX_PLAYERS; a++)
             if (pl[a].used && bitAt(pl[a].expl, cx, cy)) return false;
-        bool near = false;
+        bool nearBase = false;
         reg.view<Info, Building>().each([&](const Info& i, const Building& b) {
             if (i.kind != K_TownHall) return;
-            if (std::max(std::abs(b.tx - cx), std::abs(b.ty - cy)) < 70) near = true;
+            if (std::max(std::abs(b.tx - cx), std::abs(b.ty - cy)) < 70) nearBase = true;
         });
-        return !near;
+        return !nearBase;
     }
     IV findClearing() {
         int ths = 0;
