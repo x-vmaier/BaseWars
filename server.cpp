@@ -145,7 +145,7 @@ struct Server {
         for (float v : reg.get<Building>(e).stock) t += v;
         return t;
     }
-    float capOf(entt::entity e) const { const auto& i = reg.get<Info>(e); return storageCap(i.kind, i.level); }
+    float capOf(entt::entity e) const { const auto& i = reg.get<Info>(e); return inactive(e) ? 0.f : storageCap(i.kind, i.level); }   // non-functional storage holds nothing
     // puts as much of `cargo` as fits into storage building `st`; returns the amount stored
     float storeCargo(entt::entity st, float* cargo) {
         int o = reg.get<Owner>(st).id;
@@ -464,6 +464,7 @@ struct Server {
         h.hp -= amt;
         h.lastHit = uint8_t(attacker);
         int o = reg.get<Owner>(e).id;
+        baseOnDamage(e, o, attacker);                                    // clan alerts / defense dispatch (server_base.inc)
         if (by) reg.emplace_or_replace<Hit>(e, Hit{by, clock});
         if (isFactionOwner(o) && isPlayer(attacker)) {
             addRep(attacker, o - FACTION_BASE, -amt * .06f);
@@ -523,9 +524,10 @@ struct Server {
             for (int r = 0; r < R_Count; r++) { float l = std::floor(pl[victim].res[r] * .5f); pl[killer].res[r] += l; tot += l; }
             say(killer, "You destroyed " + pl[victim].name + "'s Town Hall! Loot: " + std::to_string(int(tot)) + " resources.");
         }
+        if (baseDefeat(victim)) return;                                    // clan members become homeless (server_base.inc)
         removeOwner(victim);
         resetProfile(victim);
-        spawnBase(victim);
+        spawnBase(victim, bp[victim].friends);                            // respawn near Steam friends / allies
         pl[victim].sentFog.clear();
         pl[victim].sentTerr.clear();
         say(victim, "Your Town Hall fell! You rebuild at a fresh clearing elsewhere in the world.");
@@ -579,6 +581,7 @@ struct Server {
                 removeOwner(id);
                 for (int a = 0; a <= MAX_PLAYERS; a++) pl[a].allied[id] = pl[a].pending[id] = false;
                 pl[id] = Profile{};
+                bp[id] = BaseProf{};
             }
             fresh = true;
             pl[id].used = true;
@@ -593,6 +596,7 @@ struct Server {
         p.online = true;
         p.conn = conn;
         p.steamId = steamId;
+        bp[id].friends = friends;
         connPlayer[conn] = id;
         p.lastSeen = nowSec();
         p.sentFog.clear();
@@ -601,7 +605,7 @@ struct Server {
         else {
             bool hasTH = false;
             reg.view<Info, Owner>().each([&](const Info& i, const Owner& o) { if (i.kind == K_TownHall && o.id == id) hasTH = true; });
-            if (!hasTH) { resetProfile(id); spawnBase(id, friends); say(id, "Your base was destroyed while you were away. You start over."); }
+            if (!hasTH && !bp[id].homeless) { resetProfile(id); spawnBase(id, friends); say(id, "Your base was destroyed while you were away. You start over."); }
         }
         if (const char* rv = std::getenv("BW_REVEAL")) {          // test hook: reveal a large disc around the base
             Pos c = p.cam;
@@ -648,10 +652,20 @@ struct Server {
         bool explored(int x, int y) { return s.explored(me, x, y); }
         bool occupied(int x, int y) { return s.occ.count(tkey(x, y)) > 0; }
         template <class F> void anchors(F f) {
-            s.reg.view<Info, Building, Owner>().each([&](const Info& i, const Building& b, const Owner& o) {
-                if (i.kind == K_TownHall || i.kind == K_Outpost) f(footCenter(i.kind, b.tx, b.ty), i.kind, o.id == me, s.allied(me, o.id) && o.id != me);
+            s.reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info& i, const Building& b, const Owner& o) {
+                if ((i.kind == K_TownHall || i.kind == K_Outpost) && !s.inactive(e)) f(footCenter(i.kind, b.tx, b.ty), i.kind, o.id == me, s.allied(me, o.id) && o.id != me);
             });
         }
+        bool campfireNear(Pos c, float r) {
+            bool hit = false;
+            s.reg.view<Info, Building>().each([&](const Info& i, const Building& b) {
+                if (i.kind != K_Campfire) return;
+                Pos q = footCenter(i.kind, b.tx, b.ty);
+                if (std::hypot(q.x - c.x, q.y - c.y) < r) hit = true;
+            });
+            return hit;
+        }
+        bool inClanRadius(Pos c) { return s.inClanRadiusOf(me, c); }
     };
 
     bool spawnSpot(entt::entity b, bool water, Pos& out) {
@@ -684,6 +698,7 @@ struct Server {
                 if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e) || reg.all_of<Aboard>(e)) continue;   // units aboard a ship cannot be commanded
                 Kind k = reg.get<Info>(e).kind;
                 if (combatOnly && (k == K_Ship || k == K_Monk)) continue;
+                releaseUnit(e);                                      // a manual command ends patrols / firefighting
                 if (k == K_Pawn) huntPause(e);                          // [world] a commanded pawn stops hunting for a while
                 reg.remove<Boarding>(e);                         // any new order cancels embarking
                 if (k == K_Ship) cancelVoyage(e);                // ... and takes a ship off a supply run
@@ -697,7 +712,8 @@ struct Server {
             auto k = Kind(r.get<uint8_t>());
             int tx = r.get<int32_t>(), ty = r.get<int32_t>();
             if (!r.ok || k >= K_Count || !isBuilding(k)) return;
-            if (k == K_TownHall) { say(id, "You can only have one Town Hall."); return; }
+            if (k == K_TownHall) { homelessBuild(id, tx, ty); return; }
+            if (k != K_Campfire && townMoveActive(id)) { say(id, "Wait until the town move is finished before building."); return; }
             PlaceWorld w{*this, id};
             int err = checkPlace(w, k, tx, ty);
             if (err) { say(id, std::string("Cannot build here: ") + PLACE_TEXT[err] + "."); return; }
@@ -713,18 +729,7 @@ struct Server {
             auto be = find(r.get<uint32_t>());
             auto k = Kind(r.get<uint8_t>());
             if (!r.ok || be == entt::null || k >= K_Count || isBuilding(k) || !reg.all_of<Building>(be)) return;
-            if (reg.get<Owner>(be).id != id || !complete(be) || !canTrain(reg.get<Info>(be).kind, k)) return;
-            if (reg.get<Info>(be).level < unitUnlockLevel(k)) { say(id, std::string(KINFO[k].name) + "s unlock at Archery level " + std::to_string(unitUnlockLevel(k)) + "."); return; }
-            if (!afford(id, KINFO[k].cost)) { say(id, "Not enough resources."); return; }
-            if (unitCount(id) >= UNIT_CAP) { say(id, "Unit cap reached."); return; }
-            Pos at;
-            if (!spawnSpot(be, k == K_Ship, at)) { say(id, k == K_Ship ? "No free ocean tile next to the harbour." : "No room to spawn units."); return; }
-            spend(id, KINFO[k].cost);
-            auto u = makeUnit(k, uint8_t(id), at.x, at.y);
-            if (k == K_Ship) initShip(u, reg.get<Info>(be).level);   // empty boat, tier = harbour level
-            if (k == K_Ship) fx(E_Splash, at.x, at.y);
-            else fx(E_Dust, at.x, at.y);
-            // [world] trained pawns are free pawns (they hunt); only building-owned workers haul resources
+            enqueueTrain(id, be, k);                                // queued production (server_base.inc)
             break;
         }
         case C_ClanCreate: {
@@ -845,6 +850,7 @@ struct Server {
             auto be = find(r.get<uint32_t>());
             if (!r.ok || be == entt::null || !reg.all_of<Building>(be) || reg.get<Owner>(be).id != id || !complete(be)) return;
             auto& in = reg.get<Info>(be);
+            if (inactive(be)) { say(id, "This building is not functional."); return; }
             if (in.level >= MAX_LEVEL) { say(id, "Already at the maximum level."); return; }
             float cost[R_Count];
             for (int i = 0; i < R_Count; i++) cost[i] = std::ceil(KINFO[in.kind].cost[i] * upgradeCostMul(in.level) * .7f);
@@ -924,7 +930,7 @@ struct Server {
             break;
         }
         case C_Clear: onClear(id, r); break;                            // [world]
-        default: shipPacket(id, type, r); break;
+        default: shipPacket(id, type, r); baseCommand(id, type, r); break;   // [ships] / [base] command sets (each ignores the other's types)
         }
     }
     void breakAlliance(int a, int b) {
@@ -1088,6 +1094,7 @@ struct Server {
         int c = pl[id].clan;
         if (!c) return;
         pl[id].clan = 0;
+        if (bp[id].homeless) respawnNormally(id);                         // a homeless member without a clan restarts normally
         notifyClan(c, pl[id].name + " left the clan.");
         say(id, "You left the clan.");
         int next = 0;
@@ -1160,7 +1167,7 @@ struct Server {
         std::unordered_set<uint32_t> busy;
         reg.view<Haul>().each([&](const Haul& h) { busy.insert(h.storage); });
         std::vector<entt::entity> blds;
-        reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info& i, const Building& b, const Owner& o) { if ((i.kind == K_Outpost || i.kind == K_Storage) && b.progress >= 1.f && isPlayer(o.id)) blds.push_back(e); });
+        reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info& i, const Building& b, const Owner& o) { if ((i.kind == K_Outpost || i.kind == K_Storage) && b.progress >= 1.f && isPlayer(o.id) && !inactive(e)) blds.push_back(e); });
         for (auto e : blds) {
             uint32_t uid = reg.get<Uid>(e).id;
             if (busy.count(uid)) continue;
@@ -1298,7 +1305,7 @@ struct Server {
             int ow = reg.get<Owner>(e).id;
             Pos c = footCenter(in.kind, b.tx, b.ty);
             if (b.progress < 1.f) {
-                b.progress = std::min(1.f, b.progress + dt / KINFO[in.kind].buildTime);
+                b.progress = std::min(1.f, b.progress + dt / buildTimeFor(e, in.kind));
                 if (b.progress >= 1.f) {
                     reveal(ow, int(std::floor(c.x)), int(std::floor(c.y)), KINFO[in.kind].vision);
                     fx(E_Dust, c.x, c.y);
@@ -1306,6 +1313,7 @@ struct Server {
                 }
                 continue;
             }
+            if (!buildingTick(e, dt)) continue;                         // non-functional buildings do nothing (server_base.inc)
             if (isResourceBuilding(in.kind) && isPlayer(ow)) {
                 Yield y = yieldOf(in.kind, biome(int(std::floor(c.x)), int(std::floor(c.y))), in.kind == K_Harbour);
                 float f = levelMul(in.level) * mineMul(e, in.kind, c) * (pl[ow].online ? 1.f : OFFLINE_PROD) * dt, tot = 0;   // [world] gold deposits boost mines
@@ -1355,6 +1363,7 @@ struct Server {
                     if (walkable(nx, ny, false, 0) && biome(nx, ny) != B_Highlands) { u.path = {{float(nx) + .5f, float(ny) + .5f}}; u.i = 0; }
                 }
             }
+            if (extinguishTick(e, u, p, dt)) continue;                  // firefighting duty (server_base.inc)
             if (isFactionOwner(ow)) factionAI(e, u, p, dt);
             if (auto* wk = reg.try_get<Worker>(e)) { runWorker(e, u, *wk, dt); }
             else if (auto* cv = reg.try_get<Convoy>(e)) { runConvoy(e, u, *cv, dt); }
@@ -1439,6 +1448,7 @@ struct Server {
                 int rx = floorDiv(cx, REGION_CHUNKS), ry = floorDiv(cy, REGION_CHUNKS);
                 for (int y = ry - 1; y <= ry + 1; y++) for (int x = rx - 1; x <= rx + 1; x++) processRegion(x, y);
             }
+            baseSecond();
             townTick();
             callHelp();
             updateSpotting();
@@ -1459,6 +1469,7 @@ struct Server {
             }
         if (tick % 4 == 0)
             for (auto e : blds) {   // keep building vision fresh for players who just (re)joined
+                if (!reg.valid(e)) continue;                     // (baseSecond may have removed relocated buildings)
                 int ow = reg.get<Owner>(e).id;
                 if (!isPlayer(ow) || !pl[ow].online || !complete(e)) continue;
                 if (tick % 40 != 0) continue;
@@ -1467,8 +1478,10 @@ struct Server {
             }
 
         worldTick(dt);                                                  // [world] clearing jobs, sheep repopulation, patrols
+        baseTail();
         for (int id = 1; id <= MAX_PLAYERS; id++) {
             if (!pl[id].online) continue;
+            if (tick % 10 == 0) sendQueues(id);
             if (tick % 2 == 0) sendState(id);
             if (tick % 8 == 0) sendPaths(id);
             if (tick % 10 == 3 && pl[id].online) sendShipInfo(id);
@@ -1502,7 +1515,7 @@ struct Server {
             u.i = 0;
             u.state = US_Attack;
             damage(tg, KINFO[k].dps * unitDmgMul(ulv(ow, k)) * damageVs(k, reg.get<Info>(tg).kind) * armorOf(reg.get<Info>(tg).kind) * dt, ow, reg.get<Uid>(e).id);
-            if (k == K_Archer && u.cd <= 0) { u.cd = .8f; fx(E_Arrow, p.x, p.y - .4f, tp.x, tp.y); }
+            if (k == K_Archer && u.cd <= 0) { u.cd = .8f; archerShot(ow, p, tp, tg); }   // fire arrows at troop level 3
         } else if (u.repath <= 0 || u.path.empty()) {
             u.repath = 1.f;
             bool bld = isBuilding(reg.get<Info>(tg).kind);
@@ -1610,6 +1623,7 @@ struct Server {
             if (const Unit* u = reg.try_get<Unit>(e)) {
                 state = u->state;
                 if (reg.all_of<Convoy>(e) || reg.all_of<Haul>(e)) state |= UNIT_CONVOY_FLAG;
+                if (reg.all_of<Support>(e)) state |= UNIT_SUPPORT_FLAG;
                 aim = u->aim;
                 if (const Worker* wk = reg.try_get<Worker>(e)) {
                     float best = 0;
@@ -1617,6 +1631,7 @@ struct Server {
                 } else aux = worldAux(e);                               // [world] hunter pawns carrying meat
             } else {
                 const Building& b = reg.get<Building>(e);
+                state = bflagsOf(e);                                   // BLD_BURNING / BLD_DISABLED / BLD_MOVING
                 aux = in.level;
                 aim = b.haulPct;
                 prog = uint8_t(std::min(1.f, b.progress) * 100.f);
@@ -1642,6 +1657,7 @@ struct Server {
 
 #include "server_world.inc"
 #include "server_ships.inc"
+#include "server_base.inc"   // base mechanics: fire, queues, clan defense, relocation
 };
 
 void Server::sendFog(int id) {
@@ -1795,6 +1811,7 @@ void Server::save() {
     });
     worldSave(w);                                                       // [world] appended section: cleared tiles
     shipsSave(w);   // append-only ship passenger section
+    saveBase(w);
     std::string tmp = savePath + ".tmp";
     {
         std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
@@ -1911,6 +1928,9 @@ bool Server::load() {
         }
     }
     worldLoad(r);                                                       // [world] optional appended section
+    if (!r.ok) { std::puts("Savegame is truncated; starting fresh."); return false; }
+    shipsLoad(r);
+    if (r.ok && r.p < r.e) loadBase(r);                                  // optional base-mechanics section (appended)
     if (!r.ok) { std::puts("Savegame is truncated; starting fresh."); return false; }
     shipsLoad(r);
     return true;

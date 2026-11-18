@@ -124,6 +124,7 @@ struct App {
 #include "client_menu.inc"
 #include "client_world.inc"                           // [world] clearing, drops, gold sparkle, land clouds
 #include "client_ships.inc"
+#include "client_base.inc"      // base mechanics: fire, queues, clan alerts, relocation (client side)
     bool socialOpen = false, bigMapOpen = false, textFocus = false, bmDragging = false;
     int socialTab = 0, socialScroll = 0, bmZoom = 4, bmW = 0, bmH = 0;
     std::string searchText;
@@ -239,7 +240,8 @@ struct App {
 
     void onPacket(const uint8_t* d, size_t n) {
         Reader r{d, d + n};
-        switch (r.get<uint8_t>()) {
+        uint8_t ptype = r.get<uint8_t>();
+        switch (ptype) {
         case S_Welcome: {
             me = r.get<uint8_t>();
             seed = r.get<uint32_t>();
@@ -401,7 +403,7 @@ struct App {
         }
         case S_Paths: if (welcomed) onShipsPaths(r); break;
         case S_ShipInfo: if (welcomed) onShipsInfo(r); break;
-        default: worldPacket(d, n); break;                               // [world] S_Cleared / S_ClearJobs / S_Drop
+        default: worldPacket(d, n); baseOnPacket(ptype, r); break;     // [world] / [base] packet sets (each ignores the other's types)
         }
     }
     void pump() {
@@ -434,8 +436,18 @@ struct App {
         bool occupied(int x, int y) { return a.occ.count(chunkKey(x, y)) > 0; }
         template <class F> void anchors(F f) {
             a.reg.view<Info, Goal>().each([&](const Info& i, const Goal& g) {
-                if (i.kind == K_TownHall || i.kind == K_Outpost) f(Pos{g.x, g.y}, i.kind, i.owner == a.me, i.owner != a.me && a.alliedWith(i.owner));
+                if ((i.kind == K_TownHall || i.kind == K_Outpost) && !(i.state & BLD_DISABLED)) f(Pos{g.x, g.y}, i.kind, i.owner == a.me, i.owner != a.me && a.alliedWith(i.owner));
             });
+        }
+        bool campfireNear(Pos c, float r) {
+            bool hit = false;
+            a.reg.view<Info, Goal>().each([&](const Info& i, const Goal& g) { if (i.kind == K_Campfire && std::hypot(g.x - c.x, g.y - c.y) < r) hit = true; });
+            return hit;
+        }
+        bool inClanRadius(Pos c) {                                  // clan towns we know of (roster locations of clan mates)
+            for (auto& p : a.roster)
+                if (p.id != a.me && p.hasLoc && p.clan && p.clan == a.myClan() && std::max(std::abs(p.lx - c.x), std::abs(p.ly - c.y)) <= CLAN_TOWN_RADIUS) return true;
+            return false;
         }
     };
     IV placeTile(Kind k, Vector2 world) {
@@ -478,6 +490,7 @@ struct App {
         if (CheckCollisionPointRec(m, buildTab()) || (buildSlide > .02f && CheckCollisionPointRec(m, buildRect()))) return true;
         if (CheckCollisionPointRec(m, coordRect()) || CheckCollisionPointRec(m, socialTabBtn())) return true;
         if (socialOpen || bigMapOpen || trainOpen || chatOpen) return true;
+        if (overBaseUI(m)) return true;
         if (ctxOpen && CheckCollisionPointRec(m, ctxRect())) return true;
         if (shipPanelOver(m)) return true;
         return false;
@@ -540,6 +553,7 @@ struct App {
 
     void selectBuildKind(int i) {
         Kind k = buildList[i].k;
+        placeMode = 0;
         buildKind = buildKind == int(k) ? -1 : int(k);
         mode = M_None;
         if (buildKind >= 0) msg(std::string("Placing ") + KINFO[k].name + ": click to build, Shift keeps building, Esc/right-click cancels.");
@@ -621,6 +635,7 @@ struct App {
         ctxNext.clear();
         ctxNextUnits.clear();
         ctxSlider = false;
+        ctxQuota = false;
         auto it = ents.find(ctxTarget);
         if (it == ents.end()) { ctxOpen = false; return; }
         const Info& in = reg.get<Info>(it->second);
@@ -684,6 +699,7 @@ struct App {
                 else ctx.push_back({"Invite to alliance", 4, uint32_t(in.owner), 0, true, false});
             }
         }
+        baseContext(in, mine, done);
     }
     void runContext(const MenuAct& a) {
         switch (a.act) {
@@ -693,7 +709,7 @@ struct App {
         case 4: cmdAlly(int(a.a), AA_Invite); break;
         case 5: cmdAlly(int(a.a), AA_Break); break;
         case 6: cmdDonate(int(a.a), int(a.b), 50.f); break;
-        default: ctxOpen = false; break;
+        default: if (!baseRunContext(a)) ctxOpen = false; break;
         }
     }
     float ctxTopY() { Rectangle r = ctxRect(); return r.y + float(mCtx.padding) + 20; }
@@ -714,6 +730,7 @@ struct App {
 
         if (pauseOpen) { pauseInput(); return; }
         if (chatOpen) { chatUpdate(m); return; }
+        if (baseInput(m)) return;
         if (bigMapOpen) { bigMapInput(m); return; }
         if (trainOpen) { trainInput(m); return; }
         if (socialOpen) { socialInput(m); return; }
@@ -763,8 +780,8 @@ struct App {
             Rectangle hit{sr.x - 12, sr.y - 10, sr.width + 24, sr.height + 20};
             if (lp && CheckCollisionPointRec(m, hit)) sliderDrag = true;
             if (sliderDrag && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-                int pct = std::clamp(int(std::lround((10.f + 90.f * (m.x - sr.x) / sr.width) / 5.f)) * 5, 10, 100);
-                if (pct != ctxPct) { ctxPct = pct; cmdSetHaul(ctxTarget, pct); }
+                int pct = ctxQuota ? quotaFromMouse(m.x, sr) : std::clamp(int(std::lround((10.f + 90.f * (m.x - sr.x) / sr.width) / 5.f)) * 5, 10, 100);
+                if (pct != ctxPct) { ctxPct = pct; if (ctxQuota) { myQuota = pct; cmdQuota(pct); } else cmdSetHaul(ctxTarget, pct); }
             }
             if (sliderDrag && lr) sliderDrag = false;
             if (sliderDrag || (lp && CheckCollisionPointRec(m, hit))) return;
@@ -793,13 +810,13 @@ struct App {
             if (buildKind >= 0) {
                 Kind k = Kind(buildKind);
                 IV t = placeTile(k, w);
-                PW pw{*this};
-                int err = checkPlace(pw, k, t.x, t.y);
+                int err = placeCheck(k, t);
                 if (err) msg(std::string("Cannot build here: ") + PLACE_TEXT[err] + ".");
-                else if (!affordable(KINFO[k].cost)) msg("Not enough resources" + std::string(roster.empty() ? "." : " (allies may cover the rest)."));
+                else if (!affordable(placeCost(k))) msg("Not enough resources" + std::string(roster.empty() ? "." : " (allies may cover the rest)."));
                 bool clearing = !err && worldPlaceClick(k, t);                // [world] only features block: start clearing exactly those tiles
-                if (!err && !clearing) cmdBuild(k, t);
-                if (!shift && !clearing) buildKind = -1;
+                if (!err && !clearing) cmdPlace(k, t);
+                if (effMode() != 0) { if (!err && !clearing) buildKind = -1; }   // special placements: stay in the mode until a valid site was chosen
+                else if (!shift && !clearing) buildKind = -1;
             } else if (mode == M_Move) {
                 cmdMove(w);
                 if (!shift) mode = M_None;
@@ -817,7 +834,7 @@ struct App {
             if (shipRightClick(id)) return;
             if (it != ents.end() && isBuilding(reg.get<Info>(it->second).kind)) {
                 const Info& bi = reg.get<Info>(it->second);
-                if (bi.kind == K_Archery && bi.owner == me && bi.prog >= 100) { trainOpen = true; trainTarget = id; trainSel = 0; ctxOpen = false; }
+                if (bi.kind == K_Archery && bi.owner == me && bi.prog >= 100 && !(bi.state & (BLD_DISABLED | BLD_MOVING))) { trainOpen = true; trainTarget = id; trainSel = 0; ctxOpen = false; }
                 else openContext(id, m);
                 return;
             }
@@ -883,6 +900,7 @@ struct App {
     Anim unitAnim(Kind k, int owner, int state, int aux, int aim, bool moving, int biome, double t) {
         std::string base = std::string("Units/") + COLOR_NAME[colorIdx(owner)] + " Units/";
         float ang = float(aim) / 255.f * 6.28319f - 3.14159f;
+        if (state == US_Extinguish) return extinguishAnim(k, owner);
         switch (k) {
         case K_Pawn: {
             if (state == US_Work) return mkAnim(base + (biome == B_Forest ? "Pawn/Pawn_Interact Axe.png" : "Pawn/Pawn_Interact Pickaxe.png"), 192, 192, 9, 96, 135);
@@ -966,7 +984,9 @@ struct App {
         items.push_back({sortY - 6.f, [=, this]() {
             DrawEllipse(int(cx), int(bottom - 8), float(ki.fw) * 28.f, float(ki.fh) * 14.f, rgb(0, 0, 0, 55));
             DrawEllipseLines(int(cx), int(bottom - 8), float(ki.fw) * 28.f, float(ki.fh) * 14.f, teamColor(i.owner));
-            Color tint = prog < 1.f ? rgb(255, 255, 255, 190) : WHITE;
+            bool moving = (i.state & BLD_MOVING) != 0;
+            Color tint = moving ? rgb(255, 255, 255, 62) : (prog < 1.f ? rgb(255, 255, 255, 190) : WHITE);
+            auto A = [&](Color c) { if (moving) c.a = 62; return c; };
             int md = hover ? 1 : 0;
             if (i.kind == K_Harbour) {                                    // wooden pier over adjacent ocean tiles
                 for (int y = ty - 1; y <= ty + ki.fh; y++)
@@ -988,10 +1008,10 @@ struct App {
             }
             if (i.kind == K_Mine) {                                       // cave mouth, timber frame, ore pile
                 float w = float(ki.fw) * TILE - 12;
-                DrawEllipse(int(cx), int(bottom - 34), w * .42f, 40, rgb(36, 30, 30));
-                DrawRectangle(int(cx - w * .42f - 4), int(bottom - 70), 8, 70, rgb(120, 82, 46));
-                DrawRectangle(int(cx + w * .42f - 4), int(bottom - 70), 8, 70, rgb(120, 82, 46));
-                DrawRectangle(int(cx - w * .42f - 8), int(bottom - 78), int(w * .84f + 16), 10, rgb(146, 100, 58));
+                DrawEllipse(int(cx), int(bottom - 34), w * .42f, 40, A(rgb(36, 30, 30)));
+                DrawRectangle(int(cx - w * .42f - 4), int(bottom - 70), 8, 70, A(rgb(120, 82, 46)));
+                DrawRectangle(int(cx + w * .42f - 4), int(bottom - 70), 8, 70, A(rgb(120, 82, 46)));
+                DrawRectangle(int(cx - w * .42f - 8), int(bottom - 78), int(w * .84f + 16), 10, A(rgb(146, 100, 58)));
                 Texture2D r1 = tex("Terrain/Decorations/Rocks/Rock2.png"), r2 = tex("Terrain/Decorations/Rocks/Rock3.png"), g1 = tex("Terrain/Resources/Gold/Gold Stones/Gold Stone 2.png");
                 drawSprite(r1, {0, 0, 64, 64}, {cx - 62, bottom - 62, 64, 64}, tint, md, oc);
                 drawSprite(r2, {0, 0, 64, 64}, {cx + 14, bottom - 58, 64, 64}, tint, md, oc);
@@ -1013,6 +1033,7 @@ struct App {
                 Anim d = mkAnim("Particle FX/Dust_01.png", 64, 64, 8, 32, 60);
                 drawAnim(d, frameFor(d, t, float(id % 4)), cx - float(ki.fw) * 20.f, bottom - 6, false, 1.2f, rgb(255, 255, 255, 180));
             }});
+        baseBuildingFx(i, id, cx, bottom, ki.fw, ki.fh, sortY, items, t);       // fire, red cross, relocation marker
         float hpFrac = i.hp / std::max(1.f, i.maxhp);
         if (prog >= 1.f && isBuilding(i.kind) && i.kind != K_Campfire) {                // damage: smoke and flames
             if (hpFrac < .6f) items.push_back({sortY + 2.f, [=, this]() { Anim d = mkAnim("Particle FX/Dust_02.png", 64, 64, 9, 32, 60); drawAnim(d, frameFor(d, t, float(id % 7)), cx - 20, bottom - 70, false, 1.8f, rgb(120, 120, 130, 210)); }});
@@ -1049,6 +1070,8 @@ struct App {
             if (selected) DrawEllipseLines(int(px), int(py + 2), 24, 10, rgb(255, 235, 90));
             drawAnim(a, frameFor(a, t, float(id % 7)), px, py + 6, fc.left, 1.f, WHITE, hover ? 1 : 0, oc);
             if (convoy) textShadow("Convoy", int(px) - 22, int(py) - 70, 14, rgb(120, 230, 255));
+            if ((i.state & UNIT_SUPPORT_FLAG) && !convoy) textShadow("Patrol", int(px) - 20, int(py) - 70, 14, alliedWith(i.owner) ? rgb(255, 190, 80) : rgb(255, 110, 100));
+            if ((i.state & 7) == US_Extinguish) drawExtinguishSplash(px, py, fc.left, t, id);
             if (i.kind == K_Monk && (i.state & 7) == US_Heal) { Anim h = mkAnim(std::string("Units/") + COLOR_NAME[colorIdx(i.owner)] + " Units/Monk/Heal_Effect.png", 192, 192, 10, 96, 135); drawAnim(h, frameFor(h, t), px, py + 6, false, 1.f); }
             float fr = i.hp / std::max(1.f, i.maxhp);
             if ((fr < .995f || selected || hover) && i.kind != K_Sheep) drawBar({px, py - 56}, 48, fr, fr > .5f ? rgb(90, 220, 90) : (fr > .25f ? rgb(240, 190, 50) : rgb(235, 70, 60)));
@@ -1110,7 +1133,7 @@ struct App {
                 }});
                 break;
             }
-            default: break;
+            default: baseDrawFx(f, items, t); break;
             }
         }
         std::erase_if(fxs, [&](const Fx& f) { return t - f.t > (f.type == E_Explosion ? 1.6 : 1.0); });
@@ -1220,10 +1243,10 @@ struct App {
             Kind k = Kind(buildKind);
             Vector2 w = GetScreenToWorld2D(::GetMousePosition(), cam);
             IV tt = placeTile(k, w);
-            PW pw{*this};
-            int err = checkPlace(pw, k, tt.x, tt.y);
-            bool ok = err == P_OK && affordable(KINFO[k].cost);
+            int err = placeCheck(k, tt);
+            bool ok = err == P_OK && affordable(placeCost(k));
             items.push_back({1e9f, [=, this]() {
+                drawPlaceExtras();
                 reg.view<Info, Goal>().each([&](const Info& i, const Goal& g) {          // territory squares of own bases
                     if (i.owner != me || (i.kind != K_TownHall && i.kind != K_Outpost)) return;
                     float r = float(anchorRadius(i.kind));
@@ -1244,7 +1267,7 @@ struct App {
                     float dw = s.artW * s.scale, dh = s.artH * s.scale;
                     DrawTexturePro(bt, {0, 0, s.artW, s.artH}, {cx - dw / 2, bottom - 6 - s.artBottom * s.scale, dw, dh}, {0, 0}, 0, rgb(255, 255, 255, 150));
                 }
-                std::string label = err ? PLACE_TEXT[err] : (ok ? costText(KINFO[k].cost) : "Not enough resources");
+                std::string label = err ? PLACE_TEXT[err] : (ok ? costText(placeCost(k)) : "Not enough resources");
                 if (!err) { std::string wl = worldGhostLabel(k, tt); if (!wl.empty()) label = wl; }          // [world]
                 textShadow(label, int(cx) - MeasureText(label.c_str(), 18) / 2, int(bottom) + 10, 18, ok ? rgb(160, 255, 160) : rgb(255, 150, 130));
                 if (k == K_Campfire) DrawCircleLinesV({cx, bottom - 30}, WARMTH_RADIUS * TILE, rgb(255, 170, 70, 160));
@@ -1454,6 +1477,7 @@ struct App {
     }
     void bigMapInput(Vector2 m) {
         Rectangle in = mapInner(), fr = mapFrameRect();
+        if (bmMenuInput(m)) return;
         if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_N)) { bigMapOpen = false; return; }
         if (IsKeyPressed(KEY_P)) { bigMapOpen = false; socialOpen = true; return; }
         float wheel = GetMouseWheelMove();
@@ -1481,7 +1505,7 @@ struct App {
             bmDragging = false;
             if (bmDragMoved < 5) { Vector2 t = mapToTile(m); travelTo(t.x, t.y); }
         }
-        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) bigMapOpen = false;
+        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && !bmRightClick(m)) bigMapOpen = false;
     }
     void refreshBigMap() {
         Rectangle in = mapInner();
@@ -1523,7 +1547,7 @@ struct App {
         auto inside = [&](Vector2 p, float pad) { return p.x > in.x + pad && p.y > in.y + pad && p.x < in.x + in.width - pad && p.y < in.y + in.height - pad; };
         float castle = mini ? 15.f : 28.f, mycastle = mini ? 19.f : 34.f;
         reg.view<Info, Goal>().each([&](const Info& i, const Goal& g) {        // territory: clans share one colour
-            if (!isBuilding(i.kind) || i.prog < 100 || isFactionOwner(i.owner) || (i.kind != K_TownHall && i.kind != K_Outpost)) return;
+            if (!isBuilding(i.kind) || i.prog < 100 || (i.state & BLD_DISABLED) || ((i.state & BLD_MOVING) && i.kind != K_TownHall) || isFactionOwner(i.owner) || (i.kind != K_TownHall && i.kind != K_Outpost)) return;
             auto p = peerOf(i.owner);
             int clan = i.owner == me ? myClan() : (p ? p->clan : 0);
             Color col = clan ? clanColor(clan) : teamColor(i.owner);
@@ -1588,6 +1612,7 @@ struct App {
             DrawTexturePro(a.t, frameRect(a, 0), {sp.x - 12, sp.y - 16, 24, 24}, {0, 0}, 0, WHITE);
             if (!friendly) { DrawText("!", int(sp.x) + 9, int(sp.y) - 16, 14, rgb(255, 90, 70)); DrawText((nameOf(i.owner) + " convoy").c_str(), int(sp.x) + 14, int(sp.y) - 4, 10, rgb(255, 170, 150)); }
         });
+        drawSupportMapIcons(in, c, tpp, mini);
     }
     void drawBigMap() {
         Vector2 m = GetMousePosition();
@@ -1628,7 +1653,7 @@ struct App {
         }
         DrawRectangleLinesEx(in, 2, rgb(60, 40, 26));
         textShadow("WORLD MAP", int(fr.x + fr.width / 2) - 50, int(fr.y) + 10, 18, rgb(255, 240, 200));
-        std::string hint = "Click: travel   Drag: pan   Wheel: zoom   N/Esc: close";
+        std::string hint = "Click: travel   Right-click ally: support patrol   Drag: pan   Wheel: zoom   N/Esc: close";
         textShadow(hint, int(fr.x + fr.width / 2) - MeasureText(hint.c_str(), 12) / 2, int(fr.y + fr.height) - 24, 12, rgb(255, 240, 200));
         if (CheckCollisionPointRec(m, in)) {
             Vector2 t = mapToTile(m);
@@ -1636,6 +1661,7 @@ struct App {
             DrawRectangleRounded({m.x + 14, m.y + 16, float(MeasureText(cs.c_str(), 14)) + 12, 22}, .3f, 4, rgb(30, 22, 16, 225));
             DrawText(cs.c_str(), int(m.x) + 20, int(m.y) + 20, 14, WHITE);
         }
+        drawBmMenu();
     }
     void drawSocialAndMap() {
         if (bigMapOpen) drawBigMap();
@@ -1694,6 +1720,7 @@ struct App {
         Vector2 m = toPanel(mouse);
         Vector2 sz = mTrain.size();
         if (m.x < 0 || m.y < 0 || m.x > sz.x || m.y > sz.y || CheckCollisionPointRec(m, trainClose())) { trainOpen = false; return; }
+        if (queueClick(m)) return;
         for (int i = 0; i < 5; i++) if (CheckCollisionPointRec(m, trainCard(i))) { trainSel = i; return; }
         Kind k = Kind(K_Pawn + trainSel);
         int bl = trainBuildingLevel();
@@ -1807,6 +1834,7 @@ struct App {
             Anim a = unitAnim(units[u], me, US_Idle, 0, 0, false, 1, now);
             drawAnim(a, frameFor(a, now, float(u)), bb.x + bb.width - 60 - 70 * float(units.size() - 1 - u), bb.y + bb.height - 8, false, a.fw > 200 ? .4f : .65f);
         }
+        drawQueueStrip(m);
         rlPopMatrix();
     }
 
@@ -1967,6 +1995,7 @@ struct App {
         drawSocialAndMap();
         if (trainOpen) drawTrain();
         drawChat();
+        drawBaseUI();
         // context panel
         if (ctxOpen) {
             auto it = ents.find(ctxTarget);
@@ -1983,10 +2012,11 @@ struct App {
                 Color ink = rgb(70, 45, 30);
                 for (auto& l : ctxLines) { DrawText(l.first.c_str(), int(x), int(y), 15, l.second); y += 19; }
                 if (ctxSlider) {                                                   // auto-haul threshold
-                    DrawText(TextFormat("Auto-haul to Town Hall at %d%% full", ctxPct), int(x), int(y) + 2, 13, ink);
+                    if (ctxQuota) DrawText(TextFormat("Defense quota: %d troops per attacked clan mate", ctxPct), int(x), int(y) + 2, 13, ink);
+                    else DrawText(TextFormat("Auto-haul to Town Hall at %d%% full", ctxPct), int(x), int(y) + 2, 13, ink);
                     Rectangle sr = ctxSliderRect();
                     DrawRectangleRounded(sr, .5f, 6, rgb(60, 40, 28, 220));
-                    float k = (float(ctxPct) - 10.f) / 90.f;
+                    float k = ctxQuota ? float(ctxPct) / float(MAX_QUOTA_UI) : (float(ctxPct) - 10.f) / 90.f;
                     DrawRectangleRounded({sr.x, sr.y, std::max(8.f, sr.width * k), sr.height}, .5f, 6, rgb(80, 170, 220));
                     DrawCircleV({sr.x + sr.width * k, sr.y + sr.height / 2}, 10, rgb(250, 235, 200));
                     DrawCircleLines(int(sr.x + sr.width * k), int(sr.y + sr.height / 2), 10, rgb(60, 40, 28));
@@ -2031,9 +2061,8 @@ struct App {
         bool ui = overUI(m);
         if (hovered || ui) file = "Cursor_02.png";
         if (buildKind >= 0 && !ui) {
-            PW pw{*this};
             IV t = placeTile(Kind(buildKind), GetScreenToWorld2D(::GetMousePosition(), cam));
-            if (checkPlace(pw, Kind(buildKind), t.x, t.y) != P_OK) file = "Cursor_03.png";
+            if (placeCheck(Kind(buildKind), t) != P_OK) file = "Cursor_03.png";
         }
         Texture2D c = tex(std::string("UI Elements/UI Elements/Cursors/") + file);
         DrawTexturePro(c, {0, 0, 64, 64}, {m.x - 22, m.y - 17, 64, 64}, {0, 0}, 0, WHITE);

@@ -37,10 +37,12 @@ enum Msg : uint8_t { C_Hello, C_Build, C_Train, C_Move, C_Attack, C_AttackMove, 
                      C_ClanCreate, C_ClanJoin, C_ClanLeave, C_Transfer, C_Donate, C_SetHaul, C_UpgradeUnit, C_Chat, C_ClanLeader,
                      C_Clear,   // [world] clear surface features: u8 n, n x (i32 x, i32 y)
                      C_Board, C_Disembark,   // [ships] embark troops / disembark all
+                     C_SetQuota, C_Support, C_MoveTown, C_Relocate, C_Dequeue,   // [base] defense quota, support patrol, town move, relocation, queue cancel
                      S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map, S_Chat,
                      S_Cleared, S_ClearJobs, S_Drop,   // [world] cleared-tile list/delta, clearing progress, resource drop effect
-                     S_Paths, S_ShipInfo };            // [ships] path lines, ship passenger/cargo breakdown
-enum EffectType : uint8_t { E_Explosion, E_Dust, E_Splash, E_Arrow, E_Heal, E_Fire };
+                     S_Paths, S_ShipInfo,              // [ships] path lines, ship passenger/cargo breakdown
+                     S_Queue, S_Alert, S_BaseInfo };   // [base] training queues, clan alerts, own base info
+enum EffectType : uint8_t { E_Explosion, E_Dust, E_Splash, E_Arrow, E_Heal, E_Fire, E_FireArrow, E_Extinguish };
 enum UnitState : uint8_t { US_Idle, US_Move, US_Attack, US_Work, US_Heal, US_Extinguish };
 // Bit registry for the `state` byte of a state record (units: low 3 bits are the UnitState; buildings: only the flags below).
 inline constexpr uint8_t UNIT_SUPPORT_FLAG = 0x40;                          // troop patrol sent to support a clan member (shown on maps)
@@ -251,15 +253,30 @@ template <class W> int goldNear(W& w, Pos c) {
 }
 
 // ---------------------------------------------------------------- placement rules (identical on server & client)
-enum PlaceErr { P_OK, P_Unexplored, P_Terrain, P_Occupied, P_Territory, P_Coast, P_TooClose, P_Enemy, P_Count };
+enum PlaceErr { P_OK, P_Unexplored, P_Terrain, P_Occupied, P_Territory, P_Coast, P_TooClose, P_Enemy, P_Spacing, P_Radius, P_Count };
+enum PlaceMode : int { PM_Normal = 0, PM_HomelessHall = 1, PM_MoveHall = 2 };   // PM_*: where a Town Hall may stand (see checkPlace)
 inline constexpr const char* PLACE_TEXT[P_Count] = {"OK", "Explore this area first", "Cannot build on this terrain", "Something is in the way", "Outside your territory",
-                                                  "Harbours must touch the ocean", "Too close to another base", "Inside enemy territory"};
+                                                  "Harbours must touch the ocean", "Too close to another base", "Inside enemy territory",
+                                                  "Too close to another campfire", "Too far from your clan's towns"};
 inline int anchorRadius(Kind k) { return k == K_TownHall ? 14 : (k == K_Outpost ? 10 : 0); }
 inline Pos footCenter(Kind k, int tx, int ty) { return {float(tx) + float(KINFO[k].fw) * .5f, float(ty) + float(KINFO[k].fh) * .5f}; }
 
 // W: int biome(x,y) [INVALID_BIOME if unknown]; bool explored(x,y); bool occupied(x,y);
-//    void anchors(F) calling F(Pos center, Kind kind, bool mine, bool allied) for each Town Hall / Outpost.
-template <class W> int checkPlace(W& w, Kind k, int tx, int ty) {
+//    void anchors(F) calling F(Pos center, Kind kind, bool mine, bool allied) for each FUNCTIONAL Town Hall / Outpost.
+//    optional: bool campfireNear(Pos c, float r)  (any campfire closer than r), bool inClanRadius(Pos c) (homeless Town Hall placement)
+inline constexpr float CAMPFIRE_SPACING = 6.f, CLAN_TOWN_RADIUS = 120.f;
+inline constexpr float OUTPOST_REACH = 34.f;
+inline constexpr float TOWN_MOVE_COST[R_Count] = {300, 500, 200, 0};   // wood, gold, stone, meat for moving the Town Hall
+inline constexpr float TOWN_MOVE_TIME = 180.f;                       // seconds of construction   // an Outpost may stand this far (tiles) from the Town Hall
+template <class W> bool wCampfireNear(W& w, Pos c, float r) {
+    if constexpr (requires { w.campfireNear(c, r); }) return w.campfireNear(c, r);
+    else return false;
+}
+template <class W> bool wInClanRadius(W& w, Pos c) {
+    if constexpr (requires { w.inClanRadius(c); }) return w.inClanRadius(c);
+    else return true;
+}
+template <class W> int checkPlace(W& w, Kind k, int tx, int ty, int mode = PM_Normal) {
     const KindInfo& ki = KINFO[k];
     for (int y = ty; y < ty + ki.fh; y++)
         for (int x = tx; x < tx + ki.fw; x++) {
@@ -282,20 +299,23 @@ template <class W> int checkPlace(W& w, Kind k, int tx, int ty) {
         if (!coast) return P_Coast;
     }
     Pos c = footCenter(k, tx, ty);
+    if (k == K_Campfire) return wCampfireNear(w, c, CAMPFIRE_SPACING) ? P_Spacing : P_OK;   // campfires: anywhere, but spaced out; they claim no territory
+    bool freeHall = k == K_TownHall && mode != PM_Normal;
     bool inTerritory = false, tooClose = false, enemy = false, anyOwn = false;
-    float reach = k == K_TownHall ? 60.f : (k == K_Outpost ? 34.f : 0.f);
+    float reach = k == K_TownHall ? 60.f : (k == K_Outpost ? OUTPOST_REACH : 0.f);
     w.anchors([&](Pos a, Kind ak, bool mine, bool ally) {
         float d = std::max(std::abs(a.x - c.x), std::abs(a.y - c.y));
         int rad = anchorRadius(ak);
         if (mine) anyOwn = true;
-        if (mine && (reach > 0 ? d <= reach : d <= float(rad))) inTerritory = true;
+        if (mine && (k == K_Outpost ? (ak == K_TownHall && d <= reach) : (reach > 0 ? d <= reach : d <= float(rad)))) inTerritory = true;
         if (!mine && !ally && d <= float(rad + 2)) enemy = true;
         if (k == K_Outpost && (mine || ally) && d < 12.f) tooClose = true;
         if (k == K_TownHall && d < 26.f) tooClose = true;
     });
     if (enemy) return P_Enemy;
-    if (!anyOwn || !inTerritory) return P_Territory;
+    if (!freeHall && (!anyOwn || !inTerritory)) return P_Territory;
     if (tooClose) return P_TooClose;
+    if (mode == PM_HomelessHall && !wInClanRadius(w, c)) return P_Radius;
     return P_OK;
 }
 
