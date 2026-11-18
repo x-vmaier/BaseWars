@@ -18,13 +18,22 @@
 #include <vector>
 
 inline constexpr int MAX_PLAYERS = 16, TICK_HZ = 20, DEFAULT_PORT = 7777, UNIT_CAP = 60, CH = 16, TEAM_COLORS = 5;
+// NPC factions own villages/towns. Their owner ids live above the player id range.
+inline constexpr int FACTION_BASE = 100, FACTION_COUNT = 5, MAX_CLANS = 16, REGION_CHUNKS = 8;
+inline constexpr int HOSTILE_REP = -25, FRIENDLY_REP = 25;
+inline constexpr uint8_t UNIT_CONVOY_FLAG = 0x80;       // set in the state byte of tribute convoys
+inline constexpr const char* FACTION_NAME[FACTION_COUNT] = {"Ironvale Kingdom", "Sunreach Empire", "Nightfall Order", "Amethyst Conclave", "Azure League"};
+inline constexpr int FACTION_COLOR[FACTION_COUNT] = {1, 2, 4, 3, 0};      // index into Blue/Red/Yellow/Purple/Black
+inline bool isFactionOwner(int o) { return o >= FACTION_BASE && o < FACTION_BASE + FACTION_COUNT; }
+inline const char* repTier(int rep) { return rep <= -60 ? "Hated" : rep <= HOSTILE_REP ? "Hostile" : rep < FRIENDLY_REP ? "Neutral" : rep < 60 ? "Friendly" : "Allied"; }
 
 enum Biome : uint8_t { B_Ocean, B_Plains, B_Forest, B_Highlands, B_Desert, B_Flowers, B_Snow, B_Count };
 enum Res : uint8_t { R_Wood, R_Gold, R_Stone, R_Meat, R_Count };
 enum Kind : uint8_t { K_TownHall, K_Outpost, K_Harbour, K_Barracks, K_Mine, K_Lumber, K_Campfire,     // buildings
                       K_Pawn, K_Warrior, K_Archer, K_Lancer, K_Monk, K_Ship, K_Sheep, K_Count };       // units / NPCs
 enum Msg : uint8_t { C_Hello, C_Build, C_Train, C_Move, C_Attack, C_AttackMove, C_Ally, C_Upgrade, C_Cam,
-                     S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect };
+                     C_ClanCreate, C_ClanJoin, C_ClanLeave, C_Transfer, C_Donate,
+                     S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map };
 enum EffectType : uint8_t { E_Explosion, E_Dust, E_Splash, E_Arrow, E_Heal, E_Fire };
 enum UnitState : uint8_t { US_Idle, US_Move, US_Attack, US_Work, US_Heal };
 enum AllyAct : uint8_t { AA_Invite, AA_Break };

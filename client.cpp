@@ -29,9 +29,13 @@ Color rgb(int r, int g, int b, int a = 255) {
 const char* COLOR_NAME[TEAM_COLORS] = {"Blue", "Red", "Yellow", "Purple", "Black"};
 Color teamColor(int owner) {
     static const Color c[TEAM_COLORS] = {rgb(70, 130, 235), rgb(225, 70, 70), rgb(240, 205, 60), rgb(165, 95, 205), rgb(95, 95, 110)};
-    return owner < 1 ? rgb(235, 235, 235) : c[(owner - 1) % TEAM_COLORS];
+    return owner < 1 ? rgb(235, 235, 235) : c[(isFactionOwner(owner) ? FACTION_COLOR[owner - FACTION_BASE] : (owner - 1)) % TEAM_COLORS];
 }
-int colorIdx(int owner) { return owner < 1 ? 0 : (owner - 1) % TEAM_COLORS; }
+int colorIdx(int owner) { return isFactionOwner(owner) ? FACTION_COLOR[owner - FACTION_BASE] : (owner < 1 ? 0 : (owner - 1) % TEAM_COLORS); }
+Color clanColor(int clan) {
+    static const Color c[8] = {rgb(255, 120, 60), rgb(70, 220, 190), rgb(240, 90, 170), rgb(150, 220, 70), rgb(120, 140, 255), rgb(255, 210, 60), rgb(200, 120, 255), rgb(90, 200, 255)};
+    return c[(clan + 7) % 8];
+}
 Color biomeColor(int b) {
     static const Color c[B_Count] = {rgb(46, 102, 172), rgb(140, 190, 80), rgb(50, 120, 58), rgb(122, 120, 128), rgb(214, 190, 110), rgb(205, 150, 205), rgb(235, 240, 248)};
     return b >= 0 && b < B_Count ? c[b] : rgb(20, 24, 34);
@@ -204,7 +208,9 @@ struct Face { bool left = false; };
 struct Seen { uint32_t stamp; };
 struct LogEvent { std::string text; };
 struct LogLine { std::string text; double t; };
-struct Peer { int id; uint8_t flags; std::string name; };
+struct Peer { int id; uint8_t flags, clan; std::string name; bool hasLoc; float lx, ly; };
+struct ClanInfo { int id; std::string name; int members, leader; };
+struct FacTown { int faction; float x, y; };
 struct Chunk { uint8_t biome[CH * CH]; uint8_t fog[32]; bool hasTerr = false, hasFog = false; };
 struct Fx { uint8_t type; float x, y, x2, y2; double t; };
 struct Ghost { Kind kind; uint8_t owner, level; float x, y; bool left; double t; };
@@ -266,7 +272,20 @@ struct App {
 
     // view / input
     Camera2D cam{};
-    bool dragging = false, buildOpen = false, rosterOpen = true, ctxOpen = false;
+    bool dragging = false, buildOpen = false, ctxOpen = false;
+    // social menu / big map
+    std::vector<ClanInfo> clansList;
+    std::vector<FacTown> facTowns;
+    int facRep[FACTION_COUNT]{};
+    bool socialOpen = false, bigMapOpen = false, textFocus = false, bmDragging = false;
+    int socialTab = 0, socialScroll = 0, bmZoom = 2, bmW = 0, bmH = 0;
+    std::string searchText;
+    Vector2 bmCenter{}, bmDragMouse{};
+    float bmDragMoved = 0;
+    double bmLast = 0;
+    std::vector<Color> bmPix;
+    Texture2D bmTex{};
+    TMap mSocial, mMapFrame;
     Vector2 dragStart{}, ctxPos{};
     float buildSlide = 0;
     int buildKind = -1;
@@ -325,9 +344,24 @@ struct App {
         return it->second.fog[i >> 3] >> (i & 7) & 1;
     }
     const Peer* peerOf(int id) const { for (auto& p : roster) if (p.id == id) return &p; return nullptr; }
-    bool alliedWith(int owner) const { if (owner == me) return true; auto p = peerOf(owner); return p && (p->flags & 2); }
-    bool hostileTo(int owner) const { return owner != me && !alliedWith(owner); }
-    std::string nameOf(int owner) const { if (owner == me) return myName; auto p = peerOf(owner); return p ? p->name : (owner ? "Player " + std::to_string(owner) : "Wildlife"); }
+    int myClan() const { auto p = peerOf(me); return p ? p->clan : 0; }
+    bool alliedWith(int owner) const {
+        if (owner == me) return true;
+        if (isFactionOwner(owner)) return false;
+        auto p = peerOf(owner);
+        return p && ((p->flags & 2) || (p->clan && p->clan == myClan()));
+    }
+    bool hostileTo(int owner) const {
+        if (isFactionOwner(owner)) return facRep[owner - FACTION_BASE] <= HOSTILE_REP;
+        return owner != me && !alliedWith(owner);
+    }
+    std::string nameOf(int owner) const {
+        if (owner == me) return myName;
+        if (isFactionOwner(owner)) return FACTION_NAME[owner - FACTION_BASE];
+        auto p = peerOf(owner);
+        return p ? p->name : (owner ? "Player " + std::to_string(owner) : "Wildlife");
+    }
+    std::string clanName(int c) const { for (auto& k : clansList) if (k.id == c) return k.name; return ""; }
 
     // ---------------------------------------------------------------- networking
     void rebuildOcc() {
@@ -376,6 +410,7 @@ struct App {
         case S_State: {
             if (!welcomed) break;
             for (float& v : res) v = r.get<float>();
+            for (int& f : facRep) f = r.get<int8_t>();
             int cnt = r.get<uint16_t>();
             ++stamp;
             for (int i = 0; i < cnt; i++) {
@@ -461,14 +496,44 @@ struct App {
             int n = r.get<uint8_t>();
             std::vector<Peer> v;
             for (int i = 0; i < n; i++) {
-                Peer p;
+                Peer p{};
                 p.id = r.get<uint8_t>();
                 p.flags = r.get<uint8_t>();
+                p.clan = r.get<uint8_t>();
                 p.name = r.str();
+                p.hasLoc = r.get<uint8_t>() != 0;
+                p.lx = r.get<float>();
+                p.ly = r.get<float>();
                 if (!r.ok) return;
                 v.push_back(p);
             }
+            int nc = r.get<uint8_t>();
+            std::vector<ClanInfo> cl;
+            for (int i = 0; i < nc; i++) {
+                ClanInfo c{};
+                c.id = r.get<uint8_t>();
+                c.name = r.str();
+                c.members = r.get<uint8_t>();
+                c.leader = r.get<uint8_t>();
+                if (!r.ok) return;
+                cl.push_back(c);
+            }
             roster = v;
+            clansList = cl;
+            break;
+        }
+        case S_Map: {
+            int n = r.get<uint8_t>();
+            std::vector<FacTown> v;
+            for (int i = 0; i < n; i++) {
+                FacTown t{};
+                t.faction = r.get<uint8_t>();
+                t.x = r.get<float>();
+                t.y = r.get<float>();
+                if (!r.ok) return;
+                v.push_back(t);
+            }
+            facTowns = v;
             break;
         }
         default: break;
@@ -520,7 +585,23 @@ struct App {
     Rectangle buildRect() { Vector2 s = mBuild.size(); return {10 - (1 - buildSlide) * (s.x + 20), 150, s.x, s.y}; }
     Rectangle buildTab() { return {std::max(0.f, buildRect().x + buildRect().width - 6), 150, 40, 56}; }
     Rectangle buildItem(int i) { Rectangle b = buildRect(); float pad = float(mBuild.padding); return {b.x + pad + 2, b.y + pad + 34 + float(i) * 47.f, b.width - 2 * pad - 4, 44}; }
-    Rectangle rosterRect() { Vector2 s = mRoster.size(); return {float(GetScreenWidth()) - s.x - 8, float(GetScreenHeight()) - s.y - 8, s.x, s.y}; }
+    Rectangle coordRect() { Rectangle f = miniFrame(); return {f.x + f.width / 2 - 78, f.y + f.height + 2, 156, 24}; }
+    Rectangle socialTabBtn() { return {0, 214, 40, 56}; }
+    Rectangle socialRect() {                                    // natural size, shrunk to fit small windows
+        Vector2 s = mSocial.size();
+        float w = std::min(s.x, float(GetScreenWidth()) - 16), h = std::min(s.y, float(GetScreenHeight()) - 16);
+        return {(float(GetScreenWidth()) - w) / 2, (float(GetScreenHeight()) - h) / 2, w, h};
+    }
+    Rectangle mapFrameRect() {
+        Vector2 s = mMapFrame.size();
+        float f = std::min({1.f, (float(GetScreenWidth()) - 30) / s.x, (float(GetScreenHeight()) - 30) / s.y});
+        return {(float(GetScreenWidth()) - s.x * f) / 2, (float(GetScreenHeight()) - s.y * f) / 2, s.x * f, s.y * f};
+    }
+    Rectangle mapInner() {
+        Rectangle r = mapFrameRect();
+        float f = r.width / mMapFrame.size().x, in = 46.f * (mMapFrame.scale / .4f) * f;
+        return {r.x + in, r.y + in, r.width - 2 * in, r.height - 2 * in};
+    }
     Rectangle ctxRect() {
         Vector2 s = mCtx.size();
         return {std::clamp(ctxPos.x, 8.f, float(GetScreenWidth()) - s.x - 8), std::clamp(ctxPos.y, 56.f, float(GetScreenHeight()) - s.y - 8), s.x, s.y};
@@ -528,7 +609,8 @@ struct App {
     bool overUI(Vector2 m) {
         if (CheckCollisionPointRec(m, hudRect()) || CheckCollisionPointRec(m, nameRect()) || CheckCollisionPointRec(m, miniFrame())) return true;
         if (CheckCollisionPointRec(m, buildTab()) || (buildSlide > .02f && CheckCollisionPointRec(m, buildRect()))) return true;
-        if (rosterOpen && CheckCollisionPointRec(m, rosterRect())) return true;
+        if (CheckCollisionPointRec(m, coordRect()) || CheckCollisionPointRec(m, socialTabBtn())) return true;
+        if (socialOpen || bigMapOpen) return true;
         if (ctxOpen && CheckCollisionPointRec(m, ctxRect())) return true;
         return false;
     }
@@ -572,6 +654,16 @@ struct App {
     void cmdAlly(int to, int act) { Writer w; w.put<uint8_t>(C_Ally).put<uint8_t>(uint8_t(to)).put<uint8_t>(uint8_t(act)); send(w); }
     void cmdTrain(uint32_t b, Kind k) { Writer w; w.put<uint8_t>(C_Train).put<uint32_t>(b).put<uint8_t>(k); send(w); }
     void cmdUpgrade(uint32_t b) { Writer w; w.put<uint8_t>(C_Upgrade).put<uint32_t>(b); send(w); }
+    void cmdClanCreate(const std::string& n) { Writer w; w.put<uint8_t>(C_ClanCreate); w.str(n); send(w); }
+    void cmdClanJoin(int c) { Writer w; w.put<uint8_t>(C_ClanJoin).put<uint8_t>(uint8_t(c)); send(w); }
+    void cmdClanLeave() { Writer w; w.put<uint8_t>(C_ClanLeave); send(w); }
+    void cmdTransfer(int to, int res, float amount) {
+        Writer w;
+        w.put<uint8_t>(C_Transfer).put<uint8_t>(uint8_t(to));
+        for (int i = 0; i < R_Count; i++) w.put<float>(i == res ? amount : 0.f);
+        send(w);
+    }
+    void cmdDonate(int faction, int res, float amount) { Writer w; w.put<uint8_t>(C_Donate).put<uint8_t>(uint8_t(faction)).put<uint8_t>(uint8_t(res)).put<float>(amount); send(w); }
     void cmdBuild(Kind k, IV t) { Writer w; w.put<uint8_t>(C_Build).put<uint8_t>(k).put<int32_t>(t.x).put<int32_t>(t.y); send(w); }
 
     void selectBuildKind(int i) {
@@ -645,8 +737,12 @@ struct App {
                 ctx.push_back({in.aux >= MAX_LEVEL ? "Max level reached" : "Upgrade to Lv" + std::to_string(in.aux + 1) + "  " + costText(c), 2, ctxTarget, 0, in.aux < MAX_LEVEL && affordable(c), false});
             }
         } else if (!mine) {
+            if (isFactionOwner(in.owner)) {
+                static const char* nm[R_Count] = {"Wood", "Gold", "Stone", "Meat"};
+                for (int r = 0; r < R_Count; r++) ctx.push_back({std::string("Help: give 50 ") + nm[r], 6, uint32_t(in.owner - FACTION_BASE), uint32_t(r), res[r] >= 50.f, false});
+            }
             ctx.push_back({"Attack this target", 3, ctxTarget, 0, true, true});
-            if (in.owner > 0) {
+            if (in.owner > 0 && !isFactionOwner(in.owner)) {
                 auto p = peerOf(in.owner);
                 uint8_t fl = p ? p->flags : 0;
                 if (fl & 2) ctx.push_back({"Break alliance", 5, uint32_t(in.owner), 0, true, true});
@@ -664,6 +760,7 @@ struct App {
         case 3: cmdAttack(a.a); break;
         case 4: cmdAlly(int(a.a), AA_Invite); break;
         case 5: cmdAlly(int(a.a), AA_Break); break;
+        case 6: cmdDonate(int(a.a), int(a.b), 50.f); break;
         default: ctxOpen = false; break;
         }
     }
@@ -680,6 +777,10 @@ struct App {
         cam.offset = {sw * .5f, sh * .5f};
         bool ui = overUI(m);
 
+        if (bigMapOpen) { bigMapInput(m); return; }
+        if (socialOpen) { socialInput(m); return; }
+        if (IsKeyPressed(KEY_N)) { openBigMap(); return; }
+        if (IsKeyPressed(KEY_P)) { socialOpen = true; textFocus = false; return; }
         float sp = 800.f * dt / cam.zoom;
         if (IsKeyDown(KEY_UP)) cam.target.y -= sp;
         if (IsKeyDown(KEY_DOWN)) cam.target.y += sp;
@@ -702,7 +803,6 @@ struct App {
         }
         if (IsKeyPressed(KEY_H)) { Pos t = myTH(); cam.target = {t.x * TILE, t.y * TILE}; }
         if (IsKeyPressed(KEY_B)) buildOpen = !buildOpen;
-        if (IsKeyPressed(KEY_P)) rosterOpen = !rosterOpen;
         if (IsKeyPressed(KEY_M)) { mode = mode == M_Move ? M_None : M_Move; buildKind = -1; }
         if (IsKeyPressed(KEY_A)) { mode = mode == M_Attack ? M_None : M_Attack; buildKind = -1; }
         if (IsKeyPressed(KEY_ESCAPE)) { buildKind = -1; mode = M_None; ctxOpen = false; sel.clear(); }
@@ -728,24 +828,10 @@ struct App {
                 for (int i = 0; i < 7; i++) if (CheckCollisionPointRec(m, buildItem(i))) { selectBuildKind(i); return; }
                 return;
             }
-            if (rosterOpen && CheckCollisionPointRec(m, rosterRect())) {
-                Rectangle rr = rosterRect();
-                float pad = float(mRoster.padding);
-                int row = 0;
-                for (auto& p : roster) {
-                    if (p.id == me) continue;
-                    Rectangle b{rr.x + rr.width - pad - 66, rr.y + pad + 26 + float(row) * 30.f, 62, 24};
-                    if (CheckCollisionPointRec(m, b)) {
-                        if (p.flags & 2) cmdAlly(p.id, AA_Break); else if (!(p.flags & 8)) cmdAlly(p.id, AA_Invite);
-                    }
-                    row++;
-                }
-                return;
-            }
+            if (CheckCollisionPointRec(m, socialTabBtn())) { socialOpen = true; textFocus = false; return; }
             if (CheckCollisionPointRec(m, miniRect())) { miniClick(m); return; }
             if (ui) return;
         }
-        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(m, miniRect()) && !dragging) { miniClick(m); return; }
         if (ui) { if (rp) ctxOpen = false; return; }
 
         Vector2 w = GetScreenToWorld2D(m, cam);
@@ -763,7 +849,7 @@ struct App {
                 cmdMove(w);
                 if (!shift) mode = M_None;
             } else if (mode == M_Attack) {
-                if (hovered && hostileTargetId(hovered)) cmdAttack(hovered); else cmdAttackMove(w);
+                if (hovered && attackable(hovered)) cmdAttack(hovered); else cmdAttackMove(w);
                 if (!shift) mode = M_None;
             } else if (hovered && hostileTargetId(hovered) && armyCountSel() > 0) {
                 cmdAttack(hovered);
@@ -790,10 +876,12 @@ struct App {
         for (auto id : sel) { auto it = ents.find(id); if (it != ents.end()) { Kind k = reg.get<Info>(it->second).kind; if (!isBuilding(k) && k != K_Ship && k != K_Monk) n++; } }
         return n;
     }
-    void miniClick(Vector2 m) {
-        Rectangle r = miniRect();
-        float fx = (m.x - r.x) / r.width, fy = (m.y - r.y) / r.height;
-        cam.target = {cam.target.x + (fx - .5f) * float(MM) * TILE, cam.target.y + (fy - .5f) * float(MM) * TILE};
+    void miniClick(Vector2) { openBigMap(); }
+    bool attackable(uint32_t id) {
+        auto it = ents.find(id);
+        if (it == ents.end()) return false;
+        const Info& i = reg.get<Info>(it->second);
+        return i.owner != me && !alliedWith(i.owner);
     }
 
     // ---------------------------------------------------------------- sprite helpers
@@ -1004,16 +1092,18 @@ struct App {
 
     void drawUnit(const RPos& p, Info& i, Face& fc, uint32_t id, bool selected, bool hover, std::vector<DrawItem>& items, double t, int biome) {
         float px = p.x * TILE, py = p.y * TILE;
-        bool moving = i.state == US_Move;
-        Color oc = i.owner == me || alliedWith(i.owner) ? rgb(255, 255, 255) : rgb(255, 90, 90);
+        bool moving = (i.state & 7) == US_Move, convoy = (i.state & UNIT_CONVOY_FLAG) != 0;
+        int carry = convoy && !i.aux ? 2 : i.aux;
+        Color oc = i.owner == me || alliedWith(i.owner) ? rgb(255, 255, 255) : (hostileTo(i.owner) ? rgb(255, 90, 90) : rgb(255, 225, 130));
         if (i.kind == K_Sheep) oc = rgb(255, 235, 140);
         items.push_back({py, [=, this]() {
             if (i.kind == K_Ship) { drawShip(px, py, i.owner, fc.left, hover, t, id); return; }
-            Anim a = unitAnim(i.kind, i.owner, i.state, i.aux, i.aim, moving, biome, t);
+            Anim a = unitAnim(i.kind, i.owner, i.state & 7, carry, i.aim, moving, biome, t);
             DrawEllipse(int(px), int(py + 2), 16, 6, rgb(0, 0, 0, 60));
             if (selected) DrawEllipseLines(int(px), int(py + 2), 24, 10, rgb(255, 235, 90));
             drawAnim(a, frameFor(a, t, float(id % 7)), px, py + 6, fc.left, 1.f, WHITE, hover ? 1 : 0, oc);
-            if (i.kind == K_Monk && i.state == US_Heal) { Anim h = mkAnim(std::string("Units/") + COLOR_NAME[colorIdx(i.owner)] + " Units/Monk/Heal_Effect.png", 192, 192, 10, 96, 135); drawAnim(h, frameFor(h, t), px, py + 6, false, 1.f); }
+            if (convoy) textShadow("Convoy", int(px) - 22, int(py) - 70, 14, rgb(120, 230, 255));
+            if (i.kind == K_Monk && (i.state & 7) == US_Heal) { Anim h = mkAnim(std::string("Units/") + COLOR_NAME[colorIdx(i.owner)] + " Units/Monk/Heal_Effect.png", 192, 192, 10, 96, 135); drawAnim(h, frameFor(h, t), px, py + 6, false, 1.f); }
             float fr = i.hp / std::max(1.f, i.maxhp);
             if ((fr < .995f || selected || hover) && i.kind != K_Sheep) drawBar({px, py - 56}, 48, fr, fr > .5f ? rgb(90, 220, 90) : (fr > .25f ? rgb(240, 190, 50) : rgb(235, 70, 60)));
             if (i.kind == K_Pawn && i.owner != 0 && i.aux) { /* carrying: sprite variant already shows the cargo */ }
@@ -1224,6 +1314,358 @@ struct App {
             }
     }
 
+    // ---------------------------------------------------------------- social menu (players / friends / clans / factions)
+    struct SBtn { std::string label; int act; float a, b; int c; bool enabled, red; float w; };
+    struct SRow { std::string text, sub; Color col; std::vector<SBtn> btns; };
+    static bool containsNoCase(const std::string& hay, const std::string& needle) {
+        if (needle.empty()) return true;
+        std::string h = hay, n = needle;
+        for (auto& c : h) c = char(std::tolower(uint8_t(c)));
+        for (auto& c : n) c = char(std::tolower(uint8_t(c)));
+        return h.find(n) != std::string::npos;
+    }
+    std::vector<SRow> socialRows() {
+        std::vector<SRow> rows;
+        int mc = myClan();
+        auto friendBtn = [&](const Peer& p) {
+            if (p.flags & 2) return SBtn{"Unfriend", 3, 0, 0, p.id, true, true, 70};
+            if (p.flags & 4) return SBtn{"Accept", 2, 0, 0, p.id, true, false, 70};
+            if (p.flags & 8) return SBtn{"Sent", 0, 0, 0, p.id, false, false, 70};
+            return SBtn{"Friend", 2, 0, 0, p.id, true, false, 70};
+        };
+        auto peerRow = [&](const Peer& p) {
+            std::string cn = p.clan ? clanName(p.clan) : "";
+            SRow r{p.name + (cn.empty() ? "" : "  [" + cn + "]"), std::string(p.flags & 1 ? "online" : "offline") + (p.hasLoc ? TextFormat("  (%d, %d)", int(p.lx), int(p.ly)) : "  location unknown"), teamColor(p.id), {}};
+            r.btns.push_back({"Travel", 1, p.lx, p.ly, 0, p.hasLoc, false, 60});
+            r.btns.push_back(friendBtn(p));
+            return r;
+        };
+        switch (socialTab) {
+        case 0: for (auto& p : roster) if (p.id != me && containsNoCase(p.name, searchText)) rows.push_back(peerRow(p)); break;
+        case 1: for (auto& p : roster) if (p.id != me && (p.flags & (2 | 4 | 8)) && containsNoCase(p.name, searchText)) rows.push_back(peerRow(p)); break;
+        case 2:
+            for (auto& c : clansList) {
+                if (!containsNoCase(c.name, searchText)) continue;
+                SRow r{c.name, TextFormat("%d member%s", c.members, c.members == 1 ? "" : "s"), clanColor(c.id), {}};
+                r.btns.push_back({c.id == mc ? "Yours" : "Join", 4, 0, 0, c.id, mc == 0, false, 60});
+                rows.push_back(r);
+            }
+            break;
+        case 3:
+            if (!mc) rows.push_back({"You are not in a clan.", "Create one or join one in the Clans tab.", rgb(90, 60, 40), {}});
+            else
+                for (auto& p : roster) {
+                    if (p.clan != mc) continue;
+                    int leader = 0;
+                    for (auto& c : clansList) if (c.id == mc) leader = c.leader;
+                    SRow r{p.name + (p.id == leader ? "  (leader)" : ""), std::string(p.flags & 1 ? "online" : "offline") + (p.hasLoc ? TextFormat("  (%d, %d)", int(p.lx), int(p.ly)) : ""), teamColor(p.id), {}};
+                    r.btns.push_back({"Travel", 1, p.lx, p.ly, 0, p.hasLoc, false, 56});
+                    if (p.id != me) {
+                        static const char* ab[R_Count] = {"W", "G", "S", "M"};
+                        for (int k = 0; k < R_Count; k++) r.btns.push_back({std::string("50") + ab[k], 5, float(k), 50.f, p.id, res[k] >= 50.f, false, 34});
+                    }
+                    rows.push_back(r);
+                }
+            break;
+        default:
+            for (int f = 0; f < FACTION_COUNT; f++) {
+                int rp = facRep[f];
+                SRow r{FACTION_NAME[f], TextFormat("%s (%d)", repTier(rp), rp), teamColor(FACTION_BASE + f), {}};
+                const FacTown* best = nullptr;
+                float bd = 1e9f;
+                for (auto& t : facTowns) if (t.faction == f) { float d = std::hypot(t.x - cam.target.x / TILE, t.y - cam.target.y / TILE); if (d < bd) { bd = d; best = &t; } }
+                r.btns.push_back({best ? "Nearest town" : "None found", 1, best ? best->x : 0.f, best ? best->y : 0.f, 0, best != nullptr, false, 104});
+                rows.push_back(r);
+            }
+            break;
+        }
+        return rows;
+    }
+    void travelTo(float tx, float ty) { cam.target = {tx * TILE, ty * TILE}; socialOpen = false; bigMapOpen = false; textFocus = false; }
+    void runSocial(const SBtn& b) {
+        switch (b.act) {
+        case 1: travelTo(b.a, b.b); break;
+        case 2: cmdAlly(b.c, AA_Invite); break;
+        case 3: cmdAlly(b.c, AA_Break); break;
+        case 4: cmdClanJoin(b.c); break;
+        case 5: cmdTransfer(b.c, int(b.a), b.b); break;
+        case 6: cmdClanLeave(); break;
+        case 7: cmdClanCreate(searchText); searchText.clear(); break;
+        default: break;
+        }
+    }
+    static constexpr float SROW = 30.f;
+    float socialScale() { Rectangle r = socialRect(); return std::min(r.width / mSocial.size().x, r.height / mSocial.size().y); }
+    Rectangle socialTabRect(int i) {
+        Rectangle r = socialRect();
+        float pad = float(mSocial.padding), w = (r.width - 2 * pad - 8) / 5.f;
+        return {r.x + pad + 4 + float(i) * w, r.y + pad + 4, w - 3, 26};
+    }
+    Rectangle socialSearch() { Rectangle r = socialRect(); float pad = float(mSocial.padding) * socialScale(); return {r.x + pad + 6, r.y + pad + 36, r.width - 2 * pad - 12, 24}; }
+    Rectangle socialList() { Rectangle r = socialRect(); float pad = float(mSocial.padding) * socialScale(); return {r.x + pad + 6, r.y + pad + 68, r.width - 2 * pad - 12, r.height - 2 * pad - 68 - 42}; }
+    Rectangle socialBottomBtn() { Rectangle r = socialRect(); float pad = float(mSocial.padding) * socialScale(); return {r.x + r.width - pad - 150, r.y + r.height - pad - 34, 144, 28}; }
+    Rectangle socialClose() { Rectangle r = socialRect(); float pad = float(mSocial.padding) * socialScale(); return {r.x + r.width - pad - 20, r.y + std::max(2.f, pad - 22), 22, 18}; }
+    Rectangle rowBtnRect(const Rectangle& row, const std::vector<SBtn>& btns, size_t i) {
+        float x = row.x + row.width - 4;
+        for (size_t k = btns.size(); k-- > i;) x -= btns[k].w + 4;
+        return {x, row.y + 3, btns[i].w, SROW - 8};
+    }
+    bool bottomBtn(SBtn& out) {
+        if (socialTab == 2 && myClan() == 0) { out = {"Create clan", 7, 0, 0, 0, searchText.size() >= 3, false, 144}; return true; }
+        if (socialTab == 3 && myClan() != 0) { out = {"Leave clan", 6, 0, 0, 0, true, true, 144}; return true; }
+        return false;
+    }
+    void socialInput(Vector2 m) {
+        if (textFocus) {
+            for (int ch = GetCharPressed(); ch > 0; ch = GetCharPressed()) if (ch >= 32 && ch < 127 && searchText.size() < 24) { searchText.push_back(char(ch)); socialScroll = 0; }
+            if ((IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) && !searchText.empty()) searchText.pop_back();
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) textFocus = false;
+        } else if (IsKeyPressed(KEY_P)) { socialOpen = false; return; }
+        if (IsKeyPressed(KEY_ESCAPE)) { if (textFocus) textFocus = false; else socialOpen = false; return; }
+        Rectangle sr = socialRect(), list = socialList();
+        float wheel = GetMouseWheelMove();
+        if (wheel != 0 && CheckCollisionPointRec(m, sr)) socialScroll = std::max(0, socialScroll - int(wheel));
+        if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) return;
+        if (!CheckCollisionPointRec(m, sr)) { socialOpen = false; textFocus = false; return; }
+        if (CheckCollisionPointRec(m, socialClose())) { socialOpen = false; textFocus = false; return; }
+        for (int i = 0; i < 5; i++) if (CheckCollisionPointRec(m, socialTabRect(i))) { socialTab = i; socialScroll = 0; return; }
+        textFocus = CheckCollisionPointRec(m, socialSearch());
+        SBtn bb;
+        if (bottomBtn(bb) && CheckCollisionPointRec(m, socialBottomBtn()) && bb.enabled) { runSocial(bb); return; }
+        auto rows = socialRows();
+        int vis = int(list.height / SROW);
+        socialScroll = std::clamp(socialScroll, 0, std::max(0, int(rows.size()) - vis));
+        for (int i = 0; i < vis && i + socialScroll < int(rows.size()); i++) {
+            Rectangle rr{list.x, list.y + float(i) * SROW, list.width, SROW};
+            auto& row = rows[size_t(i + socialScroll)];
+            for (size_t k = 0; k < row.btns.size(); k++)
+                if (CheckCollisionPointRec(m, rowBtnRect(rr, row.btns, k)) && row.btns[k].enabled) { runSocial(row.btns[k]); return; }
+        }
+    }
+    void drawSocial() {
+        Vector2 m = GetMousePosition();
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), rgb(0, 0, 0, 110));
+        Rectangle sr = socialRect();
+        drawTMap(mSocial, sr);
+        float pad = float(mSocial.padding) * socialScale();
+        Color ink = rgb(70, 45, 30);
+        static const char* tabs[5] = {"Players", "Friends", "Clans", "My Clan", "Factions"};
+        for (int i = 0; i < 5; i++) drawButton(socialTabRect(i), tabs[i], true, false, CheckCollisionPointRec(m, socialTabRect(i)), socialTab == i, 12);
+        drawButton(socialClose(), "X", true, true, CheckCollisionPointRec(m, socialClose()), false, 12);
+        Rectangle sb = socialSearch();
+        DrawRectangleRounded(sb, .3f, 6, rgb(255, 250, 235, 235));
+        DrawRectangleRoundedLinesEx(sb, .3f, 6, 2, textFocus ? rgb(60, 120, 200) : rgb(120, 90, 60));
+        std::string shown = searchText.empty() && !textFocus ? (socialTab == 2 ? "Search clans or type a new clan name..." : "Search by name...") : searchText + (textFocus && int(GetTime() * 2) % 2 == 0 ? "|" : "");
+        DrawText(shown.c_str(), int(sb.x) + 8, int(sb.y) + 5, 15, searchText.empty() && !textFocus ? rgb(150, 130, 110) : ink);
+        auto rows = socialRows();
+        Rectangle list = socialList();
+        int vis = int(list.height / SROW);
+        socialScroll = std::clamp(socialScroll, 0, std::max(0, int(rows.size()) - vis));
+        if (rows.empty()) DrawText(socialTab == 1 ? "No friends yet. Add players from the Players tab." : "Nothing to show.", int(list.x) + 6, int(list.y) + 8, 14, rgb(120, 90, 60));
+        for (int i = 0; i < vis && i + socialScroll < int(rows.size()); i++) {
+            Rectangle rr{list.x, list.y + float(i) * SROW, list.width, SROW};
+            auto& row = rows[size_t(i + socialScroll)];
+            DrawRectangleRec(rr, i % 2 ? rgb(0, 0, 0, 14) : rgb(255, 255, 255, 36));
+            DrawText(row.text.c_str(), int(rr.x) + 6, int(rr.y) + 2, 15, row.col.r > 200 && row.col.g > 200 ? ink : row.col);
+            DrawText(row.sub.c_str(), int(rr.x) + 6, int(rr.y) + 17, 10, rgb(110, 85, 60));
+            for (size_t k = 0; k < row.btns.size(); k++) {
+                Rectangle b = rowBtnRect(rr, row.btns, k);
+                drawButton(b, row.btns[k].label, row.btns[k].enabled, row.btns[k].red, CheckCollisionPointRec(m, b), false, 11);
+            }
+        }
+        if (int(rows.size()) > vis) DrawText(TextFormat("%d-%d of %d  (mouse wheel)", socialScroll + 1, std::min(int(rows.size()), socialScroll + vis), int(rows.size())), int(list.x) + 6, int(list.y + list.height) + 2, 10, ink);
+        SBtn bb;
+        if (bottomBtn(bb)) drawButton(socialBottomBtn(), bb.label, bb.enabled, bb.red, CheckCollisionPointRec(m, socialBottomBtn()), false, 13);
+        if (socialTab == 3 && myClan()) DrawText("Resources travel by convoy and can be raided.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28), 11, ink);
+        if (socialTab == 2 && myClan() == 0) DrawText("Type a name above, then press Create.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28), 11, ink);
+    }
+
+    // ---------------------------------------------------------------- big map
+    float bmTpp() const { static const float z[5] = {.5f, 1.f, 2.f, 4.f, 8.f}; return z[std::clamp(bmZoom, 0, 4)]; }
+    void openBigMap() { bigMapOpen = true; bmCenter = {cam.target.x / TILE, cam.target.y / TILE}; bmLast = 0; bmDragging = false; }
+    Vector2 mapToTile(Vector2 p) {
+        Rectangle in = mapInner();
+        return {bmCenter.x + (p.x - in.x - in.width / 2) * bmTpp(), bmCenter.y + (p.y - in.y - in.height / 2) * bmTpp()};
+    }
+    Vector2 tileToMap(float tx, float ty) {
+        Rectangle in = mapInner();
+        return {in.x + in.width / 2 + (tx - bmCenter.x) / bmTpp(), in.y + in.height / 2 + (ty - bmCenter.y) / bmTpp()};
+    }
+    void bigMapInput(Vector2 m) {
+        Rectangle in = mapInner(), fr = mapFrameRect();
+        if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_N)) { bigMapOpen = false; return; }
+        if (IsKeyPressed(KEY_P)) { bigMapOpen = false; socialOpen = true; return; }
+        float wheel = GetMouseWheelMove();
+        if (wheel != 0 && CheckCollisionPointRec(m, in)) {
+            Vector2 before = mapToTile(m);
+            bmZoom = std::clamp(bmZoom - (wheel > 0 ? 1 : -1), 0, 4);
+            Vector2 after = mapToTile(m);
+            bmCenter.x += before.x - after.x;
+            bmCenter.y += before.y - after.y;
+            bmLast = 0;
+        }
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if (!CheckCollisionPointRec(m, fr)) { bigMapOpen = false; return; }
+            if (CheckCollisionPointRec(m, in)) { bmDragging = true; bmDragMouse = m; bmDragMoved = 0; }
+        }
+        if (bmDragging && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+            Vector2 d = {m.x - bmDragMouse.x, m.y - bmDragMouse.y};
+            bmDragMoved += std::abs(d.x) + std::abs(d.y);
+            bmCenter.x -= d.x * bmTpp();
+            bmCenter.y -= d.y * bmTpp();
+            bmDragMouse = m;
+            bmLast = 0;
+        }
+        if (bmDragging && IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+            bmDragging = false;
+            if (bmDragMoved < 5) { Vector2 t = mapToTile(m); travelTo(t.x, t.y); }
+        }
+        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) bigMapOpen = false;
+    }
+    void refreshBigMap() {
+        Rectangle in = mapInner();
+        int w = std::max(8, int(in.width / 2)), h = std::max(8, int(in.height / 2));
+        if (!bmTex.id || w != bmW || h != bmH) {
+            if (bmTex.id) UnloadTexture(bmTex);
+            Image im = GenImageColor(w, h, BLACK);
+            bmTex = LoadTextureFromImage(im);
+            UnloadImage(im);
+            bmW = w; bmH = h;
+            bmPix.assign(size_t(w) * size_t(h), BLACK);
+            bmLast = 0;
+        }
+        if (GetTime() - bmLast < .35) return;
+        bmLast = GetTime();
+        float tpp = bmTpp();
+        for (int j = 0; j < h; j++)
+            for (int i = 0; i < w; i++) {
+                int tx = int(std::floor(bmCenter.x + (float(i * 2 + 1) - in.width / 2) * tpp)), ty = int(std::floor(bmCenter.y + (float(j * 2 + 1) - in.height / 2) * tpp));
+                bool ex = exploredAt(tx, ty);
+                Color c = ex ? biomeColor(biomeAt(tx, ty)) : rgb(20, 26, 38);
+                if (!ex && ((i / 4 + j / 4) & 1)) c = rgb(24, 30, 44);
+                bmPix[size_t(j * w + i)] = c;
+            }
+        UpdateTexture(bmTex, bmPix.data());
+    }
+    void mapIcon(const std::string& file, Vector2 p, float width, float artW, float artH, Color tint = WHITE) {
+        Texture2D t = tex(file);
+        float sc = width / artW;
+        DrawTexturePro(t, {0, 0, artW, artH}, {p.x - width / 2, p.y - artH * sc * .8f, width, artH * sc}, {0, 0}, 0, tint);
+    }
+    void drawBigMap() {
+        Vector2 m = GetMousePosition();
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), rgb(0, 0, 0, 150));
+        Rectangle fr = mapFrameRect(), in = mapInner();
+        drawTMap(mMapFrame, fr);
+        refreshBigMap();
+        DrawRectangleRec(in, rgb(16, 20, 30));
+        if (bmTex.id) DrawTexturePro(bmTex, {0, 0, float(bmW), float(bmH)}, {in.x, in.y, float(bmW) * 2, float(bmH) * 2}, {0, 0}, 0, WHITE);
+        auto inside = [&](Vector2 p, float pad) { return p.x > in.x + pad && p.y > in.y + pad && p.x < in.x + in.width - pad && p.y < in.y + in.height - pad; };
+        float tpp = bmTpp();
+        // territory: clans share a colour, everyone else uses their team colour
+        reg.view<Info, Goal>().each([&](const Info& i, const Goal& g) {
+            if (!isBuilding(i.kind) || i.prog < 100 || isFactionOwner(i.owner) || (i.kind != K_TownHall && i.kind != K_Outpost)) return;
+            auto p = peerOf(i.owner);
+            int clan = i.owner == me ? myClan() : (p ? p->clan : 0);
+            Color c = clan ? clanColor(clan) : teamColor(i.owner);
+            float r = float(anchorRadius(i.kind)) / tpp;
+            Vector2 sp = tileToMap(g.x, g.y);
+            Rectangle tr{sp.x - r, sp.y - r, 2 * r, 2 * r};
+            float x0 = std::max(tr.x, in.x), y0 = std::max(tr.y, in.y), x1 = std::min(tr.x + tr.width, in.x + in.width), y1 = std::min(tr.y + tr.height, in.y + in.height);
+            if (x1 <= x0 || y1 <= y0) return;
+            DrawRectangleRec({x0, y0, x1 - x0, y1 - y0}, Color{c.r, c.g, c.b, 55});
+            DrawRectangleLinesEx({x0, y0, x1 - x0, y1 - y0}, 2, Color{c.r, c.g, c.b, 190});
+        });
+        // faction towns the player has discovered
+        for (auto& t : facTowns) {
+            Vector2 sp = tileToMap(t.x, t.y);
+            if (!inside(sp, 10)) continue;
+            int rp = facRep[t.faction];
+            Color ring = rp <= HOSTILE_REP ? rgb(240, 70, 60) : (rp >= FRIENDLY_REP ? rgb(90, 220, 110) : rgb(235, 220, 120));
+            DrawCircleV({sp.x, sp.y - 6}, 14, Color{ring.r, ring.g, ring.b, 90});
+            mapIcon(std::string("Buildings/") + COLOR_NAME[FACTION_COLOR[t.faction]] + " Buildings/Castle.png", sp, 26, 320, 256);
+            std::string nm = FACTION_NAME[t.faction];
+            DrawText(nm.c_str(), int(sp.x) - MeasureText(nm.c_str(), 10) / 2, int(sp.y) + 6, 10, WHITE);
+        }
+        // player towns and outposts we know about
+        std::set<int> drawnTH;
+        reg.view<Info, Goal>().each([&](const Info& i, const Goal& g) {
+            if (!isBuilding(i.kind) || isFactionOwner(i.owner) || (i.kind != K_TownHall && i.kind != K_Outpost)) return;
+            Vector2 sp = tileToMap(g.x, g.y);
+            if (i.kind == K_TownHall) drawnTH.insert(i.owner);
+            if (!inside(sp, 8)) return;
+            bool mine = i.owner == me;
+            if (i.kind == K_TownHall) {
+                if (mine) DrawCircleV({sp.x, sp.y - 8}, 17, rgb(255, 215, 80, 110));
+                mapIcon(std::string("Buildings/") + COLOR_NAME[colorIdx(i.owner)] + " Buildings/Castle.png", sp, mine ? 34 : 28, 320, 256);
+                std::string nm = nameOf(i.owner);
+                DrawText(nm.c_str(), int(sp.x) - MeasureText(nm.c_str(), 11) / 2, int(sp.y) + 6, 11, mine ? rgb(255, 235, 140) : (alliedWith(i.owner) ? rgb(150, 255, 170) : WHITE));
+            } else mapIcon(std::string("Buildings/") + COLOR_NAME[colorIdx(i.owner)] + " Buildings/Tower.png", sp, 12, 128, 256);
+        });
+        for (auto& p : roster) {                                      // towns we know the location of but cannot currently see
+            if (p.id == me || !p.hasLoc || drawnTH.count(p.id)) continue;
+            Vector2 sp = tileToMap(p.lx, p.ly);
+            if (!inside(sp, 8)) continue;
+            mapIcon(std::string("Buildings/") + COLOR_NAME[colorIdx(p.id)] + " Buildings/Castle.png", sp, 26, 320, 256, rgb(255, 255, 255, 200));
+            DrawText(p.name.c_str(), int(sp.x) - MeasureText(p.name.c_str(), 11) / 2, int(sp.y) + 6, 11, WHITE);
+        }
+        // travelling convoys (ours, clan mates' and enemy ones spotted by the clan)
+        double now = GetTime();
+        reg.view<Info, RPos>().each([&](const Info& i, const RPos& p) {
+            if (!(i.state & UNIT_CONVOY_FLAG)) return;
+            Vector2 sp = tileToMap(p.x, p.y);
+            if (!inside(sp, 6)) return;
+            bool friendly = alliedWith(i.owner);
+            Color c = friendly ? rgb(100, 230, 255) : rgb(255, 70, 60);
+            float pulse = friendly ? 0.f : 3.f * float(std::sin(now * 6) * .5 + .5);
+            DrawCircleV(sp, 8 + pulse, Color{c.r, c.g, c.b, 90});
+            DrawCircleLines(int(sp.x), int(sp.y), 8 + pulse, c);
+            Anim a = mkAnim(std::string("Units/") + COLOR_NAME[colorIdx(i.owner)] + " Units/Pawn/Pawn_Run Gold.png", 192, 192, 10, 96, 135);
+            DrawTexturePro(a.t, frameRect(a, 0), {sp.x - 12, sp.y - 16, 24, 24}, {0, 0}, 0, WHITE);
+            if (!friendly) { DrawText("!", int(sp.x) + 9, int(sp.y) - 16, 14, rgb(255, 90, 70)); DrawText((nameOf(i.owner) + " convoy").c_str(), int(sp.x) + 14, int(sp.y) - 4, 10, rgb(255, 170, 150)); }
+        });
+        // far-away friends: an arrow on the map border pointing towards their town
+        for (auto& p : roster) {
+            if (p.id == me || !p.hasLoc || !(p.flags & 2 || (p.clan && p.clan == myClan()))) continue;
+            Vector2 sp = tileToMap(p.lx, p.ly);
+            if (inside(sp, 0)) continue;
+            Vector2 c{in.x + in.width / 2, in.y + in.height / 2}, d{sp.x - c.x, sp.y - c.y};
+            float k = std::min((in.width / 2 - 20) / std::max(1.f, std::abs(d.x)), (in.height / 2 - 20) / std::max(1.f, std::abs(d.y)));
+            Vector2 e{c.x + d.x * k, c.y + d.y * k};
+            float ang = std::atan2(d.y, d.x);
+            Color col = p.clan && p.clan == myClan() ? clanColor(p.clan) : rgb(150, 255, 170);
+            Vector2 a1{e.x + std::cos(ang) * 12, e.y + std::sin(ang) * 12}, a2{e.x + std::cos(ang + 2.5f) * 10, e.y + std::sin(ang + 2.5f) * 10}, a3{e.x + std::cos(ang - 2.5f) * 10, e.y + std::sin(ang - 2.5f) * 10};
+            DrawTriangle(a1, a3, a2, col);
+            DrawTriangleLines(a1, a3, a2, BLACK);
+            float dist = std::hypot(p.lx - bmCenter.x, p.ly - bmCenter.y);
+            std::string lb = p.name + " " + std::to_string(int(dist)) + "m";
+            float tx = std::clamp(e.x - float(MeasureText(lb.c_str(), 11)) / 2 - std::cos(ang) * 22, in.x + 4, in.x + in.width - float(MeasureText(lb.c_str(), 11)) - 4);
+            float ty = std::clamp(e.y - 6 - std::sin(ang) * 18, in.y + 4, in.y + in.height - 16);
+            textShadow(lb, int(tx), int(ty), 11, col);
+        }
+        // where the game camera currently looks
+        {
+            Vector2 tl = GetScreenToWorld2D({0, 0}, cam), br = GetScreenToWorld2D({float(GetScreenWidth()), float(GetScreenHeight())}, cam);
+            Vector2 a = tileToMap(tl.x / TILE, tl.y / TILE), b = tileToMap(br.x / TILE, br.y / TILE);
+            float x0 = std::max(a.x, in.x), y0 = std::max(a.y, in.y), x1 = std::min(b.x, in.x + in.width), y1 = std::min(b.y, in.y + in.height);
+            if (x1 > x0 && y1 > y0) DrawRectangleLinesEx({x0, y0, x1 - x0, y1 - y0}, 1, rgb(255, 255, 255, 220));
+        }
+        DrawRectangleLinesEx(in, 2, rgb(60, 40, 26));
+        textShadow("WORLD MAP", int(fr.x + fr.width / 2) - 50, int(fr.y) + 10, 18, rgb(255, 240, 200));
+        std::string hint = "Click: travel   Drag: pan   Wheel: zoom   N/Esc: close";
+        textShadow(hint, int(fr.x + fr.width / 2) - MeasureText(hint.c_str(), 12) / 2, int(fr.y + fr.height) - 24, 12, rgb(255, 240, 200));
+        if (CheckCollisionPointRec(m, in)) {
+            Vector2 t = mapToTile(m);
+            std::string cs = TextFormat("%d, %d", int(std::floor(t.x)), int(std::floor(t.y)));
+            DrawRectangleRounded({m.x + 14, m.y + 16, float(MeasureText(cs.c_str(), 14)) + 12, 22}, .3f, 4, rgb(30, 22, 16, 225));
+            DrawText(cs.c_str(), int(m.x) + 20, int(m.y) + 20, 14, WHITE);
+        }
+    }
+    void drawSocialAndMap() {
+        if (bigMapOpen) drawBigMap();
+        if (socialOpen) drawSocial();
+    }
+
     // ---------------------------------------------------------------- UI drawing
     void drawResourceIcon(int r, float x, float y, float s) {
         if (r == R_Stone) { Texture2D t = tex("Terrain/Decorations/Rocks/Rock2.png"); DrawTexturePro(t, {0, 0, 64, 64}, {x - 4, y - 10, 64 * s, 64 * s}, {0, 0}, 0, WHITE); return; }
@@ -1318,28 +1760,22 @@ struct App {
             if (x1 > x0 && y1 > y0) DrawRectangleLinesEx({x0, y0, x1 - x0, y1 - y0}, 1, WHITE);
         }
 
-        // roster / alliances
-        if (rosterOpen) {
-            Rectangle rr = rosterRect();
-            drawTMap(mRoster, rr);
-            float pad = float(mRoster.padding);
-            DrawText("PLAYERS [P]", int(rr.x + pad + 6), int(rr.y + pad + 4), 14, rgb(70, 45, 30));
-            int row = 0;
-            for (auto& p : roster) {
-                float y = rr.y + pad + 26 + float(row) * 30.f;
-                if (row >= 6) break;
-                DrawCircle(int(rr.x + pad + 14), int(y + 12), 6, p.flags & 1 ? rgb(70, 200, 90) : rgb(130, 130, 130));
-                DrawCircleLines(int(rr.x + pad + 14), int(y + 12), 6, BLACK);
-                DrawText(p.name.c_str(), int(rr.x + pad + 26), int(y + 5), 14, p.id == me ? teamColor(p.id) : rgb(60, 40, 28));
-                if (p.id != me) {
-                    Rectangle b{rr.x + rr.width - pad - 66, y, 62, 24};
-                    std::string lb = p.flags & 2 ? "Break" : ((p.flags & 4) ? "Accept" : ((p.flags & 8) ? "Sent" : "Ally"));
-                    drawButton(b, lb, !(p.flags & 8) || (p.flags & 2), p.flags & 2, CheckCollisionPointRec(m, b), false, 12);
-                } else DrawText("(you)", int(rr.x + rr.width - pad - 50), int(y + 6), 12, rgb(110, 80, 60));
-                row++;
-            }
+        // camera coordinates (so players can tell each other where they are)
+        {
+            Rectangle cr = coordRect();
+            DrawRectangleRounded(cr, .3f, 6, rgb(40, 28, 20, 225));
+            DrawRectangleRoundedLinesEx(cr, .3f, 6, 2, rgb(20, 12, 8));
+            std::string cs = TextFormat("X %d    Y %d", int(std::floor(cam.target.x / TILE)), int(std::floor(cam.target.y / TILE)));
+            DrawText(cs.c_str(), int(cr.x + cr.width / 2) - MeasureText(cs.c_str(), 16) / 2, int(cr.y) + 4, 16, rgb(255, 240, 200));
+        }
+        {   // social menu button under the build tab
+            Rectangle t = socialTabBtn();
+            DrawRectangleRounded(t, .3f, 6, rgb(70, 50, 34, 235));
+            DrawRectangleRoundedLinesEx(t, .3f, 6, 2, rgb(30, 20, 14));
+            DrawTexturePro(tex("UI Elements/UI Elements/Icons/Icon_06.png"), {0, 0, 64, 64}, {t.x + 4, t.y + 8, 40, 40}, {0, 0}, 0, WHITE);
         }
 
+        drawSocialAndMap();
         // context panel
         if (ctxOpen) {
             auto it = ents.find(ctxTarget);
@@ -1355,7 +1791,12 @@ struct App {
                 float x = cr.x + pad + 8, y = cr.y + pad + 20;
                 Color ink = rgb(70, 45, 30);
                 auto line = [&](const std::string& s, Color c) { DrawText(s.c_str(), int(x), int(y), 15, c); y += 19; };
-                line(std::string("Owner: ") + nameOf(in.owner), in.owner == me ? rgb(30, 90, 40) : rgb(150, 40, 30));
+                line(std::string("Owner: ") + nameOf(in.owner), in.owner == me ? rgb(30, 90, 40) : (isFactionOwner(in.owner) ? rgb(60, 50, 110) : rgb(150, 40, 30)));
+                if (isFactionOwner(in.owner)) {
+                    int rp = facRep[in.owner - FACTION_BASE];
+                    line(TextFormat("Reputation: %s (%d)", repTier(rp), rp), rp <= HOSTILE_REP ? rgb(170, 40, 30) : (rp >= FRIENDLY_REP ? rgb(30, 110, 40) : ink));
+                    line(rp <= HOSTILE_REP ? "They will fight you on sight." : (rp >= FRIENDLY_REP ? "They will aid you if attacked." : "Gifts earn their trust."), ink);
+                }
                 if (in.prog < 100) line("Under construction " + std::to_string(in.prog) + "%", ink);
                 line(TextFormat("Health %d / %d", int(in.hp), int(in.maxhp)), ink);
                 if (in.owner == me || alliedWith(in.owner)) {
@@ -1558,7 +1999,7 @@ struct App {
         shBlur = loadShader("bloom_blur.fs", b2);
         okBloom = b1 && b2 && okPost;
         mHud = loadTMap("hud_resources"); mTitle = loadTMap("title_ribbon"); mBuild = loadTMap("build_menu"); mMini = loadTMap("minimap_frame");
-        mCtx = loadTMap("context_panel"); mRoster = loadTMap("roster_panel");
+        mCtx = loadTMap("context_panel"); mRoster = loadTMap("roster_panel"); mSocial = loadTMap("social_menu"); mMapFrame = loadTMap("map_frame");
         mBtn = loadTMap("button_blue"); mBtnP = loadTMap("button_blue_pressed"); mBtnR = loadTMap("button_red"); mBtnRP = loadTMap("button_red_pressed");
         Image im = GenImageColor(MM, MM, BLACK);
         mmTex = LoadTextureFromImage(im);
@@ -1591,18 +2032,24 @@ struct App {
                     float dx = g.x - p.x;
                     p.x += dx * k;
                     p.y += (g.y - p.y) * k;
-                    if (in.state == US_Attack || in.state == US_Heal) f.left = std::cos(float(in.aim) / 255.f * 6.28319f - 3.14159f) < 0;
+                    if ((in.state & 7) == US_Attack || (in.state & 7) == US_Heal) f.left = std::cos(float(in.aim) / 255.f * 6.28319f - 3.14159f) < 0;
                     else if (std::abs(dx) > .004f) f.left = dx < 0;
                 });
                 updateMinimap();
             }
+            if (shotPath && welcomed && shotFrames == 25) if (const char* c = std::getenv("BW_CMD")) { std::string cm = c; if (cm.rfind("clan:", 0) == 0) cmdClanCreate(cm.substr(5, cm.find(';') == std::string::npos ? std::string::npos : cm.find(';') - 5)); }
+            if (shotPath && welcomed && (shotFrames == 300 || shotFrames == 360) && shotPath && welcomed) if (const char* c = std::getenv("BW_CMD")) { std::string cm = c; auto p = cm.find("xfer:"); if (p != std::string::npos) cmdTransfer(std::atoi(cm.c_str() + p + 5), R_Wood, 60.f); }
             if (shotPath && welcomed && shotFrames >= 20) {                 // test hooks (screenshots only)
                 if (const char* mp = std::getenv("BW_MOUSE")) { float dx = 0, dy = 0; if (std::sscanf(mp, "%f,%f", &dx, &dy) == 2) SetMousePosition(GetScreenWidth() / 2 + int(dx), GetScreenHeight() / 2 + int(dy)); }
                 if (const char* u = std::getenv("BW_UI")) {
                     std::string ui = u;
                     if (ui.find("build") != std::string::npos) buildOpen = true;
                     if (ui.find("place") != std::string::npos) buildKind = K_Lumber;
-                    if (ui.find("ctx") != std::string::npos && !ctxOpen)
+                    if (ui.find("social") != std::string::npos && shotFrames == 20) { socialOpen = true; if (const char* tb = std::getenv("BW_TAB")) socialTab = std::atoi(tb); if (const char* se = std::getenv("BW_SEARCH")) searchText = se; }
+                    if (ui.find("map") != std::string::npos && shotFrames == 20) { openBigMap(); if (const char* z = std::getenv("BW_MAPZ")) bmZoom = std::atoi(z); }
+                    if (ui.find("ctxfac") != std::string::npos && !ctxOpen)
+                        reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!ctxOpen && isFactionOwner(i.owner) && i.kind == K_TownHall) openContext(n.id, {float(GetScreenWidth()) * .55f, float(GetScreenHeight()) * .2f}); });
+                    else if (ui.find("ctx") != std::string::npos && ui.find("ctxfac") == std::string::npos && !ctxOpen)
                         reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (i.owner == me && i.kind == K_TownHall) openContext(n.id, {float(GetScreenWidth()) * .6f, float(GetScreenHeight()) * .25f}); });
                 }
             }

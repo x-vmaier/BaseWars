@@ -20,7 +20,7 @@ namespace {
 
 volatile std::sig_atomic_t g_quit = 0;
 using Bits = std::array<uint8_t, 32>;
-constexpr uint32_t SAVE_MAGIC = 0x32535742u;  // "BWS2"
+constexpr uint32_t SAVE_MAGIC = 0x33535742u;  // "BWS3"
 
 struct Uid { uint32_t id; };
 struct Owner { uint8_t id; };                                   // 0 = neutral
@@ -32,6 +32,12 @@ struct Attack { uint32_t target; };
 struct AMove { Pos dest; };
 struct Worker { uint32_t home; uint8_t phase = 0; float cargo[R_Count]{}; float timer = 0; };  // 0 wait, 1 loading, 2 carry, 3 return
 struct Wander { float timer; };
+struct Convoy { uint8_t from, to; float cargo[R_Count]; float repath = 0, bestDist = 1e9f; int stuck = 0; };   // tribute pawn walking to a clan mate
+struct Home { float x, y, helpUntil = 0; };                                                                    // faction units idle around their town
+struct TownTag { uint16_t town; };
+struct Hit { uint32_t by = 0; double t = -100; };                                                              // last attacker
+struct Clan { bool used = false; std::string name; uint8_t leader = 0; };
+struct Town { uint16_t id; uint8_t faction; int cx, cy; uint32_t th; bool alive; double respawnAt, nextSpawn, lastAlert; };
 
 struct Profile {
     bool used = false, online = false;
@@ -45,6 +51,9 @@ struct Profile {
     std::unordered_map<int64_t, Bits> sentFog;
     std::unordered_set<int64_t> sentTerr;
     double lastWarn = -100;
+    uint8_t clan = 0;
+    float rep[FACTION_COUNT]{};
+    double helpCool[FACTION_COUNT]{};
 };
 
 struct Eff { uint8_t type; float x, y, x2, y2; };
@@ -67,6 +76,12 @@ struct Server {
     std::mt19937 rng;
     std::string savePath;
     double clock = 0, lastSave = 0;
+    Clan clans[MAX_CLANS + 1];
+    std::vector<Town> towns;
+    std::unordered_set<int64_t> regionsDone;
+    float facDonated[FACTION_COUNT]{};
+    struct Spot { double until; uint8_t by; };
+    std::unordered_map<uint8_t, std::unordered_map<uint32_t, Spot>> clanSpot;   // clan -> convoys its members have spotted
 
     Server(uint16_t port, uint32_t sd, std::string path) : seed(sd), rng(sd), savePath(std::move(path)) {
         bool loaded = load();
@@ -101,8 +116,19 @@ struct Server {
     }
 
     // ---------------------------------------------------------------- helpers
-    bool allied(int a, int b) const { return a == b || (a > 0 && b > 0 && pl[a].allied[b]); }
-    bool hostile(int a, int b) const { return a > 0 && b > 0 && !allied(a, b); }
+    static bool isPlayer(int o) { return o >= 1 && o <= MAX_PLAYERS; }
+    bool sameClan(int a, int b) const { return isPlayer(a) && isPlayer(b) && pl[a].clan && pl[a].clan == pl[b].clan; }
+    bool shares(int a, int b) const { return a != b && isPlayer(a) && isPlayer(b) && (pl[a].allied[b] || sameClan(a, b)); }   // shared vision
+    bool allied(int a, int b) const { return a == b || shares(a, b); }
+    float repOf(int player, int owner) const { return isPlayer(player) && isFactionOwner(owner) ? pl[player].rep[owner - FACTION_BASE] : 0.f; }
+    bool hostile(int a, int b) const {
+        if (a < 1 || b < 1 || a == b) return false;
+        if (isFactionOwner(a) && isFactionOwner(b)) return false;
+        if (isFactionOwner(a)) return repOf(b, a) <= float(HOSTILE_REP);
+        if (isFactionOwner(b)) return repOf(a, b) <= float(HOSTILE_REP);
+        return !allied(a, b);
+    }
+    std::string ownerName(int o) const { return isFactionOwner(o) ? FACTION_NAME[o - FACTION_BASE] : (isPlayer(o) ? pl[o].name : std::string("Wildlife")); }
     int colorOf(int id) const { return (id - 1) % TEAM_COLORS; }
 
     void say(int id, const std::string& s) {
@@ -161,11 +187,11 @@ struct Server {
     }
     bool explored(int id, int x, int y) const {
         if (bitAt(pl[id].expl, x, y)) return true;
-        for (int a = 1; a <= MAX_PLAYERS; a++) if (a != id && pl[a].used && pl[a].allied[id] && bitAt(pl[a].expl, x, y)) return true;
+        for (int a = 1; a <= MAX_PLAYERS; a++) if (a != id && pl[a].used && shares(a, id) && bitAt(pl[a].expl, x, y)) return true;
         return false;
     }
     void reveal(int id, int cx, int cy, int r) {
-        if (id < 1) return;
+        if (!isPlayer(id)) return;
         auto& m = pl[id].expl;
         for (int y = cy - r; y <= cy + r; y++)
             for (int x = cx - r; x <= cx + r; x++) {
@@ -257,7 +283,7 @@ struct Server {
     }
 
     // ---------------------------------------------------------------- pathfinding (A*, 8-dir, bounded, partial paths allowed)
-    bool findPath(IV s, IV g, bool water, uint32_t ignore, std::vector<Pos>& out) {
+    bool findPath(IV s, IV g, bool water, uint32_t ignore, std::vector<Pos>& out, int maxNodes = 7000) {
         out.clear();
         if (!walkable(g.x, g.y, water, ignore)) {
             bool f = false;
@@ -282,7 +308,7 @@ struct Server {
         q.push({bestH, sk});
         int expanded = 0;
         bool found = false;
-        while (!q.empty() && expanded < 7000) {
+        while (!q.empty() && expanded < maxNodes) {
             int64_t k = q.top().second;
             q.pop();
             PN& cur = nodes[k];
@@ -312,24 +338,55 @@ struct Server {
         std::reverse(out.begin(), out.end());
         return !out.empty();
     }
-    bool order(entt::entity e, Pos goal, uint32_t ignore = 0) {
+    bool order(entt::entity e, Pos goal, uint32_t ignore = 0, int maxNodes = 7000) {
         auto& u = reg.get<Unit>(e);
         Pos p = reg.get<Pos>(e);
         bool water = reg.get<Info>(e).kind == K_Ship;
         std::vector<Pos> path;
-        if (!findPath({int(std::floor(p.x)), int(std::floor(p.y))}, {int(std::floor(goal.x)), int(std::floor(goal.y))}, water, ignore, path)) return false;
+        if (!findPath({int(std::floor(p.x)), int(std::floor(p.y))}, {int(std::floor(goal.x)), int(std::floor(goal.y))}, water, ignore, path, maxNodes)) return false;
         u.path = std::move(path);
         u.i = 0;
         return true;
     }
 
     // ---------------------------------------------------------------- combat helpers
-    void damage(entt::entity e, float amt, int attacker) {
+    void addRep(int player, int f, float d) {
+        if (!isPlayer(player)) return;
+        float& r = pl[player].rep[f];
+        float old = r;
+        r = std::clamp(r + d, -100.f, 100.f);
+        if (old > float(HOSTILE_REP) && r <= float(HOSTILE_REP)) say(player, std::string(FACTION_NAME[f]) + " now considers you hostile!");
+        if (old < float(FRIENDLY_REP) && r >= float(FRIENDLY_REP)) say(player, std::string(FACTION_NAME[f]) + " now counts you as a friend and will come to your aid.");
+        if (old <= float(HOSTILE_REP) && r > float(HOSTILE_REP)) say(player, std::string(FACTION_NAME[f]) + " no longer wants you dead.");
+    }
+    Town* townById(int id) { for (auto& t : towns) if (t.id == id) return &t; return nullptr; }
+    void alertTown(entt::entity victim, uint32_t by) {                    // a faction town defends itself against whoever hit it
+        if (!by) return;
+        auto* tt = reg.try_get<TownTag>(victim);
+        Town* t = tt ? townById(tt->town) : nullptr;
+        auto atk = find(by);
+        if (!t || atk == entt::null || clock - t->lastAlert < 3.0) return;
+        t->lastAlert = clock;
+        bool bld = isBuilding(reg.get<Info>(atk).kind);
+        Pos ap = posOf(atk);
+        std::vector<entt::entity> us;
+        reg.view<TownTag, Unit, Info>().each([&](entt::entity e, const TownTag& g, const Unit&, const Info& i) { if (g.town == t->id && isArmy(i.kind)) us.push_back(e); });
+        for (auto e : us) {
+            if (!order(e, ap, bld ? by : 0)) continue;
+            reg.emplace_or_replace<Attack>(e, Attack{by});
+        }
+    }
+    void damage(entt::entity e, float amt, int attacker, uint32_t by = 0) {
         auto& h = reg.get<Health>(e);
         h.hp -= amt;
         h.lastHit = uint8_t(attacker);
         int o = reg.get<Owner>(e).id;
-        if (o > 0 && attacker != o && pl[o].online && clock - pl[o].lastWarn > 8) { pl[o].lastWarn = clock; say(o, "Your forces are under attack!"); }
+        if (by) reg.emplace_or_replace<Hit>(e, Hit{by, clock});
+        if (isFactionOwner(o) && isPlayer(attacker)) {
+            addRep(attacker, o - FACTION_BASE, -amt * .06f);
+            alertTown(e, by);
+        }
+        if (isPlayer(o) && attacker != o && pl[o].online && clock - pl[o].lastWarn > 8) { pl[o].lastWarn = clock; say(o, "Your forces are under attack!"); }
         uint32_t uid = reg.get<Uid>(e).id;
         if (h.hp <= 0 && dying.insert(uid).second) toKill.push_back({e, attacker});
     }
@@ -341,14 +398,24 @@ struct Server {
             int owner = reg.get<Owner>(e).id;
             Pos p = posOf(e);
             if (isBuilding(k)) fx(E_Explosion, p.x, p.y);
-            if (const Worker* w = reg.try_get<Worker>(e); w && killer > 0 && killer != owner) {      // raid: killer steals the shipment
+            auto raid = [&](const float* cargo) {
                 float tot = 0;
-                for (int r = 0; r < R_Count; r++) { pl[killer].res[r] += w->cargo[r]; tot += w->cargo[r]; }
-                if (tot > 0) say(killer, "You raided a supply convoy: +" + std::to_string(int(tot)) + " resources!");
-            }
-            if (k == K_Sheep && killer > 0) { pl[killer].res[R_Meat] += 12; say(killer, "Hunted a sheep: +12 meat."); }
+                for (int r = 0; r < R_Count; r++) tot += cargo[r];
+                if (tot <= 0) return;
+                if (isPlayer(killer) && killer != owner && !sameClan(killer, owner)) {
+                    for (int r = 0; r < R_Count; r++) pl[killer].res[r] += cargo[r];
+                    say(killer, "You raided a supply convoy: +" + std::to_string(int(tot)) + " resources!");
+                }
+                say(owner, "Your convoy was destroyed!");
+            };
+            if (const Worker* w = reg.try_get<Worker>(e)) raid(w->cargo);
+            if (const Convoy* c = reg.try_get<Convoy>(e)) raid(c->cargo);
+            if (k == K_Sheep && isPlayer(killer)) { pl[killer].res[R_Meat] += 12; say(killer, "Hunted a sheep: +12 meat."); }
+            if (isFactionOwner(owner) && isPlayer(killer)) addRep(killer, owner - FACTION_BASE, k == K_TownHall ? -40.f : (isBuilding(k) ? -10.f : -4.f));
+            uint16_t town = reg.all_of<TownTag>(e) ? reg.get<TownTag>(e).town : uint16_t(0);
             destroyNow(e);
-            if (k == K_TownHall && owner > 0) {
+            if (k == K_TownHall && isFactionOwner(owner)) townDestroyed(town, killer);
+            else if (k == K_TownHall && isPlayer(owner)) {
                 bool other = false;
                 reg.view<Info, Owner>().each([&](const Info& i, const Owner& o) { if (i.kind == K_TownHall && o.id == owner) other = true; });
                 if (!other) defeat(owner, killer);
@@ -365,7 +432,7 @@ struct Server {
         }
     }
     void defeat(int victim, int killer) {
-        if (killer > 0 && killer != victim && pl[killer].used) {
+        if (isPlayer(killer) && killer != victim && pl[killer].used && !sameClan(killer, victim)) {
             float tot = 0;
             for (int r = 0; r < R_Count; r++) { float l = std::floor(pl[victim].res[r] * .5f); pl[killer].res[r] += l; tot += l; }
             say(killer, "You destroyed " + pl[victim].name + "'s Town Hall! Loot: " + std::to_string(int(tot)) + " resources.");
@@ -392,6 +459,7 @@ struct Server {
     // ---------------------------------------------------------------- connections
     void sendFog(int id);
     void sendRoster();
+    void sendMap(int id);
     bool load();
     void save();
     void run();
@@ -417,6 +485,7 @@ struct Server {
                 uint64_t oldest = UINT64_MAX;
                 for (int i = 1; i <= MAX_PLAYERS; i++) if (!pl[i].online && pl[i].lastSeen < oldest) { oldest = pl[i].lastSeen; id = i; }
                 if (!id) { enet_peer_disconnect_now(peer, 0); return; }
+                leaveClan(id);
                 removeOwner(id);
                 for (int a = 0; a <= MAX_PLAYERS; a++) pl[a].allied[id] = pl[a].pending[id] = false;
                 pl[id] = Profile{};
@@ -514,7 +583,7 @@ struct Server {
             int n = r.get<uint8_t>();
             for (int i = 0; i < n; i++) {
                 auto e = find(r.get<uint32_t>());
-                if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e)) continue;
+                if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e) || reg.all_of<Convoy>(e)) continue;
                 Kind k = reg.get<Info>(e).kind;
                 if (combatOnly && (k == K_Ship || k == K_Monk)) continue;
                 us.push_back(e);
@@ -560,6 +629,65 @@ struct Server {
                 });
                 if (bestB != entt::null) reg.emplace<Worker>(u, Worker{reg.get<Uid>(bestB).id});
             }
+            break;
+        }
+        case C_ClanCreate: {
+            std::string nm = r.str();
+            for (char& ch : nm) if (ch < 32 || ch == 127) ch = '?';
+            if (!r.ok || nm.size() < 3 || nm.size() > 16) { say(id, "Clan names need 3 to 16 characters."); return; }
+            if (p.clan) { say(id, "Leave your current clan first."); return; }
+            int slot = 0;
+            for (int c = 1; c <= MAX_CLANS; c++) {
+                if (clans[c].used && clans[c].name == nm) { say(id, "That clan name is taken."); return; }
+                if (!clans[c].used && !slot) slot = c;
+            }
+            if (!slot) { say(id, "The server has no free clan slots."); return; }
+            clans[slot] = Clan{true, nm, uint8_t(id)};
+            p.clan = uint8_t(slot);
+            say(id, "Clan '" + nm + "' founded. Friends can join it from the Clans tab.");
+            sendRoster();
+            break;
+        }
+        case C_ClanJoin: {
+            int c = r.get<uint8_t>();
+            if (!r.ok || c < 1 || c > MAX_CLANS || !clans[c].used) return;
+            if (p.clan) { say(id, "Leave your current clan first."); return; }
+            p.clan = uint8_t(c);
+            notifyClan(c, p.name + " joined the clan.");
+            sendRoster();
+            break;
+        }
+        case C_ClanLeave: leaveClan(id); break;
+        case C_Transfer: {
+            int to = r.get<uint8_t>();
+            float amt[R_Count];
+            float tot = 0;
+            for (float& a : amt) { a = r.get<float>(); if (!std::isfinite(a) || a < 0 || a > 500) return; tot += a; }
+            if (!r.ok || tot <= 0 || !isPlayer(to) || to == id || !pl[to].used || !sameClan(id, to)) { say(id, "You can only send resources to members of your clan."); return; }
+            for (int i = 0; i < R_Count; i++) if (p.res[i] + 1e-3f < amt[i]) { say(id, "Not enough resources."); return; }
+            entt::entity src = entt::null;
+            reg.view<Info, Building, Owner>().each([&](entt::entity b, const Info& i, const Building& bb, const Owner& o) { if (src == entt::null && i.kind == K_TownHall && o.id == id && bb.progress >= 1.f) src = b; });
+            Pos at;
+            if (src == entt::null || !spawnSpot(src, false, at)) { say(id, "No room at your Town Hall to send a convoy."); return; }
+            for (int i = 0; i < R_Count; i++) p.res[i] -= amt[i];
+            auto u = makeUnit(K_Pawn, uint8_t(id), at.x, at.y);
+            Convoy cv{uint8_t(id), uint8_t(to), {amt[0], amt[1], amt[2], amt[3]}};
+            reg.emplace<Convoy>(u, cv);
+            fx(E_Dust, at.x, at.y);
+            say(id, "A convoy with " + std::to_string(int(tot)) + " resources set out for " + pl[to].name + ". Other players can see and raid it!");
+            say(to, "A convoy from " + p.name + " is on its way.");
+            break;
+        }
+        case C_Donate: {
+            int f = r.get<uint8_t>(), res = r.get<uint8_t>();
+            float amount = r.get<float>();
+            if (!r.ok || f < 0 || f >= FACTION_COUNT || res >= R_Count || !std::isfinite(amount) || amount <= 0 || amount > 500) return;
+            if (p.res[res] + 1e-3f < amount) { say(id, "Not enough resources."); return; }
+            static const float worth[R_Count] = {1.f, 2.f, 1.5f, 1.f};
+            p.res[res] -= amount;
+            facDonated[f] += amount * worth[res];
+            addRep(id, f, amount * worth[res] * .08f);
+            say(id, std::string("You gave ") + std::to_string(int(amount)) + " " + RES_NAME[res] + " to the " + FACTION_NAME[f] + ". They now see you as " + repTier(int(std::lround(p.rep[f]))) + ".");
             break;
         }
         case C_Upgrade: {
@@ -611,7 +739,8 @@ struct Server {
             if (!r.ok || us.empty() || tg == entt::null) return;
             int to = reg.get<Owner>(tg).id;
             if (to == id) return;
-            if (to > 0 && allied(id, to)) { breakAlliance(id, to); }
+            if (isPlayer(to) && sameClan(id, to)) { say(id, "You cannot attack your own clan. Leave the clan first."); return; }
+            if (isPlayer(to) && allied(id, to)) { breakAlliance(id, to); }
             Pos tp = posOf(tg);
             uint32_t tuid = reg.get<Uid>(tg).id;
             bool bld = isBuilding(reg.get<Info>(tg).kind);
@@ -622,7 +751,7 @@ struct Server {
                 reg.emplace_or_replace<Attack>(e, Attack{tuid});
             }
             if (fail) say(id, "Some units cannot reach the target.");
-            if (to > 0) say(to, p.name + " is attacking you!");
+            if (isPlayer(to)) say(to, p.name + " is attacking you!");
             break;
         }
         case C_Ally: {
@@ -666,6 +795,216 @@ struct Server {
         }
     }
 
+    // ---------------------------------------------------------------- NPC factions (villages & towns)
+    bool townSiteOk(int cx, int cy) {
+        for (int y = cy - 7; y <= cy + 7; y++)
+            for (int x = cx - 7; x <= cx + 7; x++) {
+                int b = biome(x, y);
+                if (!isLand(b) || b == B_Highlands || isCliffTile(b, biome(x, y - 1)) || occ.count(tkey(x, y))) return false;
+            }
+        bool nearTh = false;
+        reg.view<Info, Building>().each([&](const Info& i, const Building& b) {
+            if (i.kind == K_TownHall && std::max(std::abs(b.tx - cx), std::abs(b.ty - cy)) < 45) nearTh = true;
+        });
+        return !nearTh;
+    }
+    bool footprintFree(Kind k, int tx, int ty) {
+        for (int y = ty; y < ty + KINFO[k].fh; y++) for (int x = tx; x < tx + KINFO[k].fw; x++) if (!walkable(x, y, false, 0)) return false;
+        return true;
+    }
+    void buildTown(Town& t) {
+        uint8_t owner = uint8_t(FACTION_BASE + t.faction);
+        struct Piece { Kind k; int dx, dy; };
+        static const Piece pieces[] = {{K_TownHall, -2, -1}, {K_Barracks, 3, -1}, {K_Outpost, -5, -3}, {K_Outpost, 3, 3}, {K_Lumber, -5, 1}, {K_Lumber, 0, 3}};
+        for (const Piece& pc : pieces) {
+            if (!footprintFree(pc.k, t.cx + pc.dx, t.cy + pc.dy)) continue;
+            auto e = makeBuilding(pc.k, owner, t.cx + pc.dx, t.cy + pc.dy, true);
+            reg.emplace<TownTag>(e, TownTag{t.id});
+            if (pc.k == K_TownHall) t.th = reg.get<Uid>(e).id;
+        }
+        static const Kind roster[] = {K_Warrior, K_Warrior, K_Warrior, K_Archer, K_Archer, K_Pawn, K_Pawn};
+        int i = 0;
+        for (Kind k : roster) spawnTownUnit(t, k, i++);
+        t.alive = true;
+        t.nextSpawn = clock + 25;
+    }
+    void spawnTownUnit(const Town& t, Kind k, int i) {
+        float a = float(i) * 0.9f + float(t.id);
+        float x = float(t.cx) + .5f + std::cos(a) * 3.2f, y = float(t.cy) + .5f + 2.4f + std::sin(a) * 1.4f;
+        if (!walkable(int(std::floor(x)), int(std::floor(y)), false, 0)) { x = float(t.cx) + .5f; y = float(t.cy) + 3.5f; }
+        auto u = makeUnit(k, uint8_t(FACTION_BASE + t.faction), x, y);
+        reg.emplace<TownTag>(u, TownTag{t.id});
+        reg.emplace<Home>(u, Home{float(t.cx) + .5f, float(t.cy) + 3.f, 0});
+        reg.emplace<Wander>(u, Wander{float(rng() % 400) / 100.f});
+    }
+    void processRegion(int rx, int ry) {
+        if (!regionsDone.insert(chunkKey(rx, ry)).second) return;
+        if (hash2(rx, ry, seed + 1111) % 100 >= 85) return;
+        int span = REGION_CHUNKS * CH, x0 = rx * span, y0 = ry * span;
+        for (int n = 0; n < 40; n++) {
+            int x = x0 + 14 + int(hash2(rx * 40 + n, ry, seed + 21) % uint32_t(span - 28)), y = y0 + 14 + int(hash2(rx, ry * 40 + n, seed + 22) % uint32_t(span - 28));
+            if (!townSiteOk(x, y)) continue;
+            Town t{uint16_t(towns.size() + 1), uint8_t(hash2(x, y, seed + 33) % FACTION_COUNT), x, y, 0, true, 0, 0, -100};
+            towns.push_back(t);
+            buildTown(towns.back());
+            std::printf("Town %d (%s) founded at %d,%d\n", t.id, FACTION_NAME[t.faction], x, y);
+            return;
+        }
+    }
+    void townDestroyed(uint16_t town, int killer) {
+        Town* t = townById(town);
+        if (!t || !t->alive) return;
+        t->alive = false;
+        t->respawnAt = clock + 600;
+        std::vector<entt::entity> all;
+        reg.view<TownTag>().each([&](entt::entity e, const TownTag& g) { if (g.town == town) all.push_back(e); });
+        for (auto e : all) {
+            if (isBuilding(reg.get<Info>(e).kind)) { Pos p = posOf(e); fx(E_Explosion, p.x, p.y); }
+            destroyNow(e);
+        }
+        if (isPlayer(killer)) {
+            for (int r = 0; r < R_Count; r++) pl[killer].res[r] += 120;
+            say(killer, std::string("You razed a ") + FACTION_NAME[t->faction] + " town! Loot: 120 of every resource.");
+        }
+    }
+    void townTick() {
+        for (auto& t : towns) {
+            if (!t.alive) { if (clock >= t.respawnAt) buildTown(t); continue; }
+            int army = 0;
+            reg.view<TownTag, Info>().each([&](const TownTag& g, const Info& i) { if (g.town == t.id && isArmy(i.kind)) army++; });
+            int desired = std::min(9, 5 + int(facDonated[t.faction] / 300.f));
+            if (army < desired && clock >= t.nextSpawn) { spawnTownUnit(t, hash2(t.id, int(clock), seed) & 1 ? K_Warrior : K_Archer, army); t.nextSpawn = clock + 25; }
+        }
+        std::vector<entt::entity> hurt;                                 // faction buildings and units mend themselves when left alone
+        reg.view<Owner, Health>().each([&](entt::entity e, const Owner& o, const Health& h) { if (isFactionOwner(o.id) && h.hp < h.maxhp) hurt.push_back(e); });
+        for (auto e : hurt) {
+            auto* hit = reg.try_get<Hit>(e);
+            if (hit && clock - hit->t < 20) continue;
+            auto& h = reg.get<Health>(e);
+            h.hp = std::min(h.maxhp, h.hp + h.maxhp * .02f);
+        }
+    }
+    void factionAI(entt::entity e, Unit& u, Pos& p, float) {
+        auto* hm = reg.try_get<Home>(e);
+        if (!hm) return;
+        bool busy = reg.all_of<Attack>(e) || reg.all_of<AMove>(e);
+        float dh = std::hypot(p.x - hm->x, p.y - hm->y);
+        if (clock < hm->helpUntil) return;
+        if (busy && dh > 24.f) { reg.remove<Attack>(e); reg.remove<AMove>(e); order(e, {hm->x, hm->y}); }
+        else if (!busy && u.path.empty() && dh > 5.f) order(e, {hm->x, hm->y});
+    }
+    void callHelp() {                                                   // friendly factions send troops when a player is attacked
+        struct Req { int victim; uint32_t by; Pos at; };
+        std::vector<Req> reqs;
+        reg.view<Hit, Owner>().each([&](entt::entity e, const Hit& h, const Owner& o) {
+            if (!isPlayer(o.id) || clock - h.t > 3.0 || reqs.size() >= 6) return;
+            reqs.push_back({o.id, h.by, posOf(e)});
+        });
+        for (auto& rq : reqs) {
+            auto atk = find(rq.by);
+            if (atk == entt::null) continue;
+            int aow = reg.get<Owner>(atk).id;
+            if (!hostile(rq.victim, aow)) continue;
+            bool bld = isBuilding(reg.get<Info>(atk).kind);
+            Pos ap = posOf(atk);
+            for (int f = 0; f < FACTION_COUNT; f++) {
+                if (pl[rq.victim].rep[f] < float(FRIENDLY_REP) || aow == FACTION_BASE + f || clock < pl[rq.victim].helpCool[f]) continue;
+                std::vector<std::pair<float, entt::entity>> cand;
+                reg.view<Owner, Unit, Info, Home>().each([&](entt::entity e, const Owner& o, const Unit&, const Info& i, const Home&) {
+                    if (o.id != FACTION_BASE + f || !isArmy(i.kind) || reg.all_of<Attack>(e)) return;
+                    Pos q = reg.get<Pos>(e);
+                    cand.push_back({std::hypot(q.x - rq.at.x, q.y - rq.at.y), e});
+                });
+                std::sort(cand.begin(), cand.end(), [](auto& a, auto& b) { return a.first < b.first; });
+                int want = std::min(8, 2 + int(pl[rq.victim].rep[f] / 15.f)), sent = 0;
+                for (auto& [d, e] : cand) {
+                    if (sent >= want || d > 160.f) break;
+                    if (!order(e, ap, bld ? rq.by : 0)) continue;
+                    reg.emplace_or_replace<Attack>(e, Attack{rq.by});
+                    reg.get<Home>(e).helpUntil = float(clock + 45);
+                    sent++;
+                }
+                pl[rq.victim].helpCool[f] = clock + 15;
+                if (sent) say(rq.victim, std::string(FACTION_NAME[f]) + " sends " + std::to_string(sent) + " troops to your aid!");
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- clans, convoys
+    void notifyClan(int clan, const std::string& msg) { for (int i = 1; i <= MAX_PLAYERS; i++) if (pl[i].used && pl[i].clan == clan) say(i, msg); }
+    void leaveClan(int id) {
+        int c = pl[id].clan;
+        if (!c) return;
+        pl[id].clan = 0;
+        notifyClan(c, pl[id].name + " left the clan.");
+        say(id, "You left the clan.");
+        int next = 0;
+        for (int i = 1; i <= MAX_PLAYERS; i++) if (pl[i].used && pl[i].clan == c) { next = i; break; }
+        if (!next) clans[c] = Clan{};
+        else if (clans[c].leader == id) { clans[c].leader = uint8_t(next); say(next, "You are now the clan leader."); }
+        sendRoster();
+    }
+    void refundConvoy(entt::entity e, const Convoy& cv, const std::string& why) {
+        for (int r = 0; r < R_Count; r++) if (isPlayer(cv.from)) pl[cv.from].res[r] += cv.cargo[r];
+        say(cv.from, "Convoy turned back: " + why + ". Resources returned.");
+        destroyNow(e);
+    }
+    void runConvoy(entt::entity e, Unit& u, Convoy& cv, float dt) {
+        Pos p = reg.get<Pos>(e);
+        entt::entity th = entt::null;
+        float bd = 1e9f;
+        reg.view<Info, Building, Owner>().each([&](entt::entity b, const Info& i, const Building& bb, const Owner& o) {
+            if (i.kind != K_TownHall || o.id != cv.to || bb.progress < 1.f) return;
+            Pos c = footCenter(i.kind, bb.tx, bb.ty);
+            float d = std::hypot(c.x - p.x, c.y - p.y);
+            if (d < bd) { bd = d; th = b; }
+        });
+        if (th == entt::null || !isPlayer(cv.to) || !pl[cv.to].used || !sameClan(cv.from, cv.to)) { refundConvoy(e, cv, "the recipient is no longer reachable"); return; }
+        if (rectDist(p, th) <= 1.6f) {
+            float tot = 0;
+            for (int r = 0; r < R_Count; r++) { pl[cv.to].res[r] += cv.cargo[r]; tot += cv.cargo[r]; }
+            say(cv.to, "A convoy from " + ownerName(cv.from) + " arrived with " + std::to_string(int(tot)) + " resources.");
+            say(cv.from, "Your convoy reached " + ownerName(cv.to) + ".");
+            destroyNow(e);
+            return;
+        }
+        cv.repath -= dt;
+        if (u.path.empty() && cv.repath <= 0) {
+            cv.repath = 3.f;
+            float d = rectDist(p, th);
+            if (d < cv.bestDist - 2.f) { cv.bestDist = d; cv.stuck = 0; }
+            else if (++cv.stuck >= 8) { refundConvoy(e, cv, "no land route"); return; }
+            if (!order(e, posOf(th), reg.get<Uid>(th).id, 40000)) cv.stuck += 2;
+        }
+    }
+    void updateSpotting() {                                             // convoys seen by a clan member are shown to the whole clan
+        std::vector<entt::entity> cvs;
+        reg.view<Convoy>().each([&](entt::entity e, const Convoy&) { cvs.push_back(e); });
+        for (auto& [c, m] : clanSpot) std::erase_if(m, [&](auto& kv) { return kv.second.until < clock; });
+        if (cvs.empty()) return;
+        std::vector<Source> srcs[MAX_PLAYERS + 1];
+        for (int pid = 1; pid <= MAX_PLAYERS; pid++) if (pl[pid].used && pl[pid].clan) srcs[pid] = sourcesFor(pid);
+        for (auto e : cvs) {
+            int owner = reg.get<Owner>(e).id;
+            Pos p = reg.get<Pos>(e);
+            uint32_t uid = reg.get<Uid>(e).id;
+            for (int pid = 1; pid <= MAX_PLAYERS; pid++) {
+                if (!pl[pid].used || !pl[pid].clan || allied(pid, owner) || !seen(srcs[pid], p.x, p.y)) continue;
+                auto& m = clanSpot[pl[pid].clan];
+                bool fresh = m.find(uid) == m.end();
+                m[uid] = {clock + 6.0, uint8_t(pid)};
+                if (fresh) notifyClan(pl[pid].clan, "Enemy convoy of " + ownerName(owner) + " spotted by " + pl[pid].name + " at (" + std::to_string(int(p.x)) + ", " + std::to_string(int(p.y)) + ")!");
+            }
+        }
+    }
+    bool spottedForClan(int id, uint32_t uid) const {
+        if (!isPlayer(id) || !pl[id].clan) return false;
+        auto it = clanSpot.find(pl[id].clan);
+        if (it == clanSpot.end()) return false;
+        auto f = it->second.find(uid);
+        return f != it->second.end() && f->second.until >= clock;
+    }
+
     void update(float dt) {
         tick++;
         clock += dt;
@@ -689,7 +1028,7 @@ struct Server {
                 }
                 continue;
             }
-            if (isResourceBuilding(in.kind) && ow > 0) {
+            if (isResourceBuilding(in.kind) && isPlayer(ow)) {
                 Yield y = yieldOf(in.kind, biome(int(std::floor(c.x)), int(std::floor(c.y))), in.kind == K_Harbour);
                 float f = levelMul(in.level) * (pl[ow].online ? 1.f : OFFLINE_PROD) * dt, tot = 0;
                 for (int r = 0; r < R_Count; r++) tot += b.stock[r];
@@ -713,7 +1052,7 @@ struct Server {
                 entt::entity best = nearestHostile(c, ow, range, false);
                 b.cd -= dt;
                 if (best != entt::null) {
-                    damage(best, KINFO[in.kind].dps * levelMul(in.level) * dt, ow);
+                    damage(best, KINFO[in.kind].dps * levelMul(in.level) * dt, ow, reg.get<Uid>(e).id);
                     if (b.cd <= 0) { b.cd = .9f; Pos t = reg.get<Pos>(best); fx(E_Arrow, c.x, c.y - 1.2f, t.x, t.y); }
                 }
             }
@@ -738,7 +1077,9 @@ struct Server {
                     if (walkable(nx, ny, false, 0) && biome(nx, ny) != B_Highlands) { u.path = {{float(nx) + .5f, float(ny) + .5f}}; u.i = 0; }
                 }
             }
+            if (isFactionOwner(ow)) factionAI(e, u, p, dt);
             if (auto* wk = reg.try_get<Worker>(e)) { runWorker(e, u, *wk, dt); }
+            else if (auto* cv = reg.try_get<Convoy>(e)) { runConvoy(e, u, *cv, dt); }
             else if (k == K_Monk) {                                  // heal the most wounded friendly unit in range
                 entt::entity best = entt::null;
                 float bn = 1e9f;
@@ -796,7 +1137,7 @@ struct Server {
             for (auto e : all) {
                 if (!reg.valid(e)) continue;
                 int ow = reg.get<Owner>(e).id;
-                if (ow == 0) continue;
+                if (ow == 0 || isFactionOwner(ow)) continue;
                 Pos p = posOf(e);
                 if (biome(int(std::floor(p.x)), int(std::floor(p.y))) != B_Snow || warm(p, ow)) continue;
                 auto& h = reg.get<Health>(e);
@@ -806,17 +1147,22 @@ struct Server {
             processKills();
             // wake up NPC chunks around every player-owned entity
             for (auto e : all) {
-                if (!reg.valid(e) || reg.get<Owner>(e).id == 0) continue;
+                if (!reg.valid(e) || !isPlayer(reg.get<Owner>(e).id)) continue;
                 Pos p = posOf(e);
                 int cx = chunkOf(int(std::floor(p.x))), cy = chunkOf(int(std::floor(p.y)));
                 for (int y = cy - 2; y <= cy + 2; y++) for (int x = cx - 2; x <= cx + 2; x++) spawnChunkNpcs(x, y);
+                int rx = floorDiv(cx, REGION_CHUNKS), ry = floorDiv(cy, REGION_CHUNKS);
+                for (int y = ry - 1; y <= ry + 1; y++) for (int x = rx - 1; x <= rx + 1; x++) processRegion(x, y);
             }
+            townTick();
+            callHelp();
+            updateSpotting();
         }
         if (tick % 4 == 0)                                             // exploration by online players' units
             for (auto e : units) {
                 if (!reg.valid(e)) continue;
                 int ow = reg.get<Owner>(e).id;
-                if (ow < 1 || !pl[ow].online) continue;
+                if (!isPlayer(ow) || !pl[ow].online) continue;
                 Pos p = reg.get<Pos>(e);
                 IV t{int(std::floor(p.x)), int(std::floor(p.y))};
                 auto& u = reg.get<Unit>(e);
@@ -827,7 +1173,7 @@ struct Server {
         if (tick % 4 == 0)
             for (auto e : blds) {   // keep building vision fresh for players who just (re)joined
                 int ow = reg.get<Owner>(e).id;
-                if (ow < 1 || !pl[ow].online || !complete(e)) continue;
+                if (!isPlayer(ow) || !pl[ow].online || !complete(e)) continue;
                 if (tick % 40 != 0) continue;
                 Pos c = posOf(e);
                 reveal(ow, int(std::floor(c.x)), int(std::floor(c.y)), KINFO[reg.get<Info>(e).kind].vision);
@@ -839,7 +1185,7 @@ struct Server {
             if (tick % 10 == 0) sendFog(id);
         }
         if (tick % 2 == 0) effects.clear();
-        if (tick % 20 == 0) sendRoster();
+        if (tick % 20 == 0) { sendRoster(); for (int id = 1; id <= MAX_PLAYERS; id++) if (pl[id].online) sendMap(id); }
         if (clock - lastSave > 30) { save(); lastSave = clock; }
     }
 
@@ -865,7 +1211,7 @@ struct Server {
             u.path.clear();
             u.i = 0;
             u.state = US_Attack;
-            damage(tg, KINFO[k].dps * dt, ow);
+            damage(tg, KINFO[k].dps * dt, ow, reg.get<Uid>(e).id);
             if (k == K_Archer && u.cd <= 0) { u.cd = .8f; fx(E_Arrow, p.x, p.y - .4f, tp.x, tp.y); }
         } else if (u.repath <= 0 || u.path.empty()) {
             u.repath = 1.f;
@@ -954,16 +1300,19 @@ struct Server {
         Writer w;
         w.put<uint8_t>(S_State);
         for (int r = 0; r < R_Count; r++) w.put<float>(p.res[r]);
+        for (int f = 0; f < FACTION_COUNT; f++) w.put<int8_t>(int8_t(std::lround(p.rep[f])));
         size_t cp = w.b.size();
         w.put<uint16_t>(0);
         uint16_t n = 0;
         reg.view<Uid, Owner, Info, Health>().each([&](entt::entity e, const Uid& uid, const Owner& o, const Info& in, const Health& h) {
             Pos ps = posOf(e);
-            if (!allied(id, o.id) && !seen(src, ps.x, ps.y, isBuilding(in.kind) ? 2.f : 0.f)) return;
+            static const bool seeAll = std::getenv("BW_SEEALL") != nullptr;      // test hook: show every entity
+            if (!seeAll && !allied(id, o.id) && !seen(src, ps.x, ps.y, isBuilding(in.kind) ? 2.f : 0.f) && !(reg.all_of<Convoy>(e) && spottedForClan(id, uid.id))) return;
             uint8_t state = 0, aux = 0, aim = 0, prog = 100;
             uint16_t stock = 0;
             if (const Unit* u = reg.try_get<Unit>(e)) {
                 state = u->state;
+                if (reg.all_of<Convoy>(e)) state |= UNIT_CONVOY_FLAG;
                 aim = u->aim;
                 if (const Worker* wk = reg.try_get<Worker>(e)) {
                     float best = 0;
@@ -997,7 +1346,7 @@ void Server::sendFog(int id) {
     Profile& p = pl[id];
     std::unordered_map<int64_t, Bits> uni = p.expl;
     for (int a = 1; a <= MAX_PLAYERS; a++)
-        if (a != id && pl[a].used && pl[a].allied[id])
+        if (a != id && pl[a].used && shares(a, id))
             for (auto& [k, b] : pl[a].expl) { Bits& u = uni.try_emplace(k, Bits{}).first->second; for (size_t i = 0; i < 32; i++) u[i] |= b[i]; }
     std::vector<std::pair<int64_t, Bits>> fogOut;
     std::vector<int64_t> terrOut;
@@ -1028,6 +1377,11 @@ void Server::sendFog(int id) {
 }
 
 void Server::sendRoster() {
+    Pos thPos[MAX_PLAYERS + 1];
+    bool hasTh[MAX_PLAYERS + 1]{};
+    reg.view<Info, Building, Owner>().each([&](const Info& i, const Building& b, const Owner& o) {
+        if (i.kind == K_TownHall && isPlayer(o.id) && !hasTh[o.id]) { hasTh[o.id] = true; thPos[o.id] = footCenter(i.kind, b.tx, b.ty); }
+    });
     for (int id = 1; id <= MAX_PLAYERS; id++) {
         if (!pl[id].online) continue;
         Writer w;
@@ -1038,13 +1392,43 @@ void Server::sendRoster() {
         for (int o = 1; o <= MAX_PLAYERS; o++) {
             if (!pl[o].used) continue;
             uint8_t flags = uint8_t((pl[o].online ? 1 : 0) | (pl[id].allied[o] ? 2 : 0) | (pl[o].pending[id] ? 4 : 0) | (pl[id].pending[o] ? 8 : 0));
-            w.put<uint8_t>(uint8_t(o)).put<uint8_t>(flags);
+            w.put<uint8_t>(uint8_t(o)).put<uint8_t>(flags).put<uint8_t>(pl[o].clan);
             w.str(pl[o].name);
+            bool known = hasTh[o] && (o == id || shares(id, o) || explored(id, int(std::floor(thPos[o].x)), int(std::floor(thPos[o].y))));
+            w.put<uint8_t>(known ? 1 : 0).put<float>(known ? thPos[o].x : 0.f).put<float>(known ? thPos[o].y : 0.f);
             n++;
         }
         w.b[cp] = n;
+        uint8_t nc = 0;
+        size_t cc = w.b.size();
+        w.put<uint8_t>(0);
+        for (int c = 1; c <= MAX_CLANS; c++) {
+            if (!clans[c].used) continue;
+            int members = 0;
+            for (int o = 1; o <= MAX_PLAYERS; o++) if (pl[o].used && pl[o].clan == c) members++;
+            w.put<uint8_t>(uint8_t(c));
+            w.str(clans[c].name);
+            w.put<uint8_t>(uint8_t(members)).put<uint8_t>(clans[c].leader);
+            nc++;
+        }
+        w.b[cc] = nc;
         sendPacket(pl[id].peer, w);
     }
+}
+
+void Server::sendMap(int id) {                                          // faction towns the player has discovered
+    Writer w;
+    w.put<uint8_t>(S_Map);
+    uint8_t n = 0;
+    size_t cp = w.b.size();
+    w.put<uint8_t>(0);
+    for (auto& t : towns) {
+        if (!t.alive || !explored(id, t.cx, t.cy)) continue;
+        w.put<uint8_t>(t.faction).put<float>(float(t.cx) + .5f).put<float>(float(t.cy) + .5f);
+        if (++n == 255) break;
+    }
+    w.b[cp] = n;
+    sendPacket(pl[id].peer, w);
 }
 
 }  // namespace
@@ -1068,14 +1452,23 @@ void Server::save() {
         for (float r : p.res) w.put<float>(r);
         for (int a = 0; a <= MAX_PLAYERS; a++) w.put<uint8_t>(uint8_t((p.allied[a] ? 1 : 0) | (p.pending[a] ? 2 : 0)));
         w.put<float>(p.cam.x).put<float>(p.cam.y);
+        w.put<uint8_t>(p.clan);
+        for (float rp : p.rep) w.put<float>(rp);
         w.put<uint32_t>(uint32_t(p.expl.size()));
         for (auto& [k, b] : p.expl) { w.put<int64_t>(k); w.bytes(b.data(), 32); }
     }
+    for (int c = 1; c <= MAX_CLANS; c++) { w.put<uint8_t>(clans[c].used ? 1 : 0); if (clans[c].used) { w.str(clans[c].name); w.put<uint8_t>(clans[c].leader); } }
+    for (float d : facDonated) w.put<float>(d);
+    w.put<uint32_t>(uint32_t(regionsDone.size()));
+    for (auto k : regionsDone) w.put<int64_t>(k);
+    w.put<uint32_t>(uint32_t(towns.size()));
+    for (auto& t : towns) w.put<uint16_t>(t.id).put<uint8_t>(t.faction).put<int32_t>(t.cx).put<int32_t>(t.cy).put<uint32_t>(t.th).put<uint8_t>(t.alive ? 1 : 0).put<double>(t.respawnAt);
     w.put<uint32_t>(uint32_t(spawned.size()));
     for (auto k : spawned) w.put<int64_t>(k);
     w.put<uint32_t>(uint32_t(byUid.size()));
     reg.view<Uid, Owner, Info, Health>().each([&](entt::entity e, const Uid& uid, const Owner& o, const Info& in, const Health& h) {
         w.put<uint32_t>(uid.id).put<uint8_t>(in.kind).put<uint8_t>(o.id).put<uint8_t>(in.level).put<float>(h.hp).put<float>(h.maxhp);
+        w.put<uint16_t>(reg.all_of<TownTag>(e) ? reg.get<TownTag>(e).town : uint16_t(0));
         if (const Building* b = reg.try_get<Building>(e)) {
             w.put<uint8_t>(1).put<int32_t>(b->tx).put<int32_t>(b->ty).put<float>(b->progress);
             for (float s : b->stock) w.put<float>(s);
@@ -1084,8 +1477,10 @@ void Server::save() {
             Pos p = reg.get<Pos>(e);
             w.put<uint8_t>(0).put<float>(p.x).put<float>(p.y);
             const Worker* wk = reg.try_get<Worker>(e);
-            w.put<uint8_t>(wk ? 1 : 0);
+            const Convoy* cv = reg.try_get<Convoy>(e);
+            w.put<uint8_t>(uint8_t((wk ? 1 : 0) | (cv ? 2 : 0)));
             if (wk) { w.put<uint32_t>(wk->home).put<uint8_t>(wk->phase); for (float c : wk->cargo) w.put<float>(c); }
+            if (cv) { w.put<uint8_t>(cv->from).put<uint8_t>(cv->to); for (float c : cv->cargo) w.put<float>(c); }
         }
     });
     std::string tmp = savePath + ".tmp";
@@ -1122,6 +1517,8 @@ bool Server::load() {
         for (int a = 0; a <= MAX_PLAYERS; a++) { uint8_t b = r.get<uint8_t>(); p.allied[a] = b & 1; p.pending[a] = b & 2; }
         p.cam.x = r.get<float>();
         p.cam.y = r.get<float>();
+        p.clan = r.get<uint8_t>();
+        for (float& rp : p.rep) rp = r.get<float>();
         uint32_t ne = r.get<uint32_t>();
         for (uint32_t i = 0; i < ne && r.ok; i++) {
             int64_t k = r.get<int64_t>();
@@ -1129,6 +1526,20 @@ bool Server::load() {
             if (auto d = r.bytes(32)) std::memcpy(b.data(), d, 32);
             p.expl[k] = b;
         }
+    }
+    for (int c = 1; c <= MAX_CLANS; c++) {
+        clans[c] = Clan{};
+        if (r.get<uint8_t>()) { clans[c].used = true; clans[c].name = r.str(); clans[c].leader = r.get<uint8_t>(); }
+    }
+    for (float& d : facDonated) d = r.get<float>();
+    uint32_t nr = r.get<uint32_t>();
+    for (uint32_t i = 0; i < nr && r.ok; i++) regionsDone.insert(r.get<int64_t>());
+    uint32_t nt = r.get<uint32_t>();
+    for (uint32_t i = 0; i < nt && r.ok; i++) {
+        Town t{};
+        t.id = r.get<uint16_t>(); t.faction = r.get<uint8_t>(); t.cx = r.get<int32_t>(); t.cy = r.get<int32_t>(); t.th = r.get<uint32_t>();
+        t.alive = r.get<uint8_t>() != 0; t.respawnAt = r.get<double>(); t.nextSpawn = 0; t.lastAlert = -100;
+        towns.push_back(t);
     }
     uint32_t ns = r.get<uint32_t>();
     for (uint32_t i = 0; i < ns && r.ok; i++) spawned.insert(r.get<int64_t>());
@@ -1138,11 +1549,13 @@ bool Server::load() {
         Kind k = Kind(r.get<uint8_t>());
         uint8_t owner = r.get<uint8_t>(), level = r.get<uint8_t>();
         float hp = r.get<float>(), mhp = r.get<float>();
+        uint16_t town = r.get<uint16_t>();
         uint8_t isB = r.get<uint8_t>();
         if (!r.ok || k >= K_Count) return false;
         auto e = makeBase(k, owner, uid);
         reg.get<Info>(e).level = level;
         reg.get<Health>(e) = Health{hp, mhp, 0};
+        if (town) reg.emplace<TownTag>(e, TownTag{town});
         if (isB) {
             Building b{};
             b.tx = r.get<int32_t>(); b.ty = r.get<int32_t>(); b.progress = r.get<float>();
@@ -1156,13 +1569,23 @@ bool Server::load() {
             reg.emplace<Pos>(e, p);
             reg.emplace<Unit>(e);
             if (k == K_Sheep) reg.emplace<Wander>(e, Wander{1.f});
-            if (r.get<uint8_t>()) {
+            uint8_t fl = r.get<uint8_t>();
+            if (town) {
+                if (Town* tw = townById(town)) { reg.emplace<Home>(e, Home{float(tw->cx) + .5f, float(tw->cy) + 3.f, 0}); reg.emplace_or_replace<Wander>(e, Wander{1.f}); }
+            }
+            if (fl & 1) {
                 Worker w;
                 w.home = r.get<uint32_t>();
                 w.phase = r.get<uint8_t>();
                 for (float& c : w.cargo) c = r.get<float>();
                 if (w.phase == 1) w.phase = 2;
                 reg.emplace<Worker>(e, w);
+            }
+            if (fl & 2) {
+                Convoy cv{};
+                cv.from = r.get<uint8_t>(); cv.to = r.get<uint8_t>();
+                for (float& c : cv.cargo) c = r.get<float>();
+                reg.emplace<Convoy>(e, cv);
             }
         }
     }
