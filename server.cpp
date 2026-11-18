@@ -95,7 +95,15 @@ struct Server {
     std::unordered_map<uint8_t, std::unordered_map<uint32_t, Spot>> clanSpot;   // clan -> convoys its members have spotted
 
     Server(uint16_t port, uint32_t sd, std::string path, std::string serverName) : seed(sd), rng(sd), savePath(std::move(path)) {
+        bool existed = std::filesystem::exists(savePath);
         bool loaded = load();
+        if (!loaded && existed) {
+            std::error_code ec;
+            std::filesystem::rename(savePath, savePath + ".bad", ec);
+            std::printf("Savegame could not be read; kept as %s.bad. Restart the server to begin a fresh world.\n", savePath.c_str());
+            std::fflush(stdout);
+            std::_Exit(2);                                            // no destructor: never overwrite the save with a half-loaded state
+        }
         if (!net.start(port, MAX_PLAYERS + 4, serverName)) { std::puts("Failed to bind port"); std::exit(1); }
         std::printf("Server listening on UDP port %d (seed %u, %s, steam %s)\n", port, seed, loaded ? "savegame loaded" : "fresh world", net.steamActive() ? "on" : "off");
     }
@@ -514,6 +522,7 @@ struct Server {
         std::vector<entt::entity> v;
         reg.view<Owner>().each([&](entt::entity e, const Owner& o) { if (o.id == id) v.push_back(e); });
         for (auto e : v) {
+            if (!reg.valid(e)) continue;                                  // passengers are destroyed together with their ship
             if (isBuilding(reg.get<Info>(e).kind)) { Pos p = posOf(e); fx(E_Explosion, p.x, p.y); }
             destroyNow(e);
         }
@@ -1598,6 +1607,23 @@ struct Server {
         });
         return s;
     }
+    // Vision sources bucketed into 16x16-tile cells (each source is inserted with a 3-tile margin, the largest padding used by callers).
+    struct SrcGrid {
+        std::unordered_map<int64_t, std::vector<Source>> cells;
+        explicit SrcGrid(const std::vector<Source>& s) {
+            for (auto& v : s) {
+                int x0 = floorDiv(int(std::floor(v.x - v.r - 3.f)), 16), x1 = floorDiv(int(std::floor(v.x + v.r + 3.f)), 16);
+                int y0 = floorDiv(int(std::floor(v.y - v.r - 3.f)), 16), y1 = floorDiv(int(std::floor(v.y + v.r + 3.f)), 16);
+                for (int cy = y0; cy <= y1; cy++) for (int cx = x0; cx <= x1; cx++) cells[chunkKey(cx, cy)].push_back(v);
+            }
+        }
+        bool seen(float x, float y, float pad = 0) const {
+            auto it = cells.find(chunkKey(floorDiv(int(std::floor(x)), 16), floorDiv(int(std::floor(y)), 16)));
+            if (it == cells.end()) return false;
+            for (auto& v : it->second) if ((x - v.x) * (x - v.x) + (y - v.y) * (y - v.y) <= (v.r + pad) * (v.r + pad)) return true;
+            return false;
+        }
+    };
     static bool seen(const std::vector<Source>& s, float x, float y, float pad = 0) {
         for (auto& v : s) if ((x - v.x) * (x - v.x) + (y - v.y) * (y - v.y) <= (v.r + pad) * (v.r + pad)) return true;
         return false;
@@ -1606,6 +1632,7 @@ struct Server {
     void sendState(int id) {
         Profile& p = pl[id];
         auto src = sourcesFor(id);
+        SrcGrid grid(src);
         Writer w;
         w.put<uint8_t>(S_State);
         for (int r = 0; r < R_Count; r++) w.put<float>(p.res[r]);
@@ -1617,7 +1644,7 @@ struct Server {
         reg.view<Uid, Owner, Info, Health>().each([&](entt::entity e, const Uid& uid, const Owner& o, const Info& in, const Health& h) {
             Pos ps = posOf(e);
             static const bool seeAll = std::getenv("BW_SEEALL") != nullptr;      // test hook: show every entity
-            if (!seeAll && !allied(id, o.id) && !seen(src, ps.x, ps.y, isBuilding(in.kind) ? 2.f : 0.f) && !((reg.all_of<Convoy>(e) || reg.all_of<Haul>(e)) && spottedForClan(id, uid.id))) return;
+            if (!seeAll && !allied(id, o.id) && !grid.seen(ps.x, ps.y, isBuilding(in.kind) ? 2.f : 0.f) && !((reg.all_of<Convoy>(e) || reg.all_of<Haul>(e)) && spottedForClan(id, uid.id))) return;
             uint8_t state = 0, aux = 0, aim = 0, prog = 100;
             uint16_t stock = 0;
             if (const Unit* u = reg.try_get<Unit>(e)) {
@@ -1650,7 +1677,7 @@ struct Server {
         w.put<uint16_t>(0);
         uint16_t ne = 0;
         for (auto& f : effects)
-            if (seen(src, f.x, f.y, 3.f) || seen(src, f.x2, f.y2, 3.f)) { w.put<uint8_t>(f.type).put<float>(f.x).put<float>(f.y).put<float>(f.x2).put<float>(f.y2); ne++; }
+            if (grid.seen(f.x, f.y, 3.f) || grid.seen(f.x2, f.y2, 3.f)) { w.put<uint8_t>(f.type).put<float>(f.x).put<float>(f.y).put<float>(f.x2).put<float>(f.y2); ne++; }
         std::memcpy(&w.b[ep], &ne, 2);
         net.send(p.conn, w);
     }
@@ -1927,12 +1954,15 @@ bool Server::load() {
             }
         }
     }
-    worldLoad(r);                                                       // [world] optional appended section
-    if (!r.ok) { std::puts("Savegame is truncated; starting fresh."); return false; }
-    shipsLoad(r);
-    if (r.ok && r.p < r.e) loadBase(r);                                  // optional base-mechanics section (appended)
-    if (!r.ok) { std::puts("Savegame is truncated; starting fresh."); return false; }
-    shipsLoad(r);
+    if (!r.ok) { std::puts("Savegame is truncated."); return false; }
+    // Optional appended sections (world, ships, base): a damaged or missing one is skipped instead of failing the whole load.
+    auto optional = [&](const char* name, auto&& load) {
+        load();
+        if (!r.ok) { std::printf("Ignoring damaged %s section of the savegame.\n", name); r.ok = true; r.p = r.e; }
+    };
+    optional("world", [&] { worldLoad(r); });
+    optional("ship", [&] { shipsLoad(r); });
+    optional("base", [&] { if (r.p < r.e) loadBase(r); });
     return true;
 }
 

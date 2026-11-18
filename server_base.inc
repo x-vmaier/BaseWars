@@ -272,12 +272,12 @@ void sendAlert(int to, uint8_t type, Pos at, const std::string& text) {
     w.str(text);
     net.send(pl[to].conn, w);
 }
-DefRoute planDefenseRoute(int /*member*/, Pos from, Pos to) {                     // land route from a member's home to the fight; the single place to extend with boats
+DefRoute planDefenseRoute(int /*member*/, Pos from, Pos to) {   // bounded search: unreachable victims must not stall a tick                     // land route from a member's home to the fight; the single place to extend with boats
     DefRoute r;
     std::vector<Pos> path;
     float straight = std::hypot(to.x - from.x, to.y - from.y);
     if (straight < 8.f) { r.ok = true; r.eta = straight / 2.7f; return r; }
-    if (!findPath({int(std::floor(from.x)), int(std::floor(from.y))}, {int(std::floor(to.x)), int(std::floor(to.y))}, false, 0, path, 60000)) return r;
+    if (!findPath({int(std::floor(from.x)), int(std::floor(from.y))}, {int(std::floor(to.x)), int(std::floor(to.y))}, false, 0, path, 15000)) return r;
     float len = 0;
     Pos prev = from;
     for (auto& wp : path) { len += std::hypot(wp.x - prev.x, wp.y - prev.y); prev = wp; }
@@ -291,7 +291,7 @@ DefRoute planDefenseRoute(int /*member*/, Pos from, Pos to) {                   
 }
 bool idleArmy(entt::entity e) {
     Kind k = reg.get<Info>(e).kind;
-    if (!isArmy(k) || reg.any_of<Attack, AMove, Convoy, Haul, Raider, Support, Extinguish, Worker>(e)) return false;
+    if (!isArmy(k) || reg.any_of<Attack, AMove, Convoy, Haul, Raider, Support, Extinguish, Worker, Aboard, Boarding>(e)) return false;
     return reg.get<Unit>(e).path.empty();
 }
 std::vector<entt::entity> pickIdleArmy(int owner, Pos near2, int n) {
@@ -332,18 +332,18 @@ void dispatchDefense(int victim, Pos at, int attacker) {
         reg.view<Support, Owner>().each([&](const Support& s, const Owner& o) { if (o.id == m && s.defense && s.victim == victim) existing++; });
         int need = int(bp[m].quota) - existing;
         if (need <= 0) continue;
+        auto us = pickIdleArmy(m, at, need);
+        if (us.empty()) continue;                                                // nothing to send: skip the route search entirely
         Pos from = posOf(th);
         spawnSpot(th, false, from);                                              // a free tile beside the hall (its centre is blocked)
         DefRoute rt = planDefenseRoute(m, from, at);
         if (std::getenv("BW_BASEDEBUG")) std::printf("[defense] %s -> victim %s: route ok=%d eta=%.0f need=%d\n", pl[m].name.c_str(), pl[victim].name.c_str(), int(rt.ok), rt.eta, need);
-        auto us = pickIdleArmy(m, at, need);
-        if (us.empty()) continue;
         // [ships] cross the water by boat when that is clearly faster than marching around (planner lives in server_ships.inc)
         TransportPlan plan = planTransport(m, us, at);
         bool boat = plan.useBoat && !plan.deferred && startTransport(plan, us, at);
         if (!rt.ok && !boat) continue;                                            // neither a land route nor a free ship: cannot help
         float eta = boat ? plan.etaBoat : rt.eta;
-        for (auto e : us) sendPatrol(e, at, victim, true, !boat);
+        for (auto e : us) sendPatrol(e, at, victim, true, false);              // the first path order comes from supportSecond() under its search budget
         total += int(us.size());
         std::string how = boat ? " by ship" : "";
         say(m, "Defending " + pl[victim].name + " against " + ownerName(attacker) + ": " + std::to_string(us.size()) + " troops dispatched" + how + " (ETA " + std::to_string(int(eta)) + " s).");
@@ -383,7 +383,7 @@ void doSupport(int id, Pos dest, int n) {
     if (!ok) { say(id, "Support patrols can only go to allied or clan towns and outposts."); return; }
     auto us = pickIdleArmy(id, dest, n);
     if (us.empty()) { say(id, "No idle army units available for a patrol."); return; }
-    for (auto e : us) sendPatrol(e, dest, 0, false);
+    for (auto e : us) sendPatrol(e, dest, 0, false, false);
     bp[id].supNext = clock + 6.0;
     say(id, "Support patrol of " + std::to_string(us.size()) + " troops sets out. They help fight, then return home.");
 }
@@ -493,6 +493,7 @@ void homelessBuild(int id, int tx, int ty) {                                    
     PlaceWorld w{*this, id};
     int err = checkPlace(w, K_TownHall, tx, ty, PM_HomelessHall);
     if (err) { say(id, std::string("Cannot build here: ") + PLACE_TEXT[err] + "."); return; }
+    if (!worldBuildOk(id, K_TownHall, tx, ty)) return;                              // [world] trees / rocks / gold veins must be cleared first
     auto e = makeBuilding(K_TownHall, uint8_t(id), tx, ty, false);
     Pos c = posOf(e);
     bp[id].homeless = false;
@@ -511,6 +512,7 @@ void doMoveTown(int id, int tx, int ty) {
     PlaceWorld w{*this, id};
     int err = checkPlace(w, K_TownHall, tx, ty, PM_MoveHall);
     if (err) { say(id, std::string("Cannot move the town here: ") + PLACE_TEXT[err] + "."); return; }
+    if (!worldBuildOk(id, K_TownHall, tx, ty)) return;                              // [world]
     spend(id, TOWN_MOVE_COST);
     auto n = makeBuilding(K_TownHall, uint8_t(id), tx, ty, false);
     reg.emplace<RelocNew>(n, RelocNew{reg.get<Uid>(th).id, true, TOWN_MOVE_TIME});
@@ -530,6 +532,7 @@ void doRelocate(int id, uint32_t uid, int tx, int ty) {
     PlaceWorld w{*this, id};
     int err = checkPlace(w, k, tx, ty);
     if (err) { say(id, std::string("Cannot relocate here: ") + PLACE_TEXT[err] + "."); return; }
+    if (!worldBuildOk(id, k, tx, ty)) return;                                       // [world]
     spend(id, KINFO[k].cost);
     auto n = makeBuilding(k, uint8_t(id), tx, ty, false);
     float total = 60.f + 30.f * float(reg.get<Info>(be).level - 1);
@@ -552,7 +555,7 @@ void migrateTown(int ow, entt::entity nth) {                                    
     if (spots.empty()) return;
     std::vector<entt::entity> us;
     reg.view<Owner, Unit, Info, Pos>().each([&](entt::entity e, const Owner& o, const Unit&, const Info& i, const Pos&) {
-        if (o.id != ow || !isTroop(i.kind) || reg.any_of<Convoy, Haul>(e)) return;
+        if (o.id != ow || !isTroop(i.kind) || reg.any_of<Convoy, Haul, Aboard, Boarding>(e)) return;
         us.push_back(e);
     });
     size_t n = 0;

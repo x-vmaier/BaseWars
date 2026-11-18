@@ -185,7 +185,10 @@ public:
     void RefreshComplete(HServerListRequest, EMatchMakingServerResponse) override { busy = false; }
 
 private:
-    void cancel() { if (req) { SteamMatchmakingServers()->ReleaseRequest(req); req = nullptr; } busy = false; }
+    void cancel() {
+        if (req) { if (auto* m = SteamMatchmakingServers()) m->ReleaseRequest(req); req = nullptr; }     // null after SteamAPI_Shutdown
+        busy = false;
+    }
     HServerListRequest req = nullptr;
     MatchMakingKeyValuePair_t filter{};
     MatchMakingKeyValuePair_t* filters = nullptr;

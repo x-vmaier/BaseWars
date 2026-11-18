@@ -253,13 +253,29 @@ static float pathLen(Pos start, const std::vector<Pos>& p) {
     return l;
 }
 // Route length in tiles from `a` to `b`; INF when there is no complete route.
+// Results are cached for 45 s per (start tile, goal tile, medium, ignored building): the planner re-asks the same questions for every
+// boarding / landing candidate and for every group sent over the same stretch of coast.
+struct RouteKey {
+    int ax, ay, bx, by; bool water; uint32_t ignore;
+    bool operator==(const RouteKey& o) const { return ax == o.ax && ay == o.ay && bx == o.bx && by == o.by && water == o.water && ignore == o.ignore; }
+};
+struct RouteKeyHash { size_t operator()(const RouteKey& k) const { return size_t(hash2(k.ax * 31 + k.bx, k.ay * 17 + k.by, k.ignore * 2u + (k.water ? 1u : 0u))); } };
+std::unordered_map<RouteKey, std::pair<float, double>, RouteKeyHash> routeCache;
 float routeLen(Pos a, IV b, bool water, uint32_t ignore, int maxNodes, float tol = 2.6f) {
     std::vector<Pos> p;
-    if (tileOf(a).x == b.x && tileOf(a).y == b.y) return 0.f;
-    if (!findPath(tileOf(a), b, water, ignore, p, maxNodes)) return INF_T;
-    Pos last = p.back(), g = tileCenter(b);
-    if (std::hypot(last.x - g.x, last.y - g.y) > tol) return INF_T;
-    return pathLen(a, p);
+    IV at = tileOf(a);
+    if (at.x == b.x && at.y == b.y) return 0.f;
+    RouteKey key{at.x, at.y, b.x, b.y, water, ignore};
+    auto hit = routeCache.find(key);
+    if (hit != routeCache.end() && hit->second.second > clock) return hit->second.first;
+    float len = INF_T;
+    if (findPath(at, b, water, ignore, p, maxNodes)) {
+        Pos last = p.back(), g = tileCenter(b);
+        if (std::hypot(last.x - g.x, last.y - g.y) <= tol) len = pathLen(a, p);
+    }
+    if (routeCache.size() > 4096) routeCache.clear();
+    routeCache[key] = {len, clock + 45.0};
+    return len;
 }
 TransportPlan planTransport(int owner, const std::vector<entt::entity>& group, Pos to, uint32_t destUid = 0, float boatFactor = .75f) {
     TransportPlan plan;
@@ -479,6 +495,8 @@ bool shipPacket(int id, uint8_t type, Reader& r) {
             if (e == entt::null || !reg.all_of<Unit, Owner, Info, Pos>(e) || reg.get<Owner>(e).id != id || !isTroop(reg.get<Info>(e).kind)) continue;
             if (reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e) || reg.all_of<Aboard>(e)) continue;
             if (taken >= tf) { over++; continue; }
+            releaseUnit(e);                                         // [base] ends patrols / firefighting
+            if (reg.get<Info>(e).kind == K_Pawn) huntPause(e);      // [world] a commanded pawn stops hunting for a while
             reg.remove<Attack>(e);
             reg.remove<AMove>(e);
             Boarding b;
@@ -525,6 +543,7 @@ bool shipStateHook(int viewer, entt::entity e, int ownerId, const Info& in, uint
         aux = uint8_t(shipTier(in.level));
         prog = uint8_t(std::min(t, 254));
         stock = uint16_t(std::min(rs, 65000.f));
+        if (!allied(viewer, ownerId)) { prog = 0; stock = 0; }      // enemies only see the boat itself, not its load
     }
     return true;
 }

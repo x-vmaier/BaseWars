@@ -74,6 +74,7 @@ bool inClearReach(int id, int x, int y) {                     // clearing is all
         if (ok || (i.kind != K_TownHall && i.kind != K_Outpost) || !allied(id, o.id) || b.progress < 1.f) return;
         Pos c = footCenter(i.kind, b.tx, b.ty);
         float reach = i.kind == K_TownHall ? 60.f : 34.f;
+        if (o.id != id) reach = std::max(reach, float(CLAN_TOWN_RADIUS) + 4.f);        // a homeless clan member may build (and so clear) anywhere around the clan halls
         if (std::max(std::abs(c.x - float(x)), std::abs(c.y - float(y))) <= reach) ok = true;
     });
     return ok;
@@ -105,12 +106,17 @@ void onClear(int id, Reader& r) {
     }
     say(id, "Clearing " + std::to_string(ok.size()) + " tile" + (ok.size() > 1 ? "s" : "") + " (-" + std::to_string(int(cost[R_Wood])) + " wood).");
 }
+std::vector<Source> dropSrc[MAX_PLAYERS + 1];
+uint32_t dropSrcTick[MAX_PLAYERS + 1]{};
 void sendDrop(Pos p, int res, int amt, int credited) {         // visible bouncing "+N" drop for everyone who can see the spot
     Writer w;
     w.put<uint8_t>(S_Drop).put<float>(p.x).put<float>(p.y).put<uint8_t>(uint8_t(res)).put<uint16_t>(uint16_t(std::clamp(amt, 0, 65000)));
     for (int id = 1; id <= MAX_PLAYERS; id++) {
         if (!pl[id].online) continue;
-        if (id != credited && !seen(sourcesFor(id), p.x, p.y, 2.f)) continue;
+        if (id != credited) {                                                   // vision sources are rebuilt at most once per tick per player
+            if (dropSrcTick[id] != tick) { dropSrc[id] = sourcesFor(id); dropSrcTick[id] = tick; }
+            if (!seen(dropSrc[id], p.x, p.y, 2.f)) continue;
+        }
         net.send(pl[id].conn, w);
     }
 }

@@ -40,7 +40,9 @@ std::vector<uint32_t> troops(){std::vector<uint32_t> v;for(auto&[i,e]:ents)if(e.
 int aboardCount(){int n=0;for(auto&[i,e]:ents)if(e.o==me&&isTroop(e.k)&&e.prog==255)n++;return n;}
 void board(const std::vector<uint32_t>&us,uint32_t ship){Writer w;w.put<uint8_t>(C_Board).put<uint8_t>(uint8_t(us.size()));for(auto u:us)w.put<uint32_t>(u);w.put<uint32_t>(ship);snd(w);}
 void moveU(const std::vector<uint32_t>&us,float x,float y){Writer w;w.put<uint8_t>(C_Move).put<uint8_t>(uint8_t(us.size()));for(auto u:us)w.put<uint32_t>(u);w.put<float>(x).put<float>(y);snd(w);}
-void train(uint32_t b,Kind k){Writer t;t.put<uint8_t>(C_Train).put<uint32_t>(b).put<uint8_t>(k);snd(t);pump(300);}
+int countKind(Kind k){int n=0;for(auto&[i,e]:ents)if(e.o==me&&e.k==k)n++;return n;}
+// training is queued and takes time: wait until one more unit of that kind exists (give up after 30 s)
+void train(uint32_t b,Kind k){int before=countKind(k);Writer t;t.put<uint8_t>(C_Train).put<uint32_t>(b).put<uint8_t>(k);snd(t);for(int i=0;i<300&&countKind(k)==before;i++)pump(100);}
 void shipLine(const char*tag){for(auto id:ships()){auto&e=ents[id];printf("[%s] ship %u tier(aux)=%d troops(prog)=%d res(stock)=%d at %.1f,%.1f hp %.0f/%.0f\n",tag,id,e.aux,e.prog,e.stock,e.x,e.y,e.hp,e.mhp);}}
 int main(int argc,char**argv){ std::string uuid=argc>1?argv[1]:"bot-uuid-0000001"; std::string name=argc>2?argv[2]:"Bot"; int mode=argc>3?atoi(argv[3]):1;
  setvbuf(stdout,nullptr,_IOLBF,0);
