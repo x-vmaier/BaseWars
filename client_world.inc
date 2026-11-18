@@ -112,7 +112,7 @@ void worldFrame() {                                            // once per frame
     mineCtr.clear();
     reg.view<Info, Goal>().each([&](const Info& i, const Goal& g) { if (i.kind == K_Mine && i.owner == me) mineCtr.push_back({g.x, g.y}); });
     if (buildKind == int(K_Mine) && !overUI(GetMousePosition())) {
-        IV t = placeTile(K_Mine, GetScreenToWorld2D(GetMousePosition(), cam));
+        IV t = placeTile(K_Mine, GetScreenToWorld2D(::GetMousePosition(), cam));
         Pos c = footCenter(K_Mine, t.x, t.y);
         mineCtr.push_back({c.x, c.y});
     }
