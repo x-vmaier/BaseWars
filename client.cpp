@@ -91,9 +91,6 @@ struct App {
 
     // network
     Settings settings;
-    int SW() const { return GetScreenWidth(); }          // logical UI size (the UI scale setting will divide these)
-    int SH() const { return GetScreenHeight(); }
-    Vector2 MP() const { return GetMousePosition(); }
     bool connected = false, welcomed = false, lost = false, helloSent = false;
     double startT = 0, lastCam = 0;
     std::string ip, uuid, myName;
@@ -134,7 +131,9 @@ struct App {
     std::vector<std::pair<std::string, Color>> ctxLines;
     std::vector<std::string> ctxNext;
     std::vector<Kind> ctxNextUnits;
+    int locOut[5]{-1, -1, -1, -1, -1}, locDis[4]{-1, -1, -1, -1};   // cached uniform locations (outline: uvRect/texelSize/outlineColor/thickness/time; dissolve: uvRect/texSize/progress/seed)
     TMap mTrain;
+#include "client_pause.inc"
 #include "client_menu.inc"
     bool socialOpen = false, bigMapOpen = false, textFocus = false, bmDragging = false;
     int socialTab = 0, socialScroll = 0, bmZoom = 4, bmW = 0, bmH = 0;
@@ -711,11 +710,13 @@ struct App {
 
     // ---------------------------------------------------------------- input
     void input(float dt) {
-        Vector2 m = GetMousePosition();
-        float sw = float(GetScreenWidth()), sh = float(GetScreenHeight());
+        Vector2 rm = ::GetMousePosition();                              // real pixels: camera, picking, dragging
+        Vector2 m = GetMousePosition();                                 // UI space (divided by the UI scale): panels and buttons
+        float sw = float(::GetScreenWidth()), sh = float(::GetScreenHeight());
         cam.offset = {sw * .5f, sh * .5f};
         bool ui = overUI(m);
 
+        if (pauseOpen) { pauseInput(); return; }
         if (chatOpen) { chatUpdate(m); return; }
         if (bigMapOpen) { bigMapInput(m); return; }
         if (trainOpen) { trainInput(m); return; }
@@ -729,17 +730,17 @@ struct App {
         if (IsKeyDown(KEY_LEFT)) cam.target.x -= sp;
         if (IsKeyDown(KEY_RIGHT)) cam.target.x += sp;
         if (IsCursorOnScreen() && !dragging && !ui) {                       // edge scrolling
-            if (m.x < 3) cam.target.x -= sp;
-            if (m.x > sw - 4) cam.target.x += sp;
-            if (m.y < 3) cam.target.y -= sp;
-            if (m.y > sh - 4) cam.target.y += sp;
+            if (rm.x < 3) cam.target.x -= sp;
+            if (rm.x > sw - 4) cam.target.x += sp;
+            if (rm.y < 3) cam.target.y -= sp;
+            if (rm.y > sh - 4) cam.target.y += sp;
         }
         if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) { Vector2 d = GetMouseDelta(); cam.target.x -= d.x / cam.zoom; cam.target.y -= d.y / cam.zoom; }
         float wh = GetMouseWheelMove();
         if (wh != 0 && !ui) {
-            Vector2 b = GetScreenToWorld2D(m, cam);
+            Vector2 b = GetScreenToWorld2D(rm, cam);
             cam.zoom = std::clamp(cam.zoom * (1 + wh * .1f), .2f, 2.2f);
-            Vector2 a = GetScreenToWorld2D(m, cam);
+            Vector2 a = GetScreenToWorld2D(rm, cam);
             cam.target.x += b.x - a.x;
             cam.target.y += b.y - a.y;
         }
@@ -747,15 +748,18 @@ struct App {
         if (IsKeyPressed(KEY_B)) buildOpen = !buildOpen;
         if (IsKeyPressed(KEY_M)) { mode = mode == M_Move ? M_None : M_Move; buildKind = -1; }
         if (IsKeyPressed(KEY_A)) { mode = mode == M_Attack ? M_None : M_Attack; buildKind = -1; }
-        if (IsKeyPressed(KEY_ESCAPE)) { buildKind = -1; mode = M_None; ctxOpen = false; sel.clear(); }
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            if (buildKind >= 0 || mode != M_None || ctxOpen || !sel.empty()) { buildKind = -1; mode = M_None; ctxOpen = false; sel.clear(); }
+            else { pauseOpen = true; return; }
+        }
         if (buildOpen) for (int i = 0; i < 7; i++) if (IsKeyPressed(KEY_ONE + i)) { selectBuildKind(i); }
         if (GetTime() - lastCam > 1.5 && connected) { lastCam = GetTime(); Writer w; w.put<uint8_t>(C_Cam).put<float>(cam.target.x / TILE).put<float>(cam.target.y / TILE); send(w); }
 
-        hovered = ui || dragging ? 0 : pick(m);
+        hovered = ui || dragging ? 0 : pick(rm);
         bool lp = IsMouseButtonPressed(MOUSE_BUTTON_LEFT), lr = IsMouseButtonReleased(MOUSE_BUTTON_LEFT), rp = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
         bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
 
-        if (dragging && lr) { dragging = false; doSelect(dragStart, m, shift); return; }
+        if (dragging && lr) { dragging = false; doSelect(dragStart, rm, shift); return; }
         if (ctxOpen) rebuildContext();
         if (ctxOpen && ctxSlider) {
             Rectangle sr = ctxSliderRect();
@@ -787,7 +791,7 @@ struct App {
         }
         if (ui) { if (rp) ctxOpen = false; return; }
 
-        Vector2 w = GetScreenToWorld2D(m, cam);
+        Vector2 w = GetScreenToWorld2D(rm, cam);
         if (lp) {
             if (buildKind >= 0) {
                 Kind k = Kind(buildKind);
@@ -806,11 +810,11 @@ struct App {
                 if (!shift) mode = M_None;
             } else if (hovered && hostileTargetId(hovered) && armyCountSel() > 0) {
                 cmdAttack(hovered);
-            } else { dragging = true; dragStart = m; if (!shift) { sel.clear(); } }
+            } else { dragging = true; dragStart = rm; if (!shift) { sel.clear(); } }
         }
         if (rp) {
             if (buildKind >= 0 || mode != M_None) { buildKind = -1; mode = M_None; return; }
-            uint32_t id = pick(m);
+            uint32_t id = pick(rm);
             auto it = id ? ents.find(id) : ents.end();
             if (it != ents.end() && isBuilding(reg.get<Info>(it->second).kind)) {
                 const Info& bi = reg.get<Info>(it->second);
@@ -852,16 +856,17 @@ struct App {
         float v0 = std::min(src.y, src.y + src.height) / float(t.height), v1 = std::max(src.y, src.y + src.height) / float(t.height);
         float uv[4] = {u0, v0, u1, v1}, ts[2] = {1.f / float(t.width), 1.f / float(t.height)}, tsz[2] = {float(t.width), float(t.height)};
         float col[4] = {oc.r / 255.f, oc.g / 255.f, oc.b / 255.f, oc.a / 255.f}, th = 2.5f, tm = float(GetTime());
-        SetShaderValue(sh, GetShaderLocation(sh, "uvRect"), uv, SHADER_UNIFORM_VEC4);
         if (mode == 1) {
-            SetShaderValue(sh, GetShaderLocation(sh, "texelSize"), ts, SHADER_UNIFORM_VEC2);
-            SetShaderValue(sh, GetShaderLocation(sh, "outlineColor"), col, SHADER_UNIFORM_VEC4);
-            SetShaderValue(sh, GetShaderLocation(sh, "thickness"), &th, SHADER_UNIFORM_FLOAT);
-            SetShaderValue(sh, GetShaderLocation(sh, "time"), &tm, SHADER_UNIFORM_FLOAT);
+            SetShaderValue(sh, locOut[0], uv, SHADER_UNIFORM_VEC4);
+            SetShaderValue(sh, locOut[1], ts, SHADER_UNIFORM_VEC2);
+            SetShaderValue(sh, locOut[2], col, SHADER_UNIFORM_VEC4);
+            SetShaderValue(sh, locOut[3], &th, SHADER_UNIFORM_FLOAT);
+            SetShaderValue(sh, locOut[4], &tm, SHADER_UNIFORM_FLOAT);
         } else {
-            SetShaderValue(sh, GetShaderLocation(sh, "texSize"), tsz, SHADER_UNIFORM_VEC2);
-            SetShaderValue(sh, GetShaderLocation(sh, "progress"), &prog, SHADER_UNIFORM_FLOAT);
-            SetShaderValue(sh, GetShaderLocation(sh, "seed"), &sd, SHADER_UNIFORM_FLOAT);
+            SetShaderValue(sh, locDis[0], uv, SHADER_UNIFORM_VEC4);
+            SetShaderValue(sh, locDis[1], tsz, SHADER_UNIFORM_VEC2);
+            SetShaderValue(sh, locDis[2], &prog, SHADER_UNIFORM_FLOAT);
+            SetShaderValue(sh, locDis[3], &sd, SHADER_UNIFORM_FLOAT);
         }
         BeginShaderMode(sh);
         DrawTexturePro(t, src, dst, {0, 0}, 0, tint);
@@ -1130,7 +1135,7 @@ struct App {
     }
 
     void drawWorld(float t) {
-        Vector2 tl = GetScreenToWorld2D({0, 0}, cam), br = GetScreenToWorld2D({float(GetScreenWidth()), float(GetScreenHeight())}, cam);
+        Vector2 tl = GetScreenToWorld2D({0, 0}, cam), br = GetScreenToWorld2D({float(::GetScreenWidth()), float(::GetScreenHeight())}, cam);
         int x0 = int(std::floor(tl.x / TILE)) - 1, y0 = int(std::floor(tl.y / TILE)) - 1, x1 = int(std::floor(br.x / TILE)) + 1, y1 = int(std::floor(br.y / TILE)) + 1;
         int wx0 = x0 - 2, wy0 = y0 - 3, wx1 = x1 + 2, wy1 = y1 + 5, bw = wx1 - wx0 + 1, bh = wy1 - wy0 + 1;
         std::vector<uint8_t> bio(size_t(bw) * size_t(bh), INVALID_BIOME), exp(size_t(bw) * size_t(bh), 0), vnow(size_t(bw) * size_t(bh), 0);
@@ -1227,7 +1232,7 @@ struct App {
         // building ghost (placement preview)
         if (buildKind >= 0 && !overUI(GetMousePosition())) {
             Kind k = Kind(buildKind);
-            Vector2 w = GetScreenToWorld2D(GetMousePosition(), cam);
+            Vector2 w = GetScreenToWorld2D(::GetMousePosition(), cam);
             IV tt = placeTile(k, w);
             PW pw{*this};
             int err = checkPlace(pw, k, tt.x, tt.y);
@@ -1626,7 +1631,7 @@ struct App {
         }
         // where the game camera currently looks
         {
-            Vector2 tl = GetScreenToWorld2D({0, 0}, cam), br = GetScreenToWorld2D({float(GetScreenWidth()), float(GetScreenHeight())}, cam);
+            Vector2 tl = GetScreenToWorld2D({0, 0}, cam), br = GetScreenToWorld2D({float(::GetScreenWidth()), float(::GetScreenHeight())}, cam);
             Vector2 a = tileToMap(tl.x / TILE, tl.y / TILE), b = tileToMap(br.x / TILE, br.y / TILE);
             float x0 = std::max(a.x, in.x), y0 = std::max(a.y, in.y), x1 = std::min(b.x, in.x + in.width), y1 = std::min(b.y, in.y + in.height);
             if (x1 > x0 && y1 > y0) DrawRectangleLinesEx({x0, y0, x1 - x0, y1 - y0}, 1, rgb(255, 255, 255, 220));
@@ -1947,7 +1952,7 @@ struct App {
         drawMapOverlay(mr, {std::floor(cam.target.x / TILE) + .5f, std::floor(cam.target.y / TILE) + .5f}, float(MM) / mr.width, true);
         DrawRectangleLinesEx(mr, 2, rgb(60, 40, 26));
         {
-            Vector2 tl = GetScreenToWorld2D({0, 0}, cam), brr = GetScreenToWorld2D({float(sw), float(sh)}, cam);
+            Vector2 tl = GetScreenToWorld2D({0, 0}, cam), brr = GetScreenToWorld2D({float(::GetScreenWidth()), float(::GetScreenHeight())}, cam);
             float k = mr.width / float(MM) / TILE;
             Rectangle vr{mr.x + mr.width / 2 + (tl.x - cam.target.x) * k, mr.y + mr.height / 2 + (tl.y - cam.target.y) * k, (brr.x - tl.x) * k, (brr.y - tl.y) * k};
             float x0 = std::max(vr.x, mr.x), y0 = std::max(vr.y, mr.y), x1 = std::min(vr.x + vr.width, mr.x + mr.width), y1 = std::min(vr.y + vr.height, mr.y + mr.height);
@@ -2015,7 +2020,8 @@ struct App {
             }
         }
         if (dragging) {
-            Rectangle R{std::min(dragStart.x, m.x), std::min(dragStart.y, m.y), std::abs(m.x - dragStart.x), std::abs(m.y - dragStart.y)};
+            Vector2 ds{dragStart.x / uiScale(), dragStart.y / uiScale()};
+            Rectangle R{std::min(ds.x, m.x), std::min(ds.y, m.y), std::abs(m.x - ds.x), std::abs(m.y - ds.y)};
             if (R.width > 6 || R.height > 6) { DrawRectangleRec(R, rgb(255, 235, 90, 36)); DrawRectangleLinesEx(R, 1, rgb(255, 235, 90)); }
         }
         // hover label
@@ -2035,7 +2041,7 @@ struct App {
         if (hovered || ui) file = "Cursor_02.png";
         if (buildKind >= 0 && !ui) {
             PW pw{*this};
-            IV t = placeTile(Kind(buildKind), GetScreenToWorld2D(m, cam));
+            IV t = placeTile(Kind(buildKind), GetScreenToWorld2D(::GetMousePosition(), cam));
             if (checkPlace(pw, Kind(buildKind), t.x, t.y) != P_OK) file = "Cursor_03.png";
         }
         Texture2D c = tex(std::string("UI Elements/UI Elements/Cursors/") + file);
@@ -2070,7 +2076,7 @@ struct App {
     void setU(Shader& s, const char* n, const void* v, int type, int count = 1) { int l = GetShaderLocation(s, n); if (l >= 0) SetShaderValueV(s, l, v, type, count); }
 
     void drawWater(float t) {
-        float sw = float(GetScreenWidth()), sh = float(GetScreenHeight());
+        float sw = float(::GetScreenWidth()), sh = float(::GetScreenHeight());
         Texture2D wt = tex("Terrain/Tileset/Water Background color.png");
         if (okWater) {
             float res2[2] = {sw, sh}, tgt[2] = {cam.target.x, cam.target.y}, z = cam.zoom;
@@ -2119,7 +2125,7 @@ struct App {
     }
 
     void postUniforms(float t) {
-        float sw = float(GetScreenWidth()), sh = float(GetScreenHeight());
+        float sw = float(::GetScreenWidth()), sh = float(::GetScreenHeight());
         int ctx2 = int(std::floor(cam.target.x / TILE)), cty = int(std::floor(cam.target.y / TILE));
         bool snow = biomeAt(ctx2, cty) == B_Snow;
         bool nearFire = false;
@@ -2164,7 +2170,7 @@ struct App {
 
     // ---------------------------------------------------------------- main loop
     void ensureTargets() {
-        int w = GetScreenWidth(), h = GetScreenHeight();
+        int w = ::GetScreenWidth(), h = ::GetScreenHeight();
         if (rt.id == 0 || rt.texture.width != w || rt.texture.height != h) {
             if (rt.id) UnloadRenderTexture(rt);
             rt = LoadRenderTexture(w, h);
@@ -2183,13 +2189,15 @@ struct App {
         shOutline = loadShader("outline.fs", okOutline);
         shWater = loadShader("water.fs", okWater);
         shDissolve = loadShader("dissolve.fs", okDissolve);
+        if (okOutline) { const char* n[5] = {"uvRect", "texelSize", "outlineColor", "thickness", "time"}; for (int i = 0; i < 5; i++) locOut[i] = GetShaderLocation(shOutline, n[i]); }
+        if (okDissolve) { const char* n[4] = {"uvRect", "texSize", "progress", "seed"}; for (int i = 0; i < 4; i++) locDis[i] = GetShaderLocation(shDissolve, n[i]); }
         shPost = loadShader("post.fs", okPost);
         bool b1 = false, b2 = false;
         shBright = loadShader("bloom_bright.fs", b1);
         shBlur = loadShader("bloom_blur.fs", b2);
         okBloom = b1 && b2 && okPost;
         mHud = loadTMap("hud_resources"); mTitle = loadTMap("title_ribbon"); mBuild = loadTMap("build_menu"); mMini = loadTMap("minimap_frame");
-        mCtx = loadTMap("context_panel"); mRoster = loadTMap("roster_panel"); mSocial = loadTMap("social_menu"); mMapFrame = loadTMap("map_frame"); mTrain = loadTMap("training_panel"); mMenu = loadTMap("main_menu");
+        mCtx = loadTMap("context_panel"); mRoster = loadTMap("roster_panel"); mSocial = loadTMap("social_menu"); mMapFrame = loadTMap("map_frame"); mTrain = loadTMap("training_panel"); mMenu = loadTMap("main_menu"); mPause = loadTMap("pause_menu");
         mBtn = loadTMap("button_blue"); mBtnP = loadTMap("button_blue_pressed"); mBtnR = loadTMap("button_red"); mBtnRP = loadTMap("button_red_pressed");
         Image im = GenImageColor(MM, MM, BLACK);
         mmTex = LoadTextureFromImage(im);
@@ -2224,6 +2232,28 @@ struct App {
                 });
                 updateMinimap();
             } else menuUpdate();
+            if (shotPath && welcomed && shotFrames == 25) if (const char* c = std::getenv("BW_CMD")) { std::string cm = c; if (cm.rfind("chat:", 0) == 0) { chatLines.push_back({0, "Tester", cm.substr(5), GetTime()}); chatLines.push_back({1, "Friend", "clan chat line", GetTime()}); }
+                if (cm.rfind("clan:", 0) == 0) cmdClanCreate(cm.substr(5, cm.find(';') == std::string::npos ? std::string::npos : cm.find(';') - 5)); }
+            if (shotPath && welcomed && (shotFrames == 300 || shotFrames == 360) && shotPath && welcomed) if (const char* c = std::getenv("BW_CMD")) { std::string cm = c; auto p = cm.find("xfer:"); if (p != std::string::npos) cmdTransfer(std::atoi(cm.c_str() + p + 5), R_Wood, 60.f); }
+            if (shotPath && welcomed && shotFrames >= 20) {                 // test hooks (screenshots only)
+                if (const char* mp = std::getenv("BW_MOUSE")) { float dx = 0, dy = 0; if (std::sscanf(mp, "%f,%f", &dx, &dy) == 2) SetMousePosition(::GetScreenWidth() / 2 + int(dx), ::GetScreenHeight() / 2 + int(dy)); }
+                if (const char* u = std::getenv("BW_UI")) {
+                    std::string ui = u;
+                    if (ui.find("build") != std::string::npos) buildOpen = true;
+                    if (ui.find("place") != std::string::npos) buildKind = K_Lumber;
+                    if (ui.find("social") != std::string::npos && shotFrames == 20) { socialOpen = true; if (const char* tb = std::getenv("BW_TAB")) socialTab = std::atoi(tb); if (const char* se = std::getenv("BW_SEARCH")) searchText = se; }
+                    if (ui.find("map") != std::string::npos && shotFrames == 20) { openBigMap(); if (const char* z = std::getenv("BW_MAPZ")) bmZoom = std::atoi(z); }
+                    if (ui.find("pause") != std::string::npos) pauseOpen = true;
+                    if (ui.find("train") != std::string::npos && !trainOpen)
+                        reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!trainOpen && i.owner == me && i.kind == K_Archery) { trainOpen = true; trainTarget = n.id; if (const char* ts = std::getenv("BW_TSEL")) trainSel = std::atoi(ts); } });
+                    if (ui.find("ctxop") != std::string::npos && !ctxOpen)
+                        reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!ctxOpen && i.owner == me && i.kind == K_Outpost) openContext(n.id, {float(GetScreenWidth()) * .5f, float(GetScreenHeight()) * .15f}); });
+                    if (ui.find("ctxfac") != std::string::npos && !ctxOpen)
+                        reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!ctxOpen && isFactionOwner(i.owner) && i.kind == K_TownHall) openContext(n.id, {float(GetScreenWidth()) * .55f, float(GetScreenHeight()) * .2f}); });
+                    else if (ui.find("ctx") != std::string::npos && ui.find("ctxfac") == std::string::npos && !ctxOpen)
+                        reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (i.owner == me && i.kind == K_TownHall) openContext(n.id, {float(GetScreenWidth()) * .6f, float(GetScreenHeight()) * .25f}); });
+                }
+            }
             float t = float(GetTime());
             if (playing) {
                 BeginTextureMode(rt);
@@ -2242,9 +2272,12 @@ struct App {
                 if (okPost) { postUniforms(t); BeginShaderMode(shPost); }
                 DrawTextureRec(rt.texture, {0, 0, float(rt.texture.width), -float(rt.texture.height)}, {0, 0}, WHITE);
                 if (okPost) EndShaderMode();
+                beginUi();
                 if (ctxOpen) rebuildContext();
                 drawUI(dt);
+                if (pauseOpen) drawPause();
                 drawCursor();
+                endUi();
                 if (shotPath && ++shotFrames == shotAfter) {                 // test hook: BW_SHOT=<file.png> saves a frame and quits
                     rlDrawRenderBatchActive();                                 // flush batched UI draws before reading pixels
                     Image img = LoadImageFromScreen();
@@ -2255,7 +2288,10 @@ struct App {
                 }
             } else {
                 ShowCursor();
+                drawMenuBackdrop(t);
+                beginUi();
                 drawMenu(t);
+                endUi();
                 if (shotPath && ++shotFrames == shotAfter) {
                     rlDrawRenderBatchActive();
                     Image img = LoadImageFromScreen();
@@ -2309,9 +2345,11 @@ int main(int argc, char** argv) {
     if (app.myName.empty() && app.steam.ok) app.myName = app.steam.name;
     app.loadProfile();
     app.directAddr = app.settings.lastServer;
+    if (const char* sc = std::getenv("BW_SCALE")) app.settings.uiScale = std::clamp(float(std::atof(sc)), 0.6f, 2.0f);       // test hook
     InitWindow(1280, 720, "Base Wars");
     SetTargetFPS(60);
     SetExitKey(KEY_NULL);
+    app.applyWindowMode(app.settings.windowMode);
     findAssets();
     std::string autoJoin;                                              // "--connect host:port" joins immediately; screenshot runs join the configured server
     for (int i = 1; i + 1 < argc; i++) if (std::string(argv[i]) == "--connect") autoJoin = argv[i + 1];

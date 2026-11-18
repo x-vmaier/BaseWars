@@ -148,3 +148,5 @@ build/
 savegame.bin
 savegame.bin.tmp
 profile.txt
+
+.claude/

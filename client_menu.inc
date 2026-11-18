@@ -124,7 +124,7 @@ void sendHello() {
 // drift of tiny islands behind the menu
 void drawMenuBackdrop(float t) {
     cam.target = {std::sin(t * .05f) * 200.f + 640.f, std::cos(t * .04f) * 120.f + 360.f};
-    cam.offset = {float(GetScreenWidth()) / 2, float(GetScreenHeight()) / 2};
+    cam.offset = {float(::GetScreenWidth()) / 2, float(::GetScreenHeight()) / 2};
     cam.zoom = 1.f;
     drawWater(t);
     BeginMode2D(cam);
@@ -167,10 +167,10 @@ void drawMenuBackdrop(float t) {
     EndMode2D();
     for (int i = 0; i < 7; i++) {                         // drifting clouds
         Texture2D c = tex(std::string("Terrain/Decorations/Clouds/Clouds_0") + char('1' + i % 8) + ".png");
-        float x = std::fmod(float(i) * 311.f + t * (14.f + float(i) * 3.f), float(GetScreenWidth()) + 700.f) - 600.f;
+        float x = std::fmod(float(i) * 311.f + t * (14.f + float(i) * 3.f), float(::GetScreenWidth()) + 700.f) - 600.f;
         DrawTexturePro(c, {0, 0, 576, 256}, {x, 30.f + float((i * 97) % 520), 576, 256}, {0, 0}, 0, rgb(255, 255, 255, 120));
     }
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), rgb(10, 20, 40, 60));
+    DrawRectangle(0, 0, ::GetScreenWidth(), ::GetScreenHeight(), rgb(10, 20, 40, 60));
 }
 
 bool menuTextInput(std::string& target, size_t maxLen) {
@@ -227,7 +227,6 @@ void menuUpdate() {
 }
 
 void drawMenu(float t) {
-    drawMenuBackdrop(t);
     Vector2 m = MP();
     Rectangle r = menuRect();
     drawTMap(mMenu, r);
