@@ -440,6 +440,10 @@ struct Server {
             reg.view<Info, Owner>().each([&](const Info& i, const Owner& o) { if (i.kind == K_TownHall && o.id == id) hasTH = true; });
             if (!hasTH) { resetProfile(id); spawnBase(id); say(id, "Your base was destroyed while you were away. You start over."); }
         }
+        if (const char* rv = std::getenv("BW_REVEAL")) {          // test hook: reveal a large disc around the base
+            Pos c = p.cam;
+            reveal(id, int(c.x), int(c.y), std::atoi(rv));
+        }
         Writer w;
         w.put<uint8_t>(S_Welcome).put<uint8_t>(uint8_t(id)).put<uint32_t>(seed).put<float>(p.cam.x).put<float>(p.cam.y);
         w.str(p.name);

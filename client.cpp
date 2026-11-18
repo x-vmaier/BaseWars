@@ -4,8 +4,10 @@
 
 #include <entt/entt.hpp>
 #include <raylib.h>
+#include <rlgl.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -171,6 +173,7 @@ TMap loadTMap(const std::string& name) {
         }
     std::sort(m.sets.begin(), m.sets.end(), [](const TMap::TS& a, const TMap::TS& b) { return a.first > b.first; });
     m.ok = m.w > 0 && m.h > 0 && !m.sets.empty() && !m.data.empty();
+    TraceLog(LOG_INFO, "UI map %s: %dx%d tiles, scale %.2f, ok=%d", name.c_str(), m.w, m.h, m.scale, int(m.ok));
     return m;
 }
 // Draws the whole map stretched into `dst` (natural size when dst matches size()).
@@ -365,6 +368,8 @@ struct App {
             myName = nm;
             cam.target = {cx * TILE, cy * TILE};
             cam.zoom = 1.f;
+            if (const char* c = std::getenv("BW_CAM")) { float a = 0, b = 0; if (std::sscanf(c, "%f,%f", &a, &b) == 2) cam.target = {a * TILE, b * TILE}; }
+            if (const char* z = std::getenv("BW_ZOOM")) cam.zoom = float(std::atof(z));
             welcomed = true;
             break;
         }
@@ -513,7 +518,7 @@ struct App {
     Rectangle miniFrame() { Vector2 s = mMini.size(); return {float(GetScreenWidth()) - s.x - 8, 8, s.x, s.y}; }
     Rectangle miniRect() { Rectangle f = miniFrame(); float in = 46.f * mMini.scale / .4f * 1.f; return {f.x + in, f.y + in, f.width - 2 * in, f.height - 2 * in}; }
     Rectangle buildRect() { Vector2 s = mBuild.size(); return {10 - (1 - buildSlide) * (s.x + 20), 150, s.x, s.y}; }
-    Rectangle buildTab() { return {buildRect().x + buildRect().width - 6, 150, 40, 56}; }
+    Rectangle buildTab() { return {std::max(0.f, buildRect().x + buildRect().width - 6), 150, 40, 56}; }
     Rectangle buildItem(int i) { Rectangle b = buildRect(); float pad = float(mBuild.padding); return {b.x + pad + 2, b.y + pad + 34 + float(i) * 47.f, b.width - 2 * pad - 4, 44}; }
     Rectangle rosterRect() { Vector2 s = mRoster.size(); return {float(GetScreenWidth()) - s.x - 8, float(GetScreenHeight()) - s.y - 8, s.x, s.y}; }
     Rectangle ctxRect() {
@@ -1110,6 +1115,8 @@ struct App {
             int b = B(x, y);
             if (!land(x, y) || !E(x, y)) continue;
             autoTile(tex(std::string("Terrain/Tileset/Tilemap_color") + tileset[b] + ".png"), x, y, 0, land, tint(b));
+            if (b == B_Snow) DrawRectangle(x * 64, y * 64, 64, 64, rgb(240, 248, 255, 215));      // snow cover
+            else if (b == B_Desert) DrawRectangle(x * 64, y * 64, 64, 64, rgb(232, 200, 120, 120)); // sand
         }
         for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) {
             if (!E(x, y)) continue;
@@ -1228,6 +1235,7 @@ struct App {
         const TMap& m = red ? (pressed ? mBtnRP : mBtnR) : (pressed ? mBtnP : mBtn);
         drawTMap(m, r, enabled ? (hover ? rgb(255, 255, 255) : rgb(238, 238, 238)) : rgb(140, 140, 140, 220));
         int tw = MeasureText(label.c_str(), fs);
+        while (tw > int(r.width) - 12 && fs > 9) { fs--; tw = MeasureText(label.c_str(), fs); }      // shrink long labels to fit
         DrawText(label.c_str(), int(r.x + r.width / 2) - tw / 2 + 1, int(r.y + r.height / 2) - fs / 2 + 1, fs, rgb(20, 20, 40, 180));
         DrawText(label.c_str(), int(r.x + r.width / 2) - tw / 2, int(r.y + r.height / 2) - fs / 2, fs, enabled ? WHITE : rgb(200, 200, 200));
     }
@@ -1298,16 +1306,16 @@ struct App {
 
         // minimap
         Rectangle mf = miniFrame(), mr = miniRect();
+        drawTMap(mMini, mf);
         DrawRectangleRec(mr, rgb(18, 22, 30));
         if (mmTex.id) DrawTexturePro(mmTex, {0, 0, float(MM), float(MM)}, mr, {0, 0}, 0, WHITE);
-        drawTMap(mMini, mf);
+        DrawRectangleLinesEx(mr, 2, rgb(60, 40, 26));
         {
             Vector2 tl = GetScreenToWorld2D({0, 0}, cam), brr = GetScreenToWorld2D({float(sw), float(sh)}, cam);
             float k = mr.width / float(MM) / TILE;
             Rectangle vr{mr.x + mr.width / 2 + (tl.x - cam.target.x) * k, mr.y + mr.height / 2 + (tl.y - cam.target.y) * k, (brr.x - tl.x) * k, (brr.y - tl.y) * k};
-            BeginScissorMode(int(mr.x), int(mr.y), int(mr.width), int(mr.height));
-            DrawRectangleLinesEx(vr, 1, WHITE);
-            EndScissorMode();
+            float x0 = std::max(vr.x, mr.x), y0 = std::max(vr.y, mr.y), x1 = std::min(vr.x + vr.width, mr.x + mr.width), y1 = std::min(vr.y + vr.height, mr.y + mr.height);
+            if (x1 > x0 && y1 > y0) DrawRectangleLinesEx({x0, y0, x1 - x0, y1 - y0}, 1, WHITE);
         }
 
         // roster / alliances
@@ -1558,6 +1566,9 @@ struct App {
         mmPix.assign(size_t(MM * MM), BLACK);
     }
 
+    const char* shotPath = std::getenv("BW_SHOT");
+    int shotFrames = 0, shotAfter = std::getenv("BW_SHOT_FRAMES") ? std::atoi(std::getenv("BW_SHOT_FRAMES")) : 400;
+
     void run() {
         host = enet_host_create(nullptr, 1, 2, 0, 0);
         ENetAddress a{};
@@ -1585,6 +1596,16 @@ struct App {
                 });
                 updateMinimap();
             }
+            if (shotPath && welcomed && shotFrames >= 20) {                 // test hooks (screenshots only)
+                if (const char* mp = std::getenv("BW_MOUSE")) { float dx = 0, dy = 0; if (std::sscanf(mp, "%f,%f", &dx, &dy) == 2) SetMousePosition(GetScreenWidth() / 2 + int(dx), GetScreenHeight() / 2 + int(dy)); }
+                if (const char* u = std::getenv("BW_UI")) {
+                    std::string ui = u;
+                    if (ui.find("build") != std::string::npos) buildOpen = true;
+                    if (ui.find("place") != std::string::npos) buildKind = K_Lumber;
+                    if (ui.find("ctx") != std::string::npos && !ctxOpen)
+                        reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (i.owner == me && i.kind == K_TownHall) openContext(n.id, {float(GetScreenWidth()) * .6f, float(GetScreenHeight()) * .25f}); });
+                }
+            }
             float t = float(GetTime());
             if (welcomed && !lost) {
                 BeginTextureMode(rt);
@@ -1605,6 +1626,14 @@ struct App {
                 if (ctxOpen) rebuildContext();
                 drawUI(dt);
                 drawCursor();
+                if (shotPath && ++shotFrames == shotAfter) {                 // test hook: BW_SHOT=<file.png> saves a frame and quits
+                    rlDrawRenderBatchActive();                                 // flush batched UI draws before reading pixels
+                    Image img = LoadImageFromScreen();
+                    ExportImage(img, shotPath);
+                    UnloadImage(img);
+                    EndDrawing();
+                    break;
+                }
             } else {
                 std::string s = lost ? "Disconnected from server." : (GetTime() - startT > 8 && !connected ? "Could not reach " + ip + ":" + std::to_string(port) + " - check config.txt" : "Connecting to " + ip + ":" + std::to_string(port) + " ...");
                 DrawText(s.c_str(), 40, 40, 28, WHITE);

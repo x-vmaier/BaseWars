@@ -91,23 +91,22 @@ void main() {
     float r = length(c * vec2(resolution.x / resolution.y, 1.0));
     col = mix(col, vec3(lum) * vec3(0.75, 0.9, 1.15), cold * 0.35);
     float frost = smoothstep(0.38, 0.85, r) * cold * (0.45 + 0.5 * noise(px * 0.05));
-    col = mix(col, vec3(0.75, 0.88, 1.0), clamp(frost, 0.0, 0.7));
+    col = mix(col, vec3(0.9, 0.95, 1.0), clamp(frost, 0.0, 0.3));
     col = mix(col, col * vec3(1.14, 0.95, 0.76), warmth * 0.7);
     col += vec3(0.10, 0.035, 0.0) * warmth * smoothstep(0.2, 1.0, uv.y);
-    if (blizzard > 0.01) {
+    if (blizzard > 0.01) {                                       // thin wind-driven flakes in two depth layers
         float s = 0.0;
         for (int layer = 0; layer < 2; layer++) {
-            float sc = layer == 0 ? 90.0 : 160.0;
-            vec2 q = vec2(px.x + px.y * 0.35, px.y) / sc;
-            q.x -= time * (layer == 0 ? 3.2 : 5.0);
-            q.y -= time * (layer == 0 ? 1.1 : 1.8);
+            float sc = layer == 0 ? 70.0 : 120.0;
+            vec2 q = vec2(px.x + px.y * 0.45, px.y * 2.2) / sc;
+            q.x -= time * (layer == 0 ? 4.0 : 6.5);
             vec2 cell = floor(q), f = fract(q);
             float h = hash(cell + float(layer) * 17.0);
-            float streak = smoothstep(0.35, 0.0, abs(f.y - h)) * smoothstep(0.0, 0.5, f.x) * smoothstep(1.0, 0.5, f.x);
-            s += streak * step(0.55, hash(cell * 1.7 + 3.0));
+            float streak = smoothstep(0.07, 0.0, abs(f.y - h)) * smoothstep(0.0, 0.3, f.x) * smoothstep(1.0, 0.6, f.x);
+            s += streak * step(0.5, hash(cell * 1.7 + 3.0));
         }
-        col = mix(col, vec3(0.85, 0.92, 1.0), clamp(s * blizzard * 0.7, 0.0, 0.8));
-        col = mix(col, vec3(0.6, 0.7, 0.82), blizzard * 0.18);
+        col = mix(col, vec3(1.0), clamp(s * blizzard * 0.55, 0.0, 0.6));
+        col = mix(col, vec3(0.9, 0.95, 1.0) * max(lum, 0.15), blizzard * 0.05);
     }
 
     // ---- bloom (added in linear HDR, before tone mapping) ----
