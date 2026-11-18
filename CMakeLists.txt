@@ -1,0 +1,36 @@
+cmake_minimum_required(VERSION 3.26)
+project(BaseWars LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+include(FetchContent)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(raylib GIT_REPOSITORY https://github.com/raysan5/raylib.git GIT_TAG 6.2 GIT_SHALLOW TRUE)
+FetchContent_Declare(entt GIT_REPOSITORY https://github.com/skypjack/entt.git GIT_TAG v4.0.0 GIT_SHALLOW TRUE)
+FetchContent_Declare(enet GIT_REPOSITORY https://github.com/lsalzman/enet.git GIT_TAG v1.3.18 GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(raylib entt enet)
+
+add_executable(server server.cpp)
+add_executable(client client.cpp)
+foreach(t server client)
+    target_include_directories(${t} PRIVATE ${enet_SOURCE_DIR}/include)
+    target_link_libraries(${t} PRIVATE EnTT::EnTT enet)
+    if(WIN32)
+        target_link_libraries(${t} PRIVATE ws2_32 winmm)
+    endif()
+endforeach()
+target_link_libraries(client PRIVATE raylib)
+
+file(WRITE ${CMAKE_BINARY_DIR}/mkcfg.cmake [=[
+if(NOT EXISTS "${DST}")
+  file(WRITE "${DST}" "server_ip=127.0.0.1\nserver_port=7777\n")
+endif()
+]=])
+add_custom_command(TARGET client POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -DDST=$<TARGET_FILE_DIR:client>/config.txt -P ${CMAKE_BINARY_DIR}/mkcfg.cmake)
