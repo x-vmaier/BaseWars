@@ -150,3 +150,5 @@ savegame.bin.tmp
 profile.txt
 
 .claude/
+
+third_party/steamworks/
