@@ -1,621 +1,1206 @@
-// Authoritative server: map gen (noise + WFC), fog, economy, army, diplomacy.
+// Authoritative server: infinite biome world, persistence, economy with physical supply lines, combat, naval units, alliances.
 #include "shared.hpp"
 
 #include <entt/entt.hpp>
 
-#include <bit>
 #include <chrono>
+#include <climits>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <queue>
 #include <random>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace {
 
-struct Owner { uint8_t id; };                                   // 0 = neutral
-struct Health { Kind kind; float hp, maxhp; uint8_t lastHit; };
-struct Mover { std::vector<Pos> path; size_t i = 0; };          // units only
-struct Attack { entt::entity target; };
-struct THDestroyed { entt::entity e; uint8_t killer; };
+volatile std::sig_atomic_t g_quit = 0;
+using Bits = std::array<uint8_t, 32>;
+constexpr uint32_t SAVE_MAGIC = 0x32535742u;  // "BWS2"
 
-struct Player {
-    bool active = false;
+struct Uid { uint32_t id; };
+struct Owner { uint8_t id; };                                   // 0 = neutral
+struct Health { float hp, maxhp; uint8_t lastHit; };
+struct Info { Kind kind; uint8_t level; };
+struct Building { int tx, ty; float progress, stock[R_Count], respawn, cd; };
+struct Unit { std::vector<Pos> path; size_t i = 0; uint8_t state = US_Idle, aim = 0; float cd = 0, repath = 0; IV lastRev{INT_MIN, INT_MIN}; };
+struct Attack { uint32_t target; };
+struct AMove { Pos dest; };
+struct Worker { uint32_t home; uint8_t phase = 0; float cargo[R_Count]{}; float timer = 0; };  // 0 wait, 1 loading, 2 carry, 3 return
+struct Wander { float timer; };
+
+struct Profile {
+    bool used = false, online = false;
     ENetPeer* peer = nullptr;
-    float gold = 300, wood = 200;
-    std::vector<uint8_t> expl;                                  // permanently explored tiles
-    bool allied[MAX_PLAYERS + 1]{};
-    bool pending[MAX_PLAYERS + 1]{};                            // pending[x] = I proposed to x
+    std::string uuid, name;
+    uint64_t lastSeen = 0;
+    float res[R_Count]{};
+    bool allied[MAX_PLAYERS + 1]{}, pending[MAX_PLAYERS + 1]{};      // pending[x] = I invited x
+    Pos cam{0, 0};
+    std::unordered_map<int64_t, Bits> expl;                          // permanently explored tiles, per chunk
+    std::unordered_map<int64_t, Bits> sentFog;
+    std::unordered_set<int64_t> sentTerr;
+    double lastWarn = -100;
 };
 
-float hf(int x, int y, uint32_t s) { return float(hash2(x, y, s) & 0xFFFF) / 65535.f; }
-float vnoise(float x, float y, uint32_t s) {
-    int xi = int(std::floor(x)), yi = int(std::floor(y));
-    float fx = x - xi, fy = y - yi;
-    fx = fx * fx * (3 - 2 * fx);
-    fy = fy * fy * (3 - 2 * fy);
-    return std::lerp(std::lerp(hf(xi, yi, s), hf(xi + 1, yi, s), fx), std::lerp(hf(xi, yi + 1, s), hf(xi + 1, yi + 1, s), fx), fy);
-}
-float fbm(float x, float y, uint32_t s) {
-    float v = 0, a = 0.5f, t = 0;
-    for (int o = 0; o < 4; o++) { v += a * vnoise(x, y, s + o * 131); t += a; x *= 2; y *= 2; a *= 0.5f; }
-    return v / t;
-}
+struct Eff { uint8_t type; float x, y, x2, y2; };
+
+uint64_t nowSec() { return uint64_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count()); }
+int64_t tkey(int x, int y) { return chunkKey(x, y); }
 
 struct Server {
-    static constexpr int N = MAP_W * MAP_H, GC = 8, GW = (MAP_W + GC - 1) / GC, GH = (MAP_H + GC - 1) / GC;
     ENetHost* host = nullptr;
     entt::registry reg;
-    entt::dispatcher disp;
-    std::vector<uint8_t> terrain, occ;
-    Player pl[MAX_PLAYERS + 1];
-    entt::entity th[MAX_PLAYERS + 1];
-    std::vector<IV> slots, camps;
-    std::vector<std::vector<entt::entity>> grid;                // spatial hash of units
-    uint32_t seed, tick = 0;
+    Profile pl[MAX_PLAYERS + 1];
+    std::unordered_map<uint32_t, entt::entity> byUid;
+    std::unordered_map<int64_t, uint32_t> occ;                        // tile -> building uid
+    std::unordered_map<int64_t, std::array<uint8_t, CH * CH>> terr;   // generated terrain chunks
+    std::unordered_set<int64_t> spawned;                              // chunks whose NPCs exist
+    std::unordered_set<uint32_t> dying;
+    std::vector<std::pair<entt::entity, int>> toKill;
+    std::vector<Eff> effects;
+    uint32_t seed, tick = 0, nextUid = 1;
     std::mt19937 rng;
+    std::string savePath;
+    double clock = 0, lastSave = 0;
 
-    Server(uint16_t port, uint32_t sd) : seed(sd), rng(sd) {
-        for (auto& t : th) t = entt::null;
-        occ.assign(N, 0);
-        grid.resize(GW * GH);
-        for (auto& p : pl) p.expl.assign(N, 0);
-        buildTerrain();
-        for (auto c : camps) {                                  // neutral camps
-            auto e = make(K_TownHall, 0, c.x + .5f, c.y + .5f);
-            auto& h = reg.get<Health>(e);
-            h.hp = h.maxhp = 400;
-            reveal(0, c.x, c.y, 3);
-        }
-        disp.sink<THDestroyed>().connect<&Server::onTH>(*this);
+    Server(uint16_t port, uint32_t sd, std::string path) : seed(sd), rng(sd), savePath(std::move(path)) {
+        bool loaded = load();
         ENetAddress a{};
         a.host = ENET_HOST_ANY;
         a.port = port;
         host = enet_host_create(&a, MAX_PLAYERS + 4, 2, 0, 0);
         if (!host) { std::puts("Failed to bind port"); std::exit(1); }
-        std::printf("Server listening on UDP port %d (seed %u)\n", port, seed);
+        std::printf("Server listening on UDP port %d (seed %u, %s)\n", port, seed, loaded ? "savegame loaded" : "fresh world");
     }
+    ~Server() { save(); if (host) enet_host_destroy(host); }
 
-    // ---------- map generation: noise-biased Wave Function Collapse ----------
-    bool walk(int x, int y) const { return inb(x, y) && walkableT(terrain[ix(x, y)]); }
-
-    void buildTerrain() {
-        // bits: 0 clearing, 1 forest, 2 mountain, 3 sea. Sea may only touch sea/clearing (beaches).
-        static constexpr uint8_t ALLOW[4] = {0b1111, 0b0111, 0b0111, 0b1001};
-        std::vector<uint8_t> dom(N, 0b1111);
-        std::vector<float> jit(N);
-        for (int i = 0; i < N; i++) jit[i] = hf(i % MAP_W, i / MAP_W, seed + 3);
-        auto propagate = [&](int s) {
-            std::vector<int> st{s};
-            const int dx[4] = {1, -1, 0, 0}, dy[4] = {0, 0, 1, -1};
-            while (!st.empty()) {
-                int i = st.back();
-                st.pop_back();
-                uint8_t al = 0;
-                for (int t = 0; t < 4; t++) if (dom[i] >> t & 1) al |= ALLOW[t];
-                for (int d = 0; d < 4; d++) {
-                    int nx = i % MAP_W + dx[d], ny = i / MAP_W + dy[d];
-                    if (!inb(nx, ny)) continue;
-                    int n = ix(nx, ny);
-                    uint8_t nm = dom[n] & al;
-                    if (nm && nm != dom[n]) { dom[n] = nm; st.push_back(n); }
-                }
-            }
-        };
-        for (;;) {
-            int best = -1, bp = 9;
-            float bj = 2;
-            for (int i = 0; i < N; i++) {                       // lowest-entropy cell, jitter tie-break
-                int p = std::popcount(dom[i]);
-                if (p < 2) continue;
-                if (p < bp || (p == bp && jit[i] < bj)) { best = i; bp = p; bj = jit[i]; }
-            }
-            if (best < 0) break;
-            int x = best % MAP_W, y = best / MAP_W;
-            float e = fbm(x * .055f, y * .055f, seed), m = fbm(x * .08f, y * .08f, seed + 77);
-            float wt[4] = {.05f, (m - .52f) * 3, (e - .62f) * 4, (.36f - e) * 4};
-            int bt = 0;
-            float bw = -1e9f;
-            for (int t = 0; t < 4; t++) {
-                if (!(dom[best] >> t & 1)) continue;
-                float v = wt[t] + (hf(x, y, seed + 9 + t) - .5f) * .05f;
-                if (v > bw) { bw = v; bt = t; }
-            }
-            dom[best] = uint8_t(1 << bt);
-            propagate(best);
+    // ---------------------------------------------------------------- terrain
+    int biome(int x, int y) {
+        int64_t k = chunkKey(chunkOf(x), chunkOf(y));
+        auto it = terr.find(k);
+        if (it == terr.end()) {
+            std::array<uint8_t, CH * CH> c;
+            for (int j = 0; j < CH; j++)
+                for (int i = 0; i < CH; i++) c[size_t(j * CH + i)] = genBiome(chunkOf(x) * CH + i, chunkOf(y) * CH + j, seed);
+            it = terr.emplace(k, c).first;
         }
-        terrain.resize(N);
-        for (int i = 0; i < N; i++) terrain[i] = uint8_t(std::countr_zero(dom[i]));
-
-        // spawn plots (3x3 grid of regions minus the centre) and neutral camps
-        for (int gy = 0; gy < 3; gy++)
-            for (int gx = 0; gx < 3; gx++) {
-                if (gx == 1 && gy == 1) continue;
-                slots.push_back({16 + 32 * gx + int(hf(gx, gy, seed + 5) * 10) - 5, 16 + 32 * gy + int(hf(gx, gy, seed + 6) * 10) - 5});
-            }
-        camps = {{32, 32}, {64, 32}, {32, 64}, {64, 64}, {48, 48}};
-        auto carve = [&](IV c, int r) {
-            for (int dy = -r; dy <= r; dy++)
-                for (int dx = -r; dx <= r; dx++)
-                    if (inb(c.x + dx, c.y + dy)) terrain[ix(c.x + dx, c.y + dy)] = T_Clearing;
-        };
-        for (auto s : slots) carve(s, 3);
-        for (auto c : camps) carve(c, 1);
-
-        // guarantee ground connectivity between every plot/camp by carving land bridges
-        std::vector<IV> pts = slots;
-        pts.insert(pts.end(), camps.begin(), camps.end());
-        for (int iter = 0; iter < int(pts.size()) + 4; iter++) {
-            std::vector<uint8_t> seen(N, 0);
-            std::vector<int> q{ix(pts[0].x, pts[0].y)};
-            seen[q[0]] = 1;
-            for (size_t h = 0; h < q.size(); h++) {
-                int x = q[h] % MAP_W, y = q[h] / MAP_W;
-                const int dx[4] = {1, -1, 0, 0}, dy[4] = {0, 0, 1, -1};
-                for (int d = 0; d < 4; d++)
-                    if (walk(x + dx[d], y + dy[d]) && !seen[ix(x + dx[d], y + dy[d])]) { seen[ix(x + dx[d], y + dy[d])] = 1; q.push_back(ix(x + dx[d], y + dy[d])); }
-            }
-            bool all = true;
-            for (size_t k = 1; k < pts.size() && all; k++) {
-                if (seen[ix(pts[k].x, pts[k].y)]) continue;
-                all = false;
-                int x = pts[k].x, y = pts[k].y;
-                auto fix = [&](int cx, int cy) {
-                    uint8_t& t = terrain[ix(cx, cy)];
-                    if (t == T_Sea) t = T_Clearing;
-                    else if (t == T_Mountain) t = T_Forest;
-                };
-                while (x != pts[0].x) { x += x < pts[0].x ? 1 : -1; fix(x, y); }
-                while (y != pts[0].y) { y += y < pts[0].y ? 1 : -1; fix(x, y); }
-            }
-            if (all) break;
-        }
+        return it->second[size_t(localIdx(x, y))];
+    }
+    bool cliff(int x, int y) { return isCliffTile(biome(x, y), biome(x, y - 1)); }
+    bool walkable(int x, int y, bool water, uint32_t ignore) {
+        int b = biome(x, y);
+        if (water) return b == B_Ocean;
+        if (!isLand(b) || isCliffTile(b, biome(x, y - 1))) return false;
+        auto it = occ.find(tkey(x, y));
+        return it == occ.end() || it->second == ignore;
     }
 
-    // ---------- helpers ----------
-    bool allied(int a, int b) const { return a == b || pl[a].allied[b]; }
-
-    entt::entity make(Kind k, uint8_t owner, float x, float y) {
-        auto e = reg.create();
-        reg.emplace<Pos>(e, Pos{x, y});
-        reg.emplace<Owner>(e, Owner{owner});
-        reg.emplace<Health>(e, Health{k, KINFO[k].hp, KINFO[k].hp, 0});
-        if (KINFO[k].building) occ[ix(int(x), int(y))] = 1;
-        else reg.emplace<Mover>(e);
-        return e;
-    }
-
-    void reveal(int owner, int cx, int cy, int r) {
-        for (int y = cy - r; y <= cy + r; y++)
-            for (int x = cx - r; x <= cx + r; x++)
-                if (inb(x, y)) pl[owner].expl[ix(x, y)] = 1;
-    }
-
-    std::vector<uint8_t> vision(int id) const {
-        auto v = pl[id].expl;
-        for (int a = 0; a <= MAX_PLAYERS; a++)
-            if (a != id && pl[id].allied[a])
-                for (int i = 0; i < N; i++) v[i] |= pl[a].expl[i];
-        return v;
-    }
+    // ---------------------------------------------------------------- helpers
+    bool allied(int a, int b) const { return a == b || (a > 0 && b > 0 && pl[a].allied[b]); }
+    bool hostile(int a, int b) const { return a > 0 && b > 0 && !allied(a, b); }
+    int colorOf(int id) const { return (id - 1) % TEAM_COLORS; }
 
     void say(int id, const std::string& s) {
-        if (id < 1 || id > MAX_PLAYERS || !pl[id].active) return;
+        if (id < 1 || id > MAX_PLAYERS || !pl[id].online) return;
         Writer w;
         w.put<uint8_t>(S_Text);
         w.str(s);
         sendPacket(pl[id].peer, w);
     }
+    void fx(EffectType t, float x, float y, float x2 = 0, float y2 = 0) { effects.push_back({t, x, y, x2, y2}); }
 
-    void breakAlliance(int a, int b) {
-        pl[a].allied[b] = pl[b].allied[a] = false;
-        pl[a].pending[b] = pl[b].pending[a] = false;
-        say(a, "Alliance broken.");
-        say(b, "Player " + std::to_string(a) + " broke the alliance!");
+    entt::entity find(uint32_t uid) const {
+        auto it = byUid.find(uid);
+        return it == byUid.end() || !reg.valid(it->second) ? entt::entity(entt::null) : it->second;
     }
+    Pos posOf(entt::entity e) const {
+        const auto& i = reg.get<Info>(e);
+        if (isBuilding(i.kind)) { const auto& b = reg.get<Building>(e); return footCenter(i.kind, b.tx, b.ty); }
+        return reg.get<Pos>(e);
+    }
+    float rectDist(Pos p, entt::entity e) const {
+        const auto& i = reg.get<Info>(e);
+        if (!isBuilding(i.kind)) { Pos q = reg.get<Pos>(e); return std::hypot(p.x - q.x, p.y - q.y); }
+        const auto& b = reg.get<Building>(e);
+        float dx = std::max({float(b.tx) - p.x, 0.f, p.x - float(b.tx + KINFO[i.kind].fw)});
+        float dy = std::max({float(b.ty) - p.y, 0.f, p.y - float(b.ty + KINFO[i.kind].fh)});
+        return std::hypot(dx, dy);
+    }
+    bool complete(entt::entity e) const { return !reg.all_of<Building>(e) || reg.get<Building>(e).progress >= 1.f; }
 
-    void removeOwner(int id) {
-        std::vector<entt::entity> v;
-        reg.view<Owner>().each([&](entt::entity e, const Owner& o) { if (o.id == id) v.push_back(e); });
-        for (auto e : v) {
-            if (KINFO[reg.get<Health>(e).kind].building) { auto& p = reg.get<Pos>(e); occ[ix(int(p.x), int(p.y))] = 0; }
-            reg.destroy(e);
+    // pooled resources: own first, then allies ("shared economy")
+    bool afford(int id, const float* cost) const {
+        for (int r = 0; r < R_Count; r++) {
+            float have = pl[id].res[r];
+            for (int a = 1; a <= MAX_PLAYERS; a++) if (a != id && pl[a].used && pl[id].allied[a]) have += pl[a].res[r];
+            if (have + 1e-3f < cost[r]) return false;
+        }
+        return true;
+    }
+    void spend(int id, const float* cost) {
+        for (int r = 0; r < R_Count; r++) {
+            float need = cost[r], take = std::min(need, pl[id].res[r]);
+            pl[id].res[r] -= take;
+            need -= take;
+            for (int a = 1; a <= MAX_PLAYERS && need > 0; a++)
+                if (a != id && pl[a].used && pl[id].allied[a]) { float t = std::min(need, pl[a].res[r]); pl[a].res[r] -= t; need -= t; }
         }
     }
 
-    void resetPlayer(int id) {
-        Player& p = pl[id];
-        p.gold = 300; p.wood = 200;
-        std::fill(p.expl.begin(), p.expl.end(), 0);
-        for (int a = 0; a <= MAX_PLAYERS; a++) { p.allied[a] = p.pending[a] = false; pl[a].allied[id] = pl[a].pending[id] = false; }
-        IV s = slots[id - 1];
-        th[id] = make(K_TownHall, uint8_t(id), s.x + .5f, s.y + .5f);
-        reveal(id, s.x, s.y, KINFO[K_TownHall].vision);
+    // ---------------------------------------------------------------- fog of war
+    bool bitAt(const std::unordered_map<int64_t, Bits>& m, int x, int y) const {
+        auto it = m.find(chunkKey(chunkOf(x), chunkOf(y)));
+        if (it == m.end()) return false;
+        int i = localIdx(x, y);
+        return it->second[size_t(i >> 3)] >> (i & 7) & 1;
+    }
+    bool explored(int id, int x, int y) const {
+        if (bitAt(pl[id].expl, x, y)) return true;
+        for (int a = 1; a <= MAX_PLAYERS; a++) if (a != id && pl[a].used && pl[a].allied[id] && bitAt(pl[a].expl, x, y)) return true;
+        return false;
+    }
+    void reveal(int id, int cx, int cy, int r) {
+        if (id < 1) return;
+        auto& m = pl[id].expl;
+        for (int y = cy - r; y <= cy + r; y++)
+            for (int x = cx - r; x <= cx + r; x++) {
+                if ((x - cx) * (x - cx) + (y - cy) * (y - cy) > r * r + r) continue;
+                Bits& b = m.try_emplace(chunkKey(chunkOf(x), chunkOf(y)), Bits{}).first->second;
+                int i = localIdx(x, y);
+                b[size_t(i >> 3)] |= uint8_t(1 << (i & 7));
+            }
     }
 
-    // ---------- pathfinding (A*, 8-dir, no corner cutting) ----------
-    bool findPath(IV s, IV g, std::vector<Pos>& out) {
+    // ---------------------------------------------------------------- entity creation
+    entt::entity makeBase(Kind k, uint8_t owner, uint32_t uid = 0) {
+        auto e = reg.create();
+        if (!uid) uid = nextUid++;
+        nextUid = std::max(nextUid, uid + 1);
+        byUid[uid] = e;
+        reg.emplace<Uid>(e, Uid{uid});
+        reg.emplace<Owner>(e, Owner{owner});
+        reg.emplace<Info>(e, Info{k, 1});
+        reg.emplace<Health>(e, Health{KINFO[k].hp, KINFO[k].hp, 0});
+        return e;
+    }
+    entt::entity makeUnit(Kind k, uint8_t owner, float x, float y) {
+        auto e = makeBase(k, owner);
+        reg.emplace<Pos>(e, Pos{x, y});
+        reg.emplace<Unit>(e);
+        if (k == K_Sheep) reg.emplace<Wander>(e, Wander{float(rng() % 300) / 100.f});
+        return e;
+    }
+    entt::entity makeBuilding(Kind k, uint8_t owner, int tx, int ty, bool done) {
+        auto e = makeBase(k, owner);
+        reg.emplace<Building>(e, Building{tx, ty, done ? 1.f : 0.f, {0, 0, 0, 0}, 0.f, 0.f});
+        for (int y = ty; y < ty + KINFO[k].fh; y++)
+            for (int x = tx; x < tx + KINFO[k].fw; x++) occ[tkey(x, y)] = reg.get<Uid>(e).id;
+        if (done) reveal(owner, int(std::floor(footCenter(k, tx, ty).x)), int(std::floor(footCenter(k, tx, ty).y)), KINFO[k].vision);
+        return e;
+    }
+    void destroyNow(entt::entity e) {
+        uint32_t uid = reg.get<Uid>(e).id;
+        if (reg.all_of<Building>(e)) {
+            const auto& b = reg.get<Building>(e);
+            Kind k = reg.get<Info>(e).kind;
+            for (int y = b.ty; y < b.ty + KINFO[k].fh; y++)
+                for (int x = b.tx; x < b.tx + KINFO[k].fw; x++) occ.erase(tkey(x, y));
+        }
+        byUid.erase(uid);
+        dying.erase(uid);
+        reg.destroy(e);
+    }
+
+    // ---------------------------------------------------------------- finding a fresh clearing
+    bool clearingOk(int cx, int cy) {
+        for (int y = cy - 6; y <= cy + 6; y++)
+            for (int x = cx - 6; x <= cx + 6; x++) {
+                int b = biome(x, y);
+                if (!isLand(b) || b == B_Highlands || b == B_Snow || b == B_Desert || isCliffTile(b, biome(x, y - 1))) return false;
+            }
+        for (int a = 1; a <= MAX_PLAYERS; a++)
+            if (pl[a].used && bitAt(pl[a].expl, cx, cy)) return false;
+        bool near = false;
+        reg.view<Info, Building>().each([&](const Info& i, const Building& b) {
+            if (i.kind != K_TownHall) return;
+            if (std::max(std::abs(b.tx - cx), std::abs(b.ty - cy)) < 70) near = true;
+        });
+        return !near;
+    }
+    IV findClearing() {
+        int ths = 0;
+        reg.view<Info>().each([&](const Info& i) { if (i.kind == K_TownHall) ths++; });
+        for (int pass = 0; pass < 3; pass++)
+            for (int n = 0; n < 12000; n++) {
+                float ang = float(rng() % 6283) / 1000.f, r = (ths ? 90.f : 0.f) + float(n) * .35f + float(pass) * 400.f;
+                int x = int(std::cos(ang) * r), y = int(std::sin(ang) * r);
+                if (clearingOk(x, y)) return {x, y};
+            }
+        return {0, 0};
+    }
+    void spawnBase(int id) {
+        IV c = findClearing();
+        auto th = makeBuilding(K_TownHall, uint8_t(id), c.x - 2, c.y - 1, true);
+        Pos p = posOf(th);
+        pl[id].cam = p;
+        for (int i = 0; i < 2; i++) makeUnit(K_Pawn, uint8_t(id), p.x - 1.f + float(i) * 2.f, p.y + 2.6f);
+        makeUnit(K_Warrior, uint8_t(id), p.x, p.y + 3.2f);
+        fx(E_Dust, p.x, p.y);
+    }
+    void resetProfile(int id) {
+        for (int r = 0; r < R_Count; r++) pl[id].res[r] = START_RES[r];
+    }
+
+    // ---------------------------------------------------------------- pathfinding (A*, 8-dir, bounded, partial paths allowed)
+    bool findPath(IV s, IV g, bool water, uint32_t ignore, std::vector<Pos>& out) {
         out.clear();
+        if (!walkable(g.x, g.y, water, ignore)) {
+            bool f = false;
+            for (int r = 1; r <= 8 && !f; r++)
+                for (int dy = -r; dy <= r && !f; dy++)
+                    for (int dx = -r; dx <= r && !f; dx++)
+                        if (std::max(std::abs(dx), std::abs(dy)) == r && walkable(g.x + dx, g.y + dy, water, ignore)) { g = {g.x + dx, g.y + dy}; f = true; }
+            if (!f) return false;
+        }
         if (s.x == g.x && s.y == g.y) return true;
-        if (!walk(g.x, g.y) || !walk(s.x, s.y)) return false;
-        std::vector<float> gs(N, 1e9f);
-        std::vector<int> par(N, -1);
-        std::vector<uint8_t> closed(N, 0);
-        using QE = std::pair<float, int>;
+        struct PN { float g; int64_t par; bool closed; };
+        std::unordered_map<int64_t, PN> nodes;
+        using QE = std::pair<float, int64_t>;
         std::priority_queue<QE, std::vector<QE>, std::greater<>> q;
         auto h = [&](int x, int y) {
             float dx = float(std::abs(x - g.x)), dy = float(std::abs(y - g.y));
             return dx + dy - 0.586f * std::min(dx, dy);
         };
-        gs[ix(s.x, s.y)] = 0;
-        q.push({h(s.x, s.y), ix(s.x, s.y)});
-        while (!q.empty()) {
-            int i = q.top().second;
+        int64_t sk = tkey(s.x, s.y), gk = tkey(g.x, g.y), best = sk;
+        float bestH = h(s.x, s.y);
+        nodes[sk] = {0, -1, false};
+        q.push({bestH, sk});
+        int expanded = 0;
+        bool found = false;
+        while (!q.empty() && expanded < 7000) {
+            int64_t k = q.top().second;
             q.pop();
-            if (closed[i]) continue;
-            closed[i] = 1;
-            int x = i % MAP_W, y = i / MAP_W;
-            if (x == g.x && y == g.y) break;
+            PN& cur = nodes[k];
+            if (cur.closed) continue;
+            cur.closed = true;
+            expanded++;
+            if (k == gk) { found = true; break; }
+            int x = keyCx(k), y = keyCy(k);
+            float cg = cur.g;
+            float ch = h(x, y);
+            if (ch < bestH) { bestH = ch; best = k; }
             for (int dx = -1; dx <= 1; dx++)
                 for (int dy = -1; dy <= 1; dy++) {
                     if (!dx && !dy) continue;
                     int nx = x + dx, ny = y + dy;
-                    if (!walk(nx, ny)) continue;
-                    if (dx && dy && (!walk(x + dx, y) || !walk(x, y + dy))) continue;
-                    int n = ix(nx, ny);
-                    float ng = gs[i] + (dx && dy ? 1.414f : 1.f) + (terrain[n] == T_Forest ? .5f : 0.f);
-                    if (ng < gs[n]) { gs[n] = ng; par[n] = i; q.push({ng + h(nx, ny), n}); }
+                    if (!walkable(nx, ny, water, ignore)) continue;
+                    if (dx && dy && (!walkable(x + dx, y, water, ignore) || !walkable(x, y + dy, water, ignore))) continue;
+                    int64_t nk = tkey(nx, ny);
+                    float ng = cg + (dx && dy ? 1.414f : 1.f);
+                    auto it = nodes.find(nk);
+                    if (it == nodes.end() || ng < it->second.g) { nodes[nk] = {ng, k, false}; q.push({ng + h(nx, ny), nk}); }
                 }
         }
-        int gi = ix(g.x, g.y), si = ix(s.x, s.y);
-        if (par[gi] < 0) return false;
-        for (int i = gi; i != si; i = par[i]) out.push_back({i % MAP_W + .5f, i / MAP_W + .5f});
+        int64_t end = found ? gk : best;
+        if (end == sk) return false;
+        for (int64_t k = end; k != sk && k != -1; k = nodes[k].par) out.push_back({float(keyCx(k)) + .5f, float(keyCy(k)) + .5f});
         std::reverse(out.begin(), out.end());
+        return !out.empty();
+    }
+    bool order(entt::entity e, Pos goal, uint32_t ignore = 0) {
+        auto& u = reg.get<Unit>(e);
+        Pos p = reg.get<Pos>(e);
+        bool water = reg.get<Info>(e).kind == K_Ship;
+        std::vector<Pos> path;
+        if (!findPath({int(std::floor(p.x)), int(std::floor(p.y))}, {int(std::floor(goal.x)), int(std::floor(goal.y))}, water, ignore, path)) return false;
+        u.path = std::move(path);
+        u.i = 0;
         return true;
     }
 
-    bool nearestWalkable(IV t, IV& out) {
-        if (walk(t.x, t.y)) { out = t; return true; }
-        for (int r = 1; r <= 6; r++)
-            for (int dy = -r; dy <= r; dy++)
-                for (int dx = -r; dx <= r; dx++)
-                    if (std::max(std::abs(dx), std::abs(dy)) == r && walk(t.x + dx, t.y + dy)) { out = {t.x + dx, t.y + dy}; return true; }
-        return false;
+    // ---------------------------------------------------------------- combat helpers
+    void damage(entt::entity e, float amt, int attacker) {
+        auto& h = reg.get<Health>(e);
+        h.hp -= amt;
+        h.lastHit = uint8_t(attacker);
+        int o = reg.get<Owner>(e).id;
+        if (o > 0 && attacker != o && pl[o].online && clock - pl[o].lastWarn > 8) { pl[o].lastWarn = clock; say(o, "Your forces are under attack!"); }
+        uint32_t uid = reg.get<Uid>(e).id;
+        if (h.hp <= 0 && dying.insert(uid).second) toKill.push_back({e, attacker});
     }
-
-    // ---------- spatial queries ----------
-    void rebuildGrid() {
-        for (auto& c : grid) c.clear();
-        reg.view<Pos, Mover>().each([&](entt::entity e, const Pos& p, const Mover&) {
-            int gx = std::clamp(int(p.x) / GC, 0, GW - 1), gy = std::clamp(int(p.y) / GC, 0, GH - 1);
-            grid[gy * GW + gx].push_back(e);
-        });
-    }
-    template <class F> void queryUnits(float cx, float cy, float r, F fn) {
-        int x0 = std::clamp(int(cx - r) / GC, 0, GW - 1), x1 = std::clamp(int(cx + r) / GC, 0, GW - 1);
-        int y0 = std::clamp(int(cy - r) / GC, 0, GH - 1), y1 = std::clamp(int(cy + r) / GC, 0, GH - 1);
-        for (int y = y0; y <= y1; y++)
-            for (int x = x0; x <= x1; x++)
-                for (auto e : grid[y * GW + x]) fn(e);
-    }
-
-    // ---------- events ----------
-    void onTH(const THDestroyed& ev) {
-        if (!reg.valid(ev.e)) return;
-        int victim = reg.get<Owner>(ev.e).id, killer = ev.killer;
-        if (victim == 0) {
-            Pos p = reg.get<Pos>(ev.e);
-            occ[ix(int(p.x), int(p.y))] = 0;
-            reg.destroy(ev.e);
-            if (killer > 0 && pl[killer].active) {
-                pl[killer].gold += 150; pl[killer].wood += 100;
-                say(killer, "Neutral camp destroyed! +150 gold, +100 wood.");
+    void processKills() {
+        for (size_t n = 0; n < toKill.size(); n++) {
+            auto [e, killer] = toKill[n];
+            if (!reg.valid(e)) continue;
+            Kind k = reg.get<Info>(e).kind;
+            int owner = reg.get<Owner>(e).id;
+            Pos p = posOf(e);
+            if (isBuilding(k)) fx(E_Explosion, p.x, p.y);
+            if (const Worker* w = reg.try_get<Worker>(e); w && killer > 0 && killer != owner) {      // raid: killer steals the shipment
+                float tot = 0;
+                for (int r = 0; r < R_Count; r++) { pl[killer].res[r] += w->cargo[r]; tot += w->cargo[r]; }
+                if (tot > 0) say(killer, "You raided a supply convoy: +" + std::to_string(int(tot)) + " resources!");
             }
-            return;
+            if (k == K_Sheep && killer > 0) { pl[killer].res[R_Meat] += 12; say(killer, "Hunted a sheep: +12 meat."); }
+            destroyNow(e);
+            if (k == K_TownHall && owner > 0) {
+                bool other = false;
+                reg.view<Info, Owner>().each([&](const Info& i, const Owner& o) { if (i.kind == K_TownHall && o.id == owner) other = true; });
+                if (!other) defeat(owner, killer);
+            }
         }
-        if (killer > 0 && killer != victim && pl[killer].active) {
-            int g = int(pl[victim].gold * .5f), w = int(pl[victim].wood * .5f);
-            pl[killer].gold += float(g); pl[killer].wood += float(w);
-            say(killer, "You destroyed Player " + std::to_string(victim) + "'s Town Hall! Loot: " + std::to_string(g) + " gold, " + std::to_string(w) + " wood.");
+        toKill.clear();
+    }
+    void removeOwner(int id) {
+        std::vector<entt::entity> v;
+        reg.view<Owner>().each([&](entt::entity e, const Owner& o) { if (o.id == id) v.push_back(e); });
+        for (auto e : v) {
+            if (isBuilding(reg.get<Info>(e).kind)) { Pos p = posOf(e); fx(E_Explosion, p.x, p.y); }
+            destroyNow(e);
+        }
+    }
+    void defeat(int victim, int killer) {
+        if (killer > 0 && killer != victim && pl[killer].used) {
+            float tot = 0;
+            for (int r = 0; r < R_Count; r++) { float l = std::floor(pl[victim].res[r] * .5f); pl[killer].res[r] += l; tot += l; }
+            say(killer, "You destroyed " + pl[victim].name + "'s Town Hall! Loot: " + std::to_string(int(tot)) + " resources.");
         }
         removeOwner(victim);
-        resetPlayer(victim);
-        say(victim, "Your Town Hall was destroyed! You start over with a new base.");
-        std::printf("Player %d was defeated by %d\n", victim, killer);
+        resetProfile(victim);
+        spawnBase(victim);
+        pl[victim].sentFog.clear();
+        pl[victim].sentTerr.clear();
+        say(victim, "Your Town Hall fell! You rebuild at a fresh clearing elsewhere in the world.");
+        std::printf("%s was defeated\n", pl[victim].name.c_str());
+    }
+    entt::entity nearestHostile(Pos p, int owner, float range, bool buildings) {
+        entt::entity best = entt::null;
+        float bd = range;
+        reg.view<Owner, Info>().each([&](entt::entity e, const Owner& o, const Info& i) {
+            if (!hostile(owner, o.id) || (isBuilding(i.kind) && !buildings) || dying.count(reg.get<Uid>(e).id)) return;
+            float d = rectDist(p, e);
+            if (d < bd) { bd = d; best = e; }
+        });
+        return best;
     }
 
-    void onConnect(ENetPeer* peer) {
+    // ---------------------------------------------------------------- connections
+    void sendFog(int id);
+    void sendRoster();
+    bool load();
+    void save();
+    void run();
+
+    void onHello(ENetPeer* peer, Reader& r) {
+        std::string uuid = r.str(), name = r.str();
+        if (!r.ok || uuid.size() < 8 || uuid.size() > 64) { enet_peer_disconnect_now(peer, 0); return; }
+        for (char& c : name) if (c < 32 || c == 127) c = '?';
+        if (name.empty()) name = "Player";
+        if (name.size() > 20) name.resize(20);
         int id = 0;
-        for (int i = 1; i <= MAX_PLAYERS && !id; i++) if (!pl[i].active) id = i;
-        if (!id) { enet_peer_disconnect_now(peer, 0); return; }
+        for (int i = 1; i <= MAX_PLAYERS; i++) if (pl[i].used && pl[i].uuid == uuid) id = i;
+        if (id && pl[id].online) {
+            Writer w; w.put<uint8_t>(S_Text); w.str("This profile is already connected.");
+            sendPacket(peer, w);
+            enet_peer_disconnect_later(peer, 0);
+            return;
+        }
+        bool fresh = false;
+        if (!id) {
+            for (int i = 1; i <= MAX_PLAYERS && !id; i++) if (!pl[i].used) id = i;
+            if (!id) {                                           // recycle the longest-offline profile
+                uint64_t oldest = UINT64_MAX;
+                for (int i = 1; i <= MAX_PLAYERS; i++) if (!pl[i].online && pl[i].lastSeen < oldest) { oldest = pl[i].lastSeen; id = i; }
+                if (!id) { enet_peer_disconnect_now(peer, 0); return; }
+                removeOwner(id);
+                for (int a = 0; a <= MAX_PLAYERS; a++) pl[a].allied[id] = pl[a].pending[id] = false;
+                pl[id] = Profile{};
+            }
+            fresh = true;
+            pl[id].used = true;
+            pl[id].uuid = uuid;
+            resetProfile(id);
+        }
+        Profile& p = pl[id];
+        p.name = name;
+        p.online = true;
+        p.peer = peer;
+        p.lastSeen = nowSec();
+        p.sentFog.clear();
+        p.sentTerr.clear();
         peer->data = reinterpret_cast<void*>(uintptr_t(id));
-        pl[id].active = true;
-        pl[id].peer = peer;
-        resetPlayer(id);
-        IV s = slots[id - 1];
+        if (fresh) spawnBase(id);
+        else {
+            bool hasTH = false;
+            reg.view<Info, Owner>().each([&](const Info& i, const Owner& o) { if (i.kind == K_TownHall && o.id == id) hasTH = true; });
+            if (!hasTH) { resetProfile(id); spawnBase(id); say(id, "Your base was destroyed while you were away. You start over."); }
+        }
         Writer w;
-        w.put<uint8_t>(S_Welcome).put<uint8_t>(uint8_t(id)).put<uint16_t>(MAP_W).put<uint16_t>(MAP_H).put<int16_t>(int16_t(s.x)).put<int16_t>(int16_t(s.y));
-        w.bytes(terrain.data(), terrain.size());
+        w.put<uint8_t>(S_Welcome).put<uint8_t>(uint8_t(id)).put<uint32_t>(seed).put<float>(p.cam.x).put<float>(p.cam.y);
+        w.str(p.name);
         sendPacket(peer, w);
         sendFog(id);
-        say(id, "Welcome! Train a Scout (3) and send it into the clouds. Right-click for commands.");
-        std::printf("Player %d joined\n", id);
+        sendRoster();
+        say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu." : "Welcome back, " + p.name + "! Your base is just as you left it.");
+        std::printf("%s (%d) %s\n", p.name.c_str(), id, fresh ? "joined" : "rejoined");
     }
-
     void onDisconnect(ENetPeer* peer) {
         int id = int(reinterpret_cast<uintptr_t>(peer->data));
         peer->data = nullptr;
         if (id < 1 || id > MAX_PLAYERS) return;
-        removeOwner(id);
-        pl[id] = Player{};
-        pl[id].expl.assign(N, 0);
-        for (int a = 0; a <= MAX_PLAYERS; a++) pl[a].allied[id] = pl[a].pending[id] = false;
-        th[id] = entt::null;
-        std::printf("Player %d left\n", id);
+        pl[id].online = false;
+        pl[id].peer = nullptr;
+        pl[id].lastSeen = nowSec();
+        std::printf("%s left\n", pl[id].name.c_str());
+        sendRoster();
     }
 
     int unitCount(int id) {
         int n = 0;
-        reg.view<Owner, Mover>().each([&](const Owner& o, const Mover&) { if (o.id == id) n++; });
+        reg.view<Owner, Unit>().each([&](const Owner& o, const Unit&) { if (o.id == id) n++; });
+        return n;
+    }
+    int workersOf(uint32_t home) {
+        int n = 0;
+        reg.view<Worker>().each([&](const Worker& w) { if (w.home == home) n++; });
         return n;
     }
 
-    // ---------- commands ----------
+    struct PlaceWorld {
+        Server& s;
+        int me;
+        int biome(int x, int y) { return s.biome(x, y); }
+        bool explored(int x, int y) { return s.explored(me, x, y); }
+        bool occupied(int x, int y) { return s.occ.count(tkey(x, y)) > 0; }
+        template <class F> void anchors(F f) {
+            s.reg.view<Info, Building, Owner>().each([&](const Info& i, const Building& b, const Owner& o) {
+                if (i.kind == K_TownHall || i.kind == K_Outpost) f(footCenter(i.kind, b.tx, b.ty), i.kind, o.id == me, s.allied(me, o.id) && o.id != me);
+            });
+        }
+    };
+
+    bool spawnSpot(entt::entity b, bool water, Pos& out) {
+        const auto& bi = reg.get<Building>(b);
+        Kind k = reg.get<Info>(b).kind;
+        int fw = KINFO[k].fw, fh = KINFO[k].fh;
+        for (int r = 1; r <= 4; r++)
+            for (int y = bi.ty + fh - 1 + r; y >= bi.ty - r; y--)
+                for (int x = bi.tx - r; x <= bi.tx + fw - 1 + r; x++) {
+                    if (std::max({bi.tx - x, x - (bi.tx + fw - 1), bi.ty - y, y - (bi.ty + fh - 1)}) != r) continue;
+                    if (walkable(x, y, water, 0)) { out = {float(x) + .5f, float(y) + .5f}; return true; }
+                }
+        return false;
+    }
+
+    // ---------------------------------------------------------------- commands
     void onPacket(ENetPeer* peer, const ENetPacket* pk) {
-        int id = int(reinterpret_cast<uintptr_t>(peer->data));
-        if (id < 1) return;
         Reader r{pk->data, pk->data + pk->dataLength};
-        Player& p = pl[id];
-        auto readUnits = [&](bool noScouts) {
+        uint8_t type = r.get<uint8_t>();
+        int id = int(reinterpret_cast<uintptr_t>(peer->data));
+        if (type == C_Hello) { if (id < 1) onHello(peer, r); return; }
+        if (id < 1 || !r.ok) return;
+        Profile& p = pl[id];
+        auto readUnits = [&](bool combatOnly) {
             std::vector<entt::entity> us;
             int n = r.get<uint8_t>();
             for (int i = 0; i < n; i++) {
-                auto e = static_cast<entt::entity>(r.get<uint32_t>());
-                if (reg.valid(e) && reg.all_of<Owner, Mover, Health>(e) && reg.get<Owner>(e).id == id && !(noScouts && reg.get<Health>(e).kind == K_Scout)) us.push_back(e);
+                auto e = find(r.get<uint32_t>());
+                if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e)) continue;
+                Kind k = reg.get<Info>(e).kind;
+                if (combatOnly && (k == K_Ship || k == K_Monk)) continue;
+                us.push_back(e);
             }
             return us;
         };
-        switch (r.get<uint8_t>()) {
+        switch (type) {
+        case C_Cam: { float x = r.get<float>(), y = r.get<float>(); if (r.ok && std::isfinite(x) && std::isfinite(y)) p.cam = {x, y}; break; }
         case C_Build: {
             auto k = Kind(r.get<uint8_t>());
-            int tx = r.get<int16_t>(), ty = r.get<int16_t>();
-            if (!r.ok || (k != K_GoldMine && k != K_Lumber) || !inb(tx, ty)) return;
-            const KindInfo& ki = KINFO[k];
-            if (p.gold < float(ki.gold) || p.wood < float(ki.wood)) { say(id, "Not enough resources."); return; }
-            if (!vision(id)[ix(tx, ty)]) { say(id, "You cannot build in the clouds."); return; }
-            uint8_t t = terrain[ix(tx, ty)];
-            bool okT = k == K_GoldMine ? (t == T_Clearing || t == T_Mountain) : (t == T_Clearing || t == T_Forest);
-            if (!okT) { say(id, k == K_GoldMine ? "Gold Mines need clearing or mountain (x2 yield)." : "Lumber Camps need clearing or forest (x2 yield)."); return; }
-            if (occ[ix(tx, ty)]) { say(id, "That tile is occupied."); return; }
-            if (!reg.valid(th[id])) return;
-            Pos tp = reg.get<Pos>(th[id]);
-            if (std::max(std::abs(tx - int(tp.x)), std::abs(ty - int(tp.y))) > BUILD_RADIUS) { say(id, "Too far from your Town Hall."); return; }
-            p.gold -= float(ki.gold); p.wood -= float(ki.wood);
-            make(k, uint8_t(id), tx + .5f, ty + .5f);
+            int tx = r.get<int32_t>(), ty = r.get<int32_t>();
+            if (!r.ok || k >= K_Count || !isBuilding(k)) return;
+            PlaceWorld w{*this, id};
+            int err = checkPlace(w, k, tx, ty);
+            if (err) { say(id, std::string("Cannot build here: ") + PLACE_TEXT[err] + "."); return; }
+            if (!afford(id, KINFO[k].cost)) { say(id, "Not enough resources."); return; }
+            spend(id, KINFO[k].cost);
+            auto e = makeBuilding(k, uint8_t(id), tx, ty, false);
+            Pos c = posOf(e);
+            fx(E_Dust, c.x, c.y);
             break;
         }
         case C_Train: {
+            auto be = find(r.get<uint32_t>());
             auto k = Kind(r.get<uint8_t>());
-            if (!r.ok || k < K_Scout || k >= K_Count || !reg.valid(th[id])) return;
-            const KindInfo& ki = KINFO[k];
-            if (p.gold < float(ki.gold) || p.wood < float(ki.wood)) { say(id, "Not enough resources."); return; }
-            if (unitCount(id) >= UNIT_CAP) { say(id, "Army cap reached."); return; }
-            p.gold -= float(ki.gold); p.wood -= float(ki.wood);
-            Pos tp = reg.get<Pos>(th[id]);
-            float a = float(rng() % 628) / 100.f;
-            make(k, uint8_t(id), tp.x + std::cos(a) * 1.6f, tp.y + std::sin(a) * 1.6f);
+            if (!r.ok || be == entt::null || k >= K_Count || isBuilding(k) || !reg.all_of<Building>(be)) return;
+            if (reg.get<Owner>(be).id != id || !complete(be) || !canTrain(reg.get<Info>(be).kind, k)) return;
+            if (!afford(id, KINFO[k].cost)) { say(id, "Not enough resources."); return; }
+            if (unitCount(id) >= UNIT_CAP) { say(id, "Unit cap reached."); return; }
+            Pos at;
+            if (!spawnSpot(be, k == K_Ship, at)) { say(id, k == K_Ship ? "No free ocean tile next to the harbour." : "No room to spawn units."); return; }
+            spend(id, KINFO[k].cost);
+            auto u = makeUnit(k, uint8_t(id), at.x, at.y);
+            if (k == K_Ship) fx(E_Splash, at.x, at.y);
+            else fx(E_Dust, at.x, at.y);
+            if (k == K_Pawn) {                                   // new pawns join the least staffed resource building as hauler
+                entt::entity bestB = entt::null;
+                int bw = 3;
+                reg.view<Info, Building, Owner, Uid>().each([&](entt::entity e, const Info& i, const Building& b, const Owner& o, const Uid& uid) {
+                    if (o.id != id || !isResourceBuilding(i.kind) || b.progress < 1.f) return;
+                    int c = workersOf(uid.id);
+                    if (c < bw) { bw = c; bestB = e; }
+                });
+                if (bestB != entt::null) reg.emplace<Worker>(u, Worker{reg.get<Uid>(bestB).id});
+            }
+            break;
+        }
+        case C_Upgrade: {
+            auto be = find(r.get<uint32_t>());
+            if (!r.ok || be == entt::null || !reg.all_of<Building>(be) || reg.get<Owner>(be).id != id || !complete(be)) return;
+            auto& in = reg.get<Info>(be);
+            if (in.level >= MAX_LEVEL) { say(id, "Already at the maximum level."); return; }
+            float cost[R_Count];
+            for (int i = 0; i < R_Count; i++) cost[i] = std::ceil(KINFO[in.kind].cost[i] * upgradeCostMul(in.level) * .7f);
+            if (in.kind == K_Campfire || !afford(id, cost)) { say(id, in.kind == K_Campfire ? "Campfires cannot be upgraded." : "Not enough resources."); return; }
+            spend(id, cost);
+            auto& h = reg.get<Health>(be);
+            float old = h.maxhp;
+            in.level++;
+            h.maxhp = KINFO[in.kind].hp * levelHp(in.level);
+            h.hp += h.maxhp - old;
+            Pos c = posOf(be);
+            fx(E_Dust, c.x, c.y);
+            say(id, std::string(KINFO[in.kind].name) + " upgraded to level " + std::to_string(in.level) + ".");
             break;
         }
         case C_Move: {
             auto us = readUnits(false);
-            int tx = r.get<int16_t>(), ty = r.get<int16_t>();
-            if (!r.ok || !inb(tx, ty)) return;
-            IV g{tx, ty};
-            bool ground = false;
-            for (auto e : us) ground |= reg.get<Health>(e).kind != K_Scout;
-            if (ground && !nearestWalkable({tx, ty}, g)) { say(id, "Ground units cannot go there."); return; }
-            int fail = 0;
+            float tx = r.get<float>(), ty = r.get<float>();
+            if (!r.ok || !std::isfinite(tx) || !std::isfinite(ty)) return;
+            int fail = 0, n = 0;
             for (auto e : us) {
                 reg.remove<Attack>(e);
-                auto& m = reg.get<Mover>(e);
-                Pos pos = reg.get<Pos>(e);
-                float jx = (float(hash2(int(entt::to_integral(e)), 7, 1) & 255) / 255.f - .5f) * .6f, jy = (float(hash2(int(entt::to_integral(e)), 8, 1) & 255) / 255.f - .5f) * .6f;
-                if (reg.get<Health>(e).kind == K_Scout) { m.path = {{tx + .5f + jx, ty + .5f + jy}}; m.i = 0; continue; }
-                std::vector<Pos> path;
-                if (!findPath({int(pos.x), int(pos.y)}, g, path)) { fail++; continue; }
-                if (!path.empty()) { path.back().x += jx; path.back().y += jy; }
-                m.path = std::move(path);
-                m.i = 0;
+                reg.remove<AMove>(e);
+                float a = float(n++) * 2.4f, rad = n > 1 ? .35f * std::sqrt(float(n)) : 0.f;
+                if (!order(e, {tx + std::cos(a) * rad, ty + std::sin(a) * rad})) { fail++; reg.get<Unit>(e).path.clear(); }
             }
-            if (fail) say(id, "Some units found no path.");
+            if (fail) say(id, "Some units cannot reach that spot.");
+            break;
+        }
+        case C_AttackMove: {
+            auto us = readUnits(true);
+            float tx = r.get<float>(), ty = r.get<float>();
+            if (!r.ok || !std::isfinite(tx) || !std::isfinite(ty)) return;
+            for (auto e : us) {
+                reg.remove<Attack>(e);
+                if (order(e, {tx, ty})) reg.emplace_or_replace<AMove>(e, AMove{{tx, ty}});
+            }
             break;
         }
         case C_Attack: {
             auto us = readUnits(true);
-            auto tg = static_cast<entt::entity>(r.get<uint32_t>());
-            if (!r.ok || us.empty() || !reg.valid(tg) || !reg.all_of<Owner, Health, Pos>(tg)) return;
+            auto tg = find(r.get<uint32_t>());
+            if (!r.ok || us.empty() || tg == entt::null) return;
             int to = reg.get<Owner>(tg).id;
-            if (to == id || reg.get<Health>(tg).kind != K_TownHall) return;
-            if (allied(id, to)) breakAlliance(id, to);
-            Pos tp = reg.get<Pos>(tg);
+            if (to == id) return;
+            if (to > 0 && allied(id, to)) { breakAlliance(id, to); }
+            Pos tp = posOf(tg);
+            uint32_t tuid = reg.get<Uid>(tg).id;
+            bool bld = isBuilding(reg.get<Info>(tg).kind);
             int fail = 0;
             for (auto e : us) {
-                Pos pos = reg.get<Pos>(e);
-                std::vector<Pos> path;
-                if (!findPath({int(pos.x), int(pos.y)}, {int(tp.x), int(tp.y)}, path)) { fail++; continue; }
-                auto& m = reg.get<Mover>(e);
-                m.path = std::move(path);
-                m.i = 0;
-                reg.emplace_or_replace<Attack>(e, Attack{tg});
+                reg.remove<AMove>(e);
+                if (!order(e, tp, bld ? tuid : 0)) { fail++; continue; }
+                reg.emplace_or_replace<Attack>(e, Attack{tuid});
             }
             if (fail) say(id, "Some units cannot reach the target.");
-            if (to > 0) say(to, "Player " + std::to_string(id) + " is attacking your Town Hall!");
+            if (to > 0) say(to, p.name + " is attacking you!");
             break;
         }
         case C_Ally: {
-            int to = r.get<uint8_t>();
-            if (!r.ok || to == id || to > MAX_PLAYERS || (to > 0 && !pl[to].active)) return;
+            int to = r.get<uint8_t>(), act = r.get<uint8_t>();
+            if (!r.ok || to == id || to < 1 || to > MAX_PLAYERS || !pl[to].used) return;
+            if (act == AA_Break) { if (p.allied[to]) breakAlliance(id, to); return; }
             if (p.allied[to]) { say(id, "Already allied."); return; }
-            if (to == 0 || pl[to].pending[id]) {
+            if (pl[to].pending[id]) {
                 p.allied[to] = pl[to].allied[id] = true;
                 p.pending[to] = pl[to].pending[id] = false;
-                if (to == 0) say(id, "Neutral camps are now your allies: shared vision, they will not be attacked.");
-                else { say(id, "You are now allied with Player " + std::to_string(to) + " (shared vision)."); say(to, "Player " + std::to_string(id) + " accepted the alliance."); }
+                say(id, "You are now allied with " + pl[to].name + ": shared vision and economy.");
+                say(to, p.name + " accepted your alliance.");
             } else {
                 p.pending[to] = true;
-                say(id, "Alliance proposed to Player " + std::to_string(to) + ".");
-                say(to, "Player " + std::to_string(id) + " proposes an alliance. Right-click their Town Hall and choose Ally.");
+                say(id, "Alliance invite sent to " + pl[to].name + ".");
+                say(to, p.name + " invites you to an alliance. Right-click one of their buildings to accept.");
             }
+            sendRoster();
             break;
         }
         default: break;
         }
     }
+    void breakAlliance(int a, int b) {
+        pl[a].allied[b] = pl[b].allied[a] = false;
+        pl[a].pending[b] = pl[b].pending[a] = false;
+        say(a, "Alliance with " + pl[b].name + " ended.");
+        say(b, pl[a].name + " ended the alliance!");
+        sendRoster();
+    }
 
-    // ---------- simulation ----------
+    // ---------------------------------------------------------------- simulation
+    void spawnChunkNpcs(int cx, int cy) {
+        if (!spawned.insert(chunkKey(cx, cy)).second) return;
+        int b = biome(cx * CH + 8, cy * CH + 8);
+        if (b != B_Plains && b != B_Flowers) return;
+        int n = int(hash2(cx, cy, seed + 901) % 4);
+        for (int i = 0; i < n; i++) {
+            int x = cx * CH + int(hash2(cx, cy * 7 + i, seed + 5) % CH), y = cy * CH + int(hash2(cx * 5 + i, cy, seed + 6) % CH);
+            if (walkable(x, y, false, 0) && (b == biome(x, y))) makeUnit(K_Sheep, 0, float(x) + .5f, float(y) + .5f);
+        }
+    }
+
     void update(float dt) {
         tick++;
-        rebuildGrid();
-        std::vector<entt::entity> drop, dead;
+        clock += dt;
+        std::vector<entt::entity> units, blds;
+        reg.view<Info>().each([&](entt::entity e, const Info& i) { (isBuilding(i.kind) ? blds : units).push_back(e); });
+        std::unordered_map<uint32_t, int> workerCount;
+        reg.view<Worker>().each([&](const Worker& w) { workerCount[w.home]++; });
 
-        // unit attacks on Town Halls
-        reg.view<Pos, Mover, Health, Owner, Attack>().each([&](entt::entity e, const Pos& p, Mover& m, const Health& h, const Owner& o, const Attack& a) {
-            if (!reg.valid(a.target) || !reg.all_of<Pos, Health, Owner>(a.target)) { drop.push_back(e); return; }
-            const Pos& tp = reg.get<Pos>(a.target);
-            Health& tgt = reg.get<Health>(a.target);
-            int to = reg.get<Owner>(a.target).id;
-            if (allied(o.id, to)) { drop.push_back(e); return; }
-            if (std::hypot(tp.x - p.x, tp.y - p.y) <= 1.4f) {
-                m.path.clear(); m.i = 0;
-                tgt.hp -= KINFO[h.kind].dps * dt;
-                tgt.lastHit = o.id;
-                if (tgt.hp <= 0) disp.enqueue(THDestroyed{a.target, o.id});
-            } else if (m.path.empty()) {
-                std::vector<Pos> path;
-                if (findPath({int(p.x), int(p.y)}, {int(tp.x), int(tp.y)}, path)) { m.path = std::move(path); m.i = 0; }
-                else drop.push_back(e);
+        // construction, production, towers
+        for (auto e : blds) {
+            auto& b = reg.get<Building>(e);
+            auto& in = reg.get<Info>(e);
+            int ow = reg.get<Owner>(e).id;
+            Pos c = footCenter(in.kind, b.tx, b.ty);
+            if (b.progress < 1.f) {
+                b.progress = std::min(1.f, b.progress + dt / KINFO[in.kind].buildTime);
+                if (b.progress >= 1.f) {
+                    reveal(ow, int(std::floor(c.x)), int(std::floor(c.y)), KINFO[in.kind].vision);
+                    fx(E_Dust, c.x, c.y);
+                    say(ow, std::string(KINFO[in.kind].name) + " completed.");
+                }
+                continue;
             }
-        });
-        for (auto e : drop) reg.remove<Attack>(e);
+            if (isResourceBuilding(in.kind) && ow > 0) {
+                Yield y = yieldOf(in.kind, biome(int(std::floor(c.x)), int(std::floor(c.y))), in.kind == K_Harbour);
+                float f = levelMul(in.level) * (pl[ow].online ? 1.f : OFFLINE_PROD) * dt, tot = 0;
+                for (int r = 0; r < R_Count; r++) tot += b.stock[r];
+                if (tot < 150) for (int r = 0; r < R_Count; r++) b.stock[r] += y.r[r] * f;
+                int cnt = workerCount[reg.get<Uid>(e).id];
+                if (cnt < 1 || (cnt < 3 && tot > 60)) {
+                    b.respawn -= dt;
+                    if (b.respawn <= 0 && unitCount(ow) < UNIT_CAP) {
+                        Pos at;
+                        if (spawnSpot(e, false, at)) {
+                            auto u = makeUnit(K_Pawn, uint8_t(ow), at.x, at.y);
+                            reg.emplace<Worker>(u, Worker{reg.get<Uid>(e).id});
+                            workerCount[reg.get<Uid>(e).id]++;
+                        }
+                        b.respawn = cnt < 1 ? 6.f : 25.f;
+                    }
+                }
+            }
+            if (ow > 0 && KINFO[in.kind].dps > 0) {                  // defensive fire (Town Hall, Outpost)
+                float range = KINFO[in.kind].range;
+                entt::entity best = nearestHostile(c, ow, range, false);
+                b.cd -= dt;
+                if (best != entt::null) {
+                    damage(best, KINFO[in.kind].dps * levelMul(in.level) * dt, ow);
+                    if (b.cd <= 0) { b.cd = .9f; Pos t = reg.get<Pos>(best); fx(E_Arrow, c.x, c.y - 1.2f, t.x, t.y); }
+                }
+            }
+        }
 
-        // Town Hall defences (spatial query for the closest hostile unit)
-        reg.view<Pos, Health, Owner>().each([&](const Pos& p, const Health& h, const Owner& o) {
-            if (h.kind != K_TownHall) return;
-            entt::entity best = entt::null;
-            float bd = 4.5f;
-            queryUnits(p.x, p.y, 4.5f, [&](entt::entity u) {
-                if (allied(o.id, reg.get<Owner>(u).id)) return;
-                const Pos& up = reg.get<Pos>(u);
-                float d = std::hypot(up.x - p.x, up.y - p.y);
-                if (d < bd) { bd = d; best = u; }
-            });
-            if (best == entt::null) return;
-            Health& uh = reg.get<Health>(best);
-            uh.hp -= KINFO[K_TownHall].dps * dt;
-            if (uh.hp <= 0) dead.push_back(best);
-        });
-        std::sort(dead.begin(), dead.end());
-        dead.erase(std::unique(dead.begin(), dead.end()), dead.end());
-        for (auto e : dead) if (reg.valid(e)) reg.destroy(e);
-        disp.update();                                          // resolves destroyed Town Halls
+        // units
+        for (auto e : units) {
+            if (!reg.valid(e) || dying.count(reg.get<Uid>(e).id)) continue;
+            auto& u = reg.get<Unit>(e);
+            Kind k = reg.get<Info>(e).kind;
+            int ow = reg.get<Owner>(e).id;
+            Pos& p = reg.get<Pos>(e);
+            u.state = US_Idle;
+            u.cd -= dt;
+            u.repath -= dt;
+            if (reg.all_of<Wander>(e)) {
+                auto& wd = reg.get<Wander>(e);
+                wd.timer -= dt;
+                if (wd.timer <= 0 && u.path.empty()) {
+                    wd.timer = 2.f + float(rng() % 400) / 100.f;
+                    int nx = int(std::floor(p.x)) + int(rng() % 7) - 3, ny = int(std::floor(p.y)) + int(rng() % 7) - 3;
+                    if (walkable(nx, ny, false, 0) && biome(nx, ny) != B_Highlands) { u.path = {{float(nx) + .5f, float(ny) + .5f}}; u.i = 0; }
+                }
+            }
+            if (auto* wk = reg.try_get<Worker>(e)) { runWorker(e, u, *wk, dt); }
+            else if (k == K_Monk) {                                  // heal the most wounded friendly unit in range
+                entt::entity best = entt::null;
+                float bn = 1e9f;
+                for (auto o : units) {
+                    if (o == e || !reg.valid(o) || !allied(ow, reg.get<Owner>(o).id)) continue;
+                    auto& h = reg.get<Health>(o);
+                    if (h.hp >= h.maxhp - .5f) continue;
+                    Pos q = reg.get<Pos>(o);
+                    float d = std::hypot(p.x - q.x, p.y - q.y);
+                    if (d <= KINFO[K_Monk].range && h.hp / h.maxhp < bn) { bn = h.hp / h.maxhp; best = o; }
+                }
+                if (best != entt::null) {
+                    auto& h = reg.get<Health>(best);
+                    h.hp = std::min(h.maxhp, h.hp + KINFO[K_Monk].dps * dt);
+                    u.state = US_Heal;
+                    u.path.clear();
+                    Pos q = reg.get<Pos>(best);
+                    u.aim = uint8_t(int((std::atan2(q.y - p.y, q.x - p.x) + 3.14159f) / 6.28319f * 255.f));
+                    if (u.cd <= 0) { u.cd = 1.f; fx(E_Heal, q.x, q.y); }
+                }
+            } else if (KINFO[k].dps > 0 && ow > 0) {
+                combat(e, u, k, ow, p, dt);
+            }
+        }
+        processKills();
 
         // movement
-        reg.view<Pos, Mover, Health>().each([&](Pos& p, Mover& m, const Health& h) {
-            if (m.i >= m.path.size()) return;
-            float step = KINFO[h.kind].speed * dt;
-            Pos t = m.path[m.i];
+        for (auto e : units) {
+            if (!reg.valid(e)) continue;
+            auto& u = reg.get<Unit>(e);
+            Pos& p = reg.get<Pos>(e);
+            Kind k = reg.get<Info>(e).kind;
+            if (u.i >= u.path.size()) { if (!u.path.empty()) u.path.clear(); u.i = 0; if (reg.all_of<AMove>(e) && u.state != US_Attack) reg.remove<AMove>(e); continue; }
+            float step = KINFO[k].speed * dt;
+            Pos t = u.path[u.i];
             float dx = t.x - p.x, dy = t.y - p.y, d = std::hypot(dx, dy);
-            if (d <= step) { p = t; if (++m.i >= m.path.size()) { m.path.clear(); m.i = 0; } }
+            u.aim = uint8_t(int((std::atan2(dy, dx) + 3.14159f) / 6.28319f * 255.f));
+            if (u.state == US_Idle) u.state = US_Move;
+            if (d <= step) { p = t; u.i++; }
             else { p.x += dx / d * step; p.y += dy / d * step; }
-        });
+        }
 
-        // economy
-        reg.view<Pos, Health, Owner>().each([&](const Pos& p, const Health& h, const Owner& o) {
-            if (o.id == 0 || !pl[o.id].active) return;
-            uint8_t t = terrain[ix(int(p.x), int(p.y))];
-            Player& pp = pl[o.id];
-            if (h.kind == K_TownHall) { pp.gold += 1.f * dt; pp.wood += .5f * dt; }
-            else if (h.kind == K_GoldMine) pp.gold += 2.f * (t == T_Mountain ? 2.f : 1.f) * dt;
-            else if (h.kind == K_Lumber) pp.wood += 2.f * (t == T_Forest ? 2.f : 1.f) * dt;
-        });
-
-        // fog of war: everything owned reveals around itself
+        if (tick % 20 == 0) {
+            // cold attrition in the snow unless a campfire warms the spot
+            std::vector<Pos> fires;
+            std::vector<int> fireOwner;
+            for (auto e : blds) if (reg.get<Info>(e).kind == K_Campfire && complete(e)) { fires.push_back(posOf(e)); fireOwner.push_back(reg.get<Owner>(e).id); }
+            auto warm = [&](Pos p, int owner) {
+                for (size_t i = 0; i < fires.size(); i++)
+                    if (allied(owner, fireOwner[i]) && std::hypot(p.x - fires[i].x, p.y - fires[i].y) <= WARMTH_RADIUS) return true;
+                return false;
+            };
+            std::vector<entt::entity> all = units;
+            all.insert(all.end(), blds.begin(), blds.end());
+            for (auto e : all) {
+                if (!reg.valid(e)) continue;
+                int ow = reg.get<Owner>(e).id;
+                if (ow == 0) continue;
+                Pos p = posOf(e);
+                if (biome(int(std::floor(p.x)), int(std::floor(p.y))) != B_Snow || warm(p, ow)) continue;
+                auto& h = reg.get<Health>(e);
+                if (isBuilding(reg.get<Info>(e).kind)) h.hp = std::max(h.maxhp * .25f, h.hp - h.maxhp * COLD_BUILDING_FRAC);
+                else damage(e, COLD_UNIT_DPS, 0);
+            }
+            processKills();
+            // wake up NPC chunks around every player-owned entity
+            for (auto e : all) {
+                if (!reg.valid(e) || reg.get<Owner>(e).id == 0) continue;
+                Pos p = posOf(e);
+                int cx = chunkOf(int(std::floor(p.x))), cy = chunkOf(int(std::floor(p.y)));
+                for (int y = cy - 2; y <= cy + 2; y++) for (int x = cx - 2; x <= cx + 2; x++) spawnChunkNpcs(x, y);
+            }
+        }
+        if (tick % 4 == 0)                                             // exploration by online players' units
+            for (auto e : units) {
+                if (!reg.valid(e)) continue;
+                int ow = reg.get<Owner>(e).id;
+                if (ow < 1 || !pl[ow].online) continue;
+                Pos p = reg.get<Pos>(e);
+                IV t{int(std::floor(p.x)), int(std::floor(p.y))};
+                auto& u = reg.get<Unit>(e);
+                if (u.lastRev.x == t.x && u.lastRev.y == t.y) continue;
+                u.lastRev = t;
+                reveal(ow, t.x, t.y, KINFO[reg.get<Info>(e).kind].vision);
+            }
         if (tick % 4 == 0)
-            reg.view<Pos, Health, Owner>().each([&](const Pos& p, const Health& h, const Owner& o) {
-                if (o.id) reveal(o.id, int(p.x), int(p.y), KINFO[h.kind].vision);
-            });
+            for (auto e : blds) {   // keep building vision fresh for players who just (re)joined
+                int ow = reg.get<Owner>(e).id;
+                if (ow < 1 || !pl[ow].online || !complete(e)) continue;
+                if (tick % 40 != 0) continue;
+                Pos c = posOf(e);
+                reveal(ow, int(std::floor(c.x)), int(std::floor(c.y)), KINFO[reg.get<Info>(e).kind].vision);
+            }
 
         for (int id = 1; id <= MAX_PLAYERS; id++) {
-            if (!pl[id].active) continue;
+            if (!pl[id].online) continue;
             if (tick % 2 == 0) sendState(id);
             if (tick % 10 == 0) sendFog(id);
         }
+        if (tick % 2 == 0) effects.clear();
+        if (tick % 20 == 0) sendRoster();
+        if (clock - lastSave > 30) { save(); lastSave = clock; }
+    }
+
+    void combat(entt::entity e, Unit& u, Kind k, int ow, Pos& p, float dt) {
+        entt::entity tg = entt::null;
+        bool explicitOrder = false;
+        if (auto* a = reg.try_get<Attack>(e)) {
+            tg = find(a->target);
+            explicitOrder = true;
+            if (tg == entt::null || dying.count(a->target) || allied(ow, reg.get<Owner>(tg).id)) { reg.remove<Attack>(e); tg = entt::null; explicitOrder = false; }
+        }
+        bool amove = reg.all_of<AMove>(e);
+        if (tg == entt::null && (isArmy(k) || amove) && u.repath <= 0) {
+            float aggro = amove ? 7.f : 5.f;
+            tg = nearestHostile(p, ow, aggro, amove);
+            if (tg == entt::null) u.repath = .3f;
+        }
+        if (tg == entt::null) return;
+        Pos tp = posOf(tg);
+        float d = rectDist(p, tg);
+        u.aim = uint8_t(int((std::atan2(tp.y - p.y, tp.x - p.x) + 3.14159f) / 6.28319f * 255.f));
+        if (d <= KINFO[k].range) {
+            u.path.clear();
+            u.i = 0;
+            u.state = US_Attack;
+            damage(tg, KINFO[k].dps * dt, ow);
+            if (k == K_Archer && u.cd <= 0) { u.cd = .8f; fx(E_Arrow, p.x, p.y - .4f, tp.x, tp.y); }
+        } else if (u.repath <= 0 || u.path.empty()) {
+            u.repath = 1.f;
+            bool bld = isBuilding(reg.get<Info>(tg).kind);
+            if (!order(e, tp, bld ? reg.get<Uid>(tg).id : 0) && explicitOrder) reg.remove<Attack>(e);
+            if (!explicitOrder && !reg.all_of<Attack>(e)) { /* auto-acquired targets are re-evaluated each pass */ }
+        }
+        if (!explicitOrder && tg != entt::null && !reg.all_of<Attack>(e) && d > KINFO[k].range && !u.path.empty()) u.state = US_Move;
+    }
+
+    void runWorker(entt::entity e, Unit& u, Worker& w, float dt) {
+        Pos p = reg.get<Pos>(e);
+        auto home = find(w.home);
+        if (home == entt::null) { reg.remove<Worker>(e); return; }
+        auto& hb = reg.get<Building>(home);
+        int ow = reg.get<Owner>(e).id;
+        auto toward = [&](entt::entity b) { return order(e, posOf(b), reg.get<Uid>(b).id); };
+        auto findStorage = [&]() {
+            entt::entity best = entt::null;
+            float bd = 1e9f;
+            reg.view<Info, Building, Owner>().each([&](entt::entity s, const Info& i, const Building& sb, const Owner& so) {
+                if (!isStorage(i.kind) || sb.progress < 1.f || !allied(ow, so.id)) return;
+                float d = std::hypot(p.x - footCenter(i.kind, sb.tx, sb.ty).x, p.y - footCenter(i.kind, sb.tx, sb.ty).y);
+                if (d < bd) { bd = d; best = s; }
+            });
+            return best;
+        };
+        switch (w.phase) {
+        case 0: {
+            if (hb.progress < 1.f) return;
+            if (rectDist(p, home) > 1.6f) { if (u.path.empty()) toward(home); return; }
+            float tot = 0;
+            for (float s : hb.stock) tot += s;
+            if (tot >= 8.f && findStorage() != entt::null) {
+                float f = std::min(1.f, 30.f / tot);
+                for (int r = 0; r < R_Count; r++) { w.cargo[r] = hb.stock[r] * f; hb.stock[r] -= w.cargo[r]; }
+                w.phase = 1;
+                w.timer = 1.f;
+            }
+            break;
+        }
+        case 1:
+            u.state = US_Work;
+            u.path.clear();
+            w.timer -= dt;
+            if (w.timer <= 0) w.phase = 2;
+            break;
+        case 2: {
+            auto st = findStorage();
+            if (st == entt::null) return;
+            if (rectDist(p, st) <= 1.5f) {
+                for (int r = 0; r < R_Count; r++) { pl[ow].res[r] += w.cargo[r]; w.cargo[r] = 0; }
+                w.phase = 3;
+                u.path.clear();
+                return;
+            }
+            if (u.path.empty() && !toward(st)) w.timer = 0;
+            break;
+        }
+        default:
+            if (rectDist(p, home) <= 1.6f) { w.phase = 0; u.path.clear(); }
+            else if (u.path.empty()) toward(home);
+            break;
+        }
+    }
+
+    // ---------------------------------------------------------------- networking out
+    struct Source { float x, y, r; };
+    std::vector<Source> sourcesFor(int id) {
+        std::vector<Source> s;
+        reg.view<Owner, Info>().each([&](entt::entity e, const Owner& o, const Info& i) {
+            if (o.id == 0 || !allied(id, o.id) || !complete(e)) return;
+            Pos p = posOf(e);
+            s.push_back({p.x, p.y, float(KINFO[i.kind].vision) + (isBuilding(i.kind) ? float(KINFO[i.kind].fw) * .5f : 0.f)});
+        });
+        return s;
+    }
+    static bool seen(const std::vector<Source>& s, float x, float y, float pad = 0) {
+        for (auto& v : s) if ((x - v.x) * (x - v.x) + (y - v.y) * (y - v.y) <= (v.r + pad) * (v.r + pad)) return true;
+        return false;
     }
 
     void sendState(int id) {
-        Player& p = pl[id];
-        auto vis = vision(id);
+        Profile& p = pl[id];
+        auto src = sourcesFor(id);
         Writer w;
-        w.put<uint8_t>(S_State).put<float>(p.gold).put<float>(p.wood);
-        uint16_t am = 0, pm = 0;
-        for (int i = 0; i <= MAX_PLAYERS; i++) { if (p.allied[i]) am |= uint16_t(1 << i); if (pl[i].pending[id]) pm |= uint16_t(1 << i); }
-        w.put<uint16_t>(am).put<uint16_t>(pm);
+        w.put<uint8_t>(S_State);
+        for (int r = 0; r < R_Count; r++) w.put<float>(p.res[r]);
         size_t cp = w.b.size();
         w.put<uint16_t>(0);
         uint16_t n = 0;
-        reg.view<Pos, Health, Owner>().each([&](entt::entity e, const Pos& ps, const Health& h, const Owner& o) {
-            int tx = std::clamp(int(ps.x), 0, MAP_W - 1), ty = std::clamp(int(ps.y), 0, MAP_H - 1);
-            if (!(allied(id, o.id) || vis[ix(tx, ty)])) return;
-            w.put<uint32_t>(entt::to_integral(e)).put<uint8_t>(h.kind).put<uint8_t>(o.id).put<float>(ps.x).put<float>(ps.y);
+        reg.view<Uid, Owner, Info, Health>().each([&](entt::entity e, const Uid& uid, const Owner& o, const Info& in, const Health& h) {
+            Pos ps = posOf(e);
+            if (!allied(id, o.id) && !seen(src, ps.x, ps.y, isBuilding(in.kind) ? 2.f : 0.f)) return;
+            uint8_t state = 0, aux = 0, aim = 0, prog = 100;
+            uint16_t stock = 0;
+            if (const Unit* u = reg.try_get<Unit>(e)) {
+                state = u->state;
+                aim = u->aim;
+                if (const Worker* wk = reg.try_get<Worker>(e)) {
+                    float best = 0;
+                    for (int r = 0; r < R_Count; r++) if (wk->cargo[r] > best) { best = wk->cargo[r]; aux = uint8_t(r + 1); }
+                }
+            } else {
+                const Building& b = reg.get<Building>(e);
+                aux = in.level;
+                prog = uint8_t(std::min(1.f, b.progress) * 100.f);
+                float tot = 0;
+                for (float s : b.stock) tot += s;
+                stock = uint16_t(std::min(tot, 65000.f));
+            }
+            w.put<uint32_t>(uid.id).put<uint8_t>(in.kind).put<uint8_t>(o.id).put<float>(ps.x).put<float>(ps.y);
             w.put<uint16_t>(uint16_t(std::max(0.f, h.hp))).put<uint16_t>(uint16_t(h.maxhp));
+            w.put<uint8_t>(state).put<uint8_t>(aux).put<uint8_t>(aim).put<uint8_t>(prog).put<uint16_t>(stock);
             n++;
         });
         std::memcpy(&w.b[cp], &n, 2);
+        size_t ep = w.b.size();
+        w.put<uint16_t>(0);
+        uint16_t ne = 0;
+        for (auto& f : effects)
+            if (seen(src, f.x, f.y, 3.f) || seen(src, f.x2, f.y2, 3.f)) { w.put<uint8_t>(f.type).put<float>(f.x).put<float>(f.y).put<float>(f.x2).put<float>(f.y2); ne++; }
+        std::memcpy(&w.b[ep], &ne, 2);
         sendPacket(p.peer, w);
     }
+};
 
-    void sendFog(int id) {
-        auto vis = vision(id);
+void Server::sendFog(int id) {
+    Profile& p = pl[id];
+    std::unordered_map<int64_t, Bits> uni = p.expl;
+    for (int a = 1; a <= MAX_PLAYERS; a++)
+        if (a != id && pl[a].used && pl[a].allied[id])
+            for (auto& [k, b] : pl[a].expl) { Bits& u = uni.try_emplace(k, Bits{}).first->second; for (size_t i = 0; i < 32; i++) u[i] |= b[i]; }
+    std::vector<std::pair<int64_t, Bits>> fogOut;
+    std::vector<int64_t> terrOut;
+    for (auto& [k, b] : uni) {
+        auto it = p.sentFog.find(k);
+        if (it != p.sentFog.end() && it->second == b) continue;
+        if (fogOut.size() >= 150) break;
+        fogOut.push_back({k, b});
+        p.sentFog[k] = b;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++) {
+                int64_t nk = chunkKey(keyCx(k) + dx, keyCy(k) + dy);
+                if (p.sentTerr.insert(nk).second) terrOut.push_back(nk);
+            }
+    }
+    if (fogOut.empty()) return;
+    Writer w;
+    w.put<uint8_t>(S_Fog).put<uint16_t>(uint16_t(terrOut.size()));
+    for (auto k : terrOut) {
+        int cx = keyCx(k), cy = keyCy(k);
+        biome(cx * CH, cy * CH);
+        w.put<int32_t>(cx).put<int32_t>(cy);
+        w.bytes(terr[k].data(), CH * CH);
+    }
+    w.put<uint16_t>(uint16_t(fogOut.size()));
+    for (auto& [k, b] : fogOut) { w.put<int32_t>(keyCx(k)).put<int32_t>(keyCy(k)); w.bytes(b.data(), 32); }
+    sendPacket(p.peer, w);
+}
+
+void Server::sendRoster() {
+    for (int id = 1; id <= MAX_PLAYERS; id++) {
+        if (!pl[id].online) continue;
         Writer w;
-        w.put<uint8_t>(S_Fog);
-        std::vector<uint8_t> bits((N + 7) / 8, 0);
-        for (int i = 0; i < N; i++) if (vis[i]) bits[i >> 3] |= uint8_t(1 << (i & 7));
-        w.bytes(bits.data(), bits.size());
+        w.put<uint8_t>(S_Roster);
+        uint8_t n = 0;
+        size_t cp = w.b.size();
+        w.put<uint8_t>(0);
+        for (int o = 1; o <= MAX_PLAYERS; o++) {
+            if (!pl[o].used) continue;
+            uint8_t flags = uint8_t((pl[o].online ? 1 : 0) | (pl[id].allied[o] ? 2 : 0) | (pl[o].pending[id] ? 4 : 0) | (pl[id].pending[o] ? 8 : 0));
+            w.put<uint8_t>(uint8_t(o)).put<uint8_t>(flags);
+            w.str(pl[o].name);
+            n++;
+        }
+        w.b[cp] = n;
         sendPacket(pl[id].peer, w);
     }
+}
 
-    void run() {
-        using clk = std::chrono::steady_clock;
-        auto next = clk::now();
-        const auto step = std::chrono::milliseconds(1000 / TICK_HZ);
-        for (;;) {
-            ENetEvent ev;
-            while (enet_host_service(host, &ev, 0) > 0) {
-                switch (ev.type) {
-                case ENET_EVENT_TYPE_CONNECT: onConnect(ev.peer); break;
-                case ENET_EVENT_TYPE_RECEIVE: onPacket(ev.peer, ev.packet); enet_packet_destroy(ev.packet); break;
-                case ENET_EVENT_TYPE_DISCONNECT: onDisconnect(ev.peer); break;
-                default: break;
-                }
-            }
-            update(1.f / TICK_HZ);
-            enet_host_flush(host);
-            next += step;
-            auto now = clk::now();
-            if (next < now - std::chrono::seconds(1)) next = now;
-            std::this_thread::sleep_until(next);
+}  // namespace
+
+// ---------------------------------------------------------------- persistence (binary savegame)
+namespace {
+
+void Server::save() {
+    Writer w;
+    w.put<uint32_t>(SAVE_MAGIC).put<uint32_t>(seed).put<uint32_t>(nextUid).put<double>(clock);
+    uint32_t np = 0;
+    for (int i = 1; i <= MAX_PLAYERS; i++) if (pl[i].used) np++;
+    w.put<uint32_t>(np);
+    for (int i = 1; i <= MAX_PLAYERS; i++) {
+        if (!pl[i].used) continue;
+        const Profile& p = pl[i];
+        w.put<uint8_t>(uint8_t(i));
+        w.str(p.uuid);
+        w.str(p.name);
+        w.put<uint64_t>(p.lastSeen);
+        for (float r : p.res) w.put<float>(r);
+        for (int a = 0; a <= MAX_PLAYERS; a++) w.put<uint8_t>(uint8_t((p.allied[a] ? 1 : 0) | (p.pending[a] ? 2 : 0)));
+        w.put<float>(p.cam.x).put<float>(p.cam.y);
+        w.put<uint32_t>(uint32_t(p.expl.size()));
+        for (auto& [k, b] : p.expl) { w.put<int64_t>(k); w.bytes(b.data(), 32); }
+    }
+    w.put<uint32_t>(uint32_t(spawned.size()));
+    for (auto k : spawned) w.put<int64_t>(k);
+    w.put<uint32_t>(uint32_t(byUid.size()));
+    reg.view<Uid, Owner, Info, Health>().each([&](entt::entity e, const Uid& uid, const Owner& o, const Info& in, const Health& h) {
+        w.put<uint32_t>(uid.id).put<uint8_t>(in.kind).put<uint8_t>(o.id).put<uint8_t>(in.level).put<float>(h.hp).put<float>(h.maxhp);
+        if (const Building* b = reg.try_get<Building>(e)) {
+            w.put<uint8_t>(1).put<int32_t>(b->tx).put<int32_t>(b->ty).put<float>(b->progress);
+            for (float s : b->stock) w.put<float>(s);
+            w.put<float>(b->respawn);
+        } else {
+            Pos p = reg.get<Pos>(e);
+            w.put<uint8_t>(0).put<float>(p.x).put<float>(p.y);
+            const Worker* wk = reg.try_get<Worker>(e);
+            w.put<uint8_t>(wk ? 1 : 0);
+            if (wk) { w.put<uint32_t>(wk->home).put<uint8_t>(wk->phase); for (float c : wk->cargo) w.put<float>(c); }
+        }
+    });
+    std::string tmp = savePath + ".tmp";
+    {
+        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        if (!f) { std::printf("Could not write %s\n", tmp.c_str()); return; }
+        f.write(reinterpret_cast<const char*>(w.b.data()), std::streamsize(w.b.size()));
+    }
+    std::error_code ec;
+    std::filesystem::rename(tmp, savePath, ec);
+    if (ec) std::printf("Could not replace %s: %s\n", savePath.c_str(), ec.message().c_str());
+}
+
+bool Server::load() {
+    std::ifstream f(savePath, std::ios::binary);
+    if (!f) return false;
+    std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    Reader r{data.data(), data.data() + data.size()};
+    if (r.get<uint32_t>() != SAVE_MAGIC) { std::puts("Savegame has an unknown format; starting fresh."); return false; }
+    seed = r.get<uint32_t>();
+    rng.seed(seed ^ uint32_t(nowSec()));
+    nextUid = r.get<uint32_t>();
+    clock = r.get<double>();
+    uint32_t np = r.get<uint32_t>();
+    for (uint32_t n = 0; n < np && r.ok; n++) {
+        int id = r.get<uint8_t>();
+        if (id < 1 || id > MAX_PLAYERS) return false;
+        Profile& p = pl[id];
+        p.used = true;
+        p.uuid = r.str();
+        p.name = r.str();
+        p.lastSeen = r.get<uint64_t>();
+        for (float& v : p.res) v = r.get<float>();
+        for (int a = 0; a <= MAX_PLAYERS; a++) { uint8_t b = r.get<uint8_t>(); p.allied[a] = b & 1; p.pending[a] = b & 2; }
+        p.cam.x = r.get<float>();
+        p.cam.y = r.get<float>();
+        uint32_t ne = r.get<uint32_t>();
+        for (uint32_t i = 0; i < ne && r.ok; i++) {
+            int64_t k = r.get<int64_t>();
+            Bits b{};
+            if (auto d = r.bytes(32)) std::memcpy(b.data(), d, 32);
+            p.expl[k] = b;
         }
     }
-};
+    uint32_t ns = r.get<uint32_t>();
+    for (uint32_t i = 0; i < ns && r.ok; i++) spawned.insert(r.get<int64_t>());
+    uint32_t nent = r.get<uint32_t>();
+    for (uint32_t n = 0; n < nent && r.ok; n++) {
+        uint32_t uid = r.get<uint32_t>();
+        Kind k = Kind(r.get<uint8_t>());
+        uint8_t owner = r.get<uint8_t>(), level = r.get<uint8_t>();
+        float hp = r.get<float>(), mhp = r.get<float>();
+        uint8_t isB = r.get<uint8_t>();
+        if (!r.ok || k >= K_Count) return false;
+        auto e = makeBase(k, owner, uid);
+        reg.get<Info>(e).level = level;
+        reg.get<Health>(e) = Health{hp, mhp, 0};
+        if (isB) {
+            Building b{};
+            b.tx = r.get<int32_t>(); b.ty = r.get<int32_t>(); b.progress = r.get<float>();
+            for (float& s : b.stock) s = r.get<float>();
+            b.respawn = r.get<float>();
+            reg.emplace<Building>(e, b);
+            for (int y = b.ty; y < b.ty + KINFO[k].fh; y++)
+                for (int x = b.tx; x < b.tx + KINFO[k].fw; x++) occ[tkey(x, y)] = uid;
+        } else {
+            Pos p{r.get<float>(), r.get<float>()};
+            reg.emplace<Pos>(e, p);
+            reg.emplace<Unit>(e);
+            if (k == K_Sheep) reg.emplace<Wander>(e, Wander{1.f});
+            if (r.get<uint8_t>()) {
+                Worker w;
+                w.home = r.get<uint32_t>();
+                w.phase = r.get<uint8_t>();
+                for (float& c : w.cargo) c = r.get<float>();
+                if (w.phase == 1) w.phase = 2;
+                reg.emplace<Worker>(e, w);
+            }
+        }
+    }
+    if (!r.ok) { std::puts("Savegame is truncated; starting fresh."); return false; }
+    return true;
+}
+
+void Server::run() {
+    using clk = std::chrono::steady_clock;
+    auto next = clk::now();
+    const auto step = std::chrono::milliseconds(1000 / TICK_HZ);
+    while (!g_quit) {
+        ENetEvent ev;
+        while (enet_host_service(host, &ev, 0) > 0) {
+            switch (ev.type) {
+            case ENET_EVENT_TYPE_CONNECT: break;
+            case ENET_EVENT_TYPE_RECEIVE: onPacket(ev.peer, ev.packet); enet_packet_destroy(ev.packet); break;
+            case ENET_EVENT_TYPE_DISCONNECT: onDisconnect(ev.peer); break;
+            default: break;
+            }
+        }
+        update(1.f / TICK_HZ);
+        enet_host_flush(host);
+        next += step;
+        auto now = clk::now();
+        if (next < now - std::chrono::seconds(1)) next = now;
+        std::this_thread::sleep_until(next);
+    }
+    std::puts("Shutting down, saving world...");
+}
 
 }  // namespace
 
 int main(int argc, char** argv) {
     int port = argc > 1 ? std::atoi(argv[1]) : DEFAULT_PORT;
     uint32_t seed = argc > 2 ? uint32_t(std::strtoul(argv[2], nullptr, 10)) : std::random_device{}();
+    std::string save = argc > 3 ? argv[3] : "savegame.bin";
     if (enet_initialize() != 0) { std::puts("enet_initialize failed"); return 1; }
+    std::signal(SIGINT, [](int) { g_quit = 1; });
+    std::signal(SIGTERM, [](int) { g_quit = 1; });
     {
-        Server s(uint16_t(port), seed);
+        Server s(uint16_t(port), seed, save);
         s.run();
     }
     enet_deinitialize();

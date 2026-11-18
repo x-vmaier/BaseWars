@@ -145,3 +145,6 @@ $RECYCLE.BIN/
 
 build/
 .DS_Store
+savegame.bin
+savegame.bin.tmp
+profile.txt
