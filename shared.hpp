@@ -29,11 +29,11 @@ inline const char* repTier(int rep) { return rep <= -60 ? "Hated" : rep <= HOSTI
 
 enum Biome : uint8_t { B_Ocean, B_Plains, B_Forest, B_Highlands, B_Desert, B_Flowers, B_Snow, B_Count };
 enum Res : uint8_t { R_Wood, R_Gold, R_Stone, R_Meat, R_Count };
-enum Kind : uint8_t { K_TownHall, K_Outpost, K_Harbour, K_Barracks, K_Mine, K_Lumber, K_Campfire,     // buildings
+enum Kind : uint8_t { K_TownHall, K_Outpost, K_Harbour, K_Storage, K_Mine, K_Lumber, K_Campfire, K_Archery,   // buildings
                       K_Pawn, K_Warrior, K_Archer, K_Lancer, K_Monk, K_Ship, K_Sheep, K_Count };       // units / NPCs
 enum Msg : uint8_t { C_Hello, C_Build, C_Train, C_Move, C_Attack, C_AttackMove, C_Ally, C_Upgrade, C_Cam,
-                     C_ClanCreate, C_ClanJoin, C_ClanLeave, C_Transfer, C_Donate,
-                     S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map };
+                     C_ClanCreate, C_ClanJoin, C_ClanLeave, C_Transfer, C_Donate, C_SetHaul, C_UpgradeUnit, C_Chat, C_ClanLeader,
+                     S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map, S_Chat };
 enum EffectType : uint8_t { E_Explosion, E_Dust, E_Splash, E_Arrow, E_Heal, E_Fire };
 enum UnitState : uint8_t { US_Idle, US_Move, US_Attack, US_Work, US_Heal };
 enum AllyAct : uint8_t { AA_Invite, AA_Break };
@@ -57,10 +57,11 @@ inline constexpr KindInfo KINFO[K_Count] = {
     {"Town Hall", true, 4, 3, {250, 200, 150, 0}, 800, 0, 14, 6.5f, 40, 9},
     {"Outpost", true, 2, 2, {80, 40, 60, 0}, 350, 0, 8, 7.f, 20, 8},
     {"Harbour", true, 2, 2, {120, 60, 40, 0}, 300, 0, 0, 0, 25, 7},
-    {"Barracks", true, 2, 2, {100, 50, 80, 0}, 450, 0, 0, 0, 30, 5},
+    {"Storage House", true, 2, 2, {100, 20, 60, 0}, 400, 0, 0, 0, 25, 5},
     {"Mine", true, 2, 2, {60, 20, 0, 0}, 250, 0, 0, 0, 18, 4},
     {"Lumber Camp", true, 2, 2, {40, 10, 0, 0}, 250, 0, 0, 0, 15, 4},
     {"Campfire", true, 1, 1, {20, 0, 0, 0}, 60, 0, 0, 0, 5, 4},
+    {"Archery", true, 3, 2, {120, 60, 80, 0}, 450, 0, 0, 0, 30, 5},
     {"Pawn", false, 1, 1, {0, 0, 0, 30}, 40, 2.6f, 3, 1.2f, 0, 5},
     {"Warrior", false, 1, 1, {10, 20, 0, 40}, 120, 2.6f, 12, 1.4f, 0, 6},
     {"Archer", false, 1, 1, {30, 20, 0, 35}, 60, 2.8f, 9, 6.f, 0, 7},
@@ -73,17 +74,34 @@ inline constexpr int MAX_LEVEL = 3;
 
 inline bool isBuilding(Kind k) { return KINFO[k].building; }
 inline bool isResourceBuilding(Kind k) { return k == K_Mine || k == K_Lumber || k == K_Harbour; }
-inline bool isStorage(Kind k) { return k == K_TownHall || k == K_Outpost; }
+inline bool isStorage(Kind k) { return k == K_TownHall || k == K_Outpost || k == K_Storage; }
 inline bool isArmy(Kind k) { return k == K_Warrior || k == K_Archer || k == K_Lancer; }
+// Troops are trained only in the Archery; the Harbour builds ships.
 inline bool canTrain(Kind building, Kind unit) {
-    switch (building) {
-    case K_TownHall: return unit == K_Pawn || unit == K_Monk;
-    case K_Outpost: return unit == K_Pawn || unit == K_Warrior;
-    case K_Barracks: return unit == K_Warrior || unit == K_Archer || unit == K_Lancer || unit == K_Monk;
-    case K_Harbour: return unit == K_Ship;
-    default: return false;
-    }
+    if (building == K_Archery) return unit == K_Pawn || unit == K_Warrior || unit == K_Archer || unit == K_Lancer || unit == K_Monk;
+    return building == K_Harbour && unit == K_Ship;
 }
+inline int unitUnlockLevel(Kind u) { return u == K_Pawn || u == K_Warrior ? 1 : (u == K_Archer || u == K_Monk ? 2 : (u == K_Lancer ? 3 : 1)); }   // Archery level needed
+// Storage capacity (total resources) by building level 1..3.
+inline float storageCap(Kind k, int level) {
+    static const float th[3] = {3000, 6000, 10000}, op[3] = {300, 600, 1000}, sh[3] = {800, 1600, 2800};
+    int i = std::clamp(level, 1, 3) - 1;
+    return k == K_TownHall ? th[i] : (k == K_Outpost ? op[i] : (k == K_Storage ? sh[i] : 0.f));
+}
+inline constexpr float HAULER_CARRY = 400.f;
+inline constexpr int MAX_UNIT_LEVEL = 5;
+inline bool isTroop(Kind k) { return k == K_Pawn || k == K_Warrior || k == K_Archer || k == K_Lancer || k == K_Monk; }
+inline float unitHpMul(int lv) { return 1.f + .22f * float(lv - 1); }
+inline float unitDmgMul(int lv) { return 1.f + .18f * float(lv - 1); }
+inline float unitSpeedMul(int lv) { return 1.f + .03f * float(lv - 1); }
+inline int troopUpgradeNeedsArchery(int toLevel) { return toLevel <= 2 ? 1 : (toLevel <= 4 ? 2 : 3); }
+inline float damageVs(Kind attacker, Kind target) {      // unit roles: lancers shred units, archers are poor against walls
+    bool bld = KINFO[target].building;
+    if (attacker == K_Lancer) return bld ? .6f : 1.3f;
+    if (attacker == K_Archer) return bld ? .7f : 1.f;
+    return 1.f;
+}
+inline float armorOf(Kind target) { return target == K_Warrior ? .8f : 1.f; }   // warriors take 20% less damage
 inline float upgradeCostMul(int level) { return 1.f + float(level); }       // cost of going from `level` to level+1
 inline float levelMul(int level) { return 1.f + 0.5f * float(level - 1); }  // production / defence multiplier
 inline float levelHp(int level) { return 1.f + 0.25f * float(level - 1); }

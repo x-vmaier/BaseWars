@@ -24,19 +24,21 @@ namespace {
 
 volatile std::sig_atomic_t g_quit = 0;
 using Bits = std::array<uint8_t, 32>;
-constexpr uint32_t SAVE_MAGIC = 0x33535742u;  // "BWS3"
+constexpr uint32_t SAVE_MAGIC = 0x34535742u;  // "BWS4"
 
 struct Uid { uint32_t id; };
 struct Owner { uint8_t id; };                                   // 0 = neutral
 struct Health { float hp, maxhp; uint8_t lastHit; };
 struct Info { Kind kind; uint8_t level; };
-struct Building { int tx, ty; float progress, stock[R_Count], respawn, cd; };
+struct Building { int tx, ty; float progress, stock[R_Count], respawn, cd; uint8_t haulPct = 75; };   // storage buildings keep their stock here
 struct Unit { std::vector<Pos> path; size_t i = 0; uint8_t state = US_Idle, aim = 0; float cd = 0, repath = 0; IV lastRev{INT_MIN, INT_MIN}; };
 struct Attack { uint32_t target; };
 struct AMove { Pos dest; };
-struct Worker { uint32_t home; uint8_t phase = 0; float cargo[R_Count]{}; float timer = 0; };  // 0 wait, 1 loading, 2 carry, 3 return
+struct Worker { uint32_t home; uint8_t phase = 0; float cargo[R_Count]{}; float timer = 0; uint32_t dest = 0; };  // 0 wait, 1 loading, 2 carry, 3 return
 struct Wander { float timer; };
 struct Convoy { uint8_t from, to; float cargo[R_Count]; float repath = 0, bestDist = 1e9f; int stuck = 0; };   // tribute pawn walking to a clan mate
+struct Haul { uint32_t storage; uint8_t phase = 0; float cargo[R_Count]{}; float repath = 0, bestDist = 1e9f; int stuck = 0; };   // pawn troop fetching stock from an outpost / storage house
+struct Raider { uint8_t target; double until; float repath = 0; };                                                         // faction raiding party
 struct Home { float x, y, helpUntil = 0; };                                                                    // faction units idle around their town
 struct TownTag { uint16_t town; };
 struct Hit { uint32_t by = 0; double t = -100; };                                                              // last attacker
@@ -55,7 +57,8 @@ struct Profile {
     std::unordered_map<int64_t, Bits> sentFog;
     std::unordered_set<int64_t> sentTerr;
     double lastWarn = -100;
-    uint8_t clan = 0;
+    uint8_t clan = 0, ulevel[K_Count]{};
+    double raidNext[FACTION_COUNT]{}, lastLootWarn = -100;
     float rep[FACTION_COUNT]{};
     double helpCool[FACTION_COUNT]{};
 };
@@ -131,6 +134,34 @@ struct Server {
         if (isFactionOwner(a)) return repOf(b, a) <= float(HOSTILE_REP);
         if (isFactionOwner(b)) return repOf(a, b) <= float(HOSTILE_REP);
         return !allied(a, b);
+    }
+    int ulv(int owner, Kind k) const { return isPlayer(owner) ? std::max<int>(1, pl[owner].ulevel[k]) : 1; }
+    float totalRes(int id) const { float t = 0; for (float v : pl[id].res) t += v; return t; }
+    float stockOf(entt::entity e) const {                                // the Town Hall stores the player's resources
+        const auto& i = reg.get<Info>(e);
+        int o = reg.get<Owner>(e).id;
+        if (i.kind == K_TownHall && isPlayer(o)) return totalRes(o);
+        float t = 0;
+        for (float v : reg.get<Building>(e).stock) t += v;
+        return t;
+    }
+    float capOf(entt::entity e) const { const auto& i = reg.get<Info>(e); return storageCap(i.kind, i.level); }
+    // puts as much of `cargo` as fits into storage building `st`; returns the amount stored
+    float storeCargo(entt::entity st, float* cargo) {
+        int o = reg.get<Owner>(st).id;
+        float tot = 0;
+        for (int r = 0; r < R_Count; r++) tot += cargo[r];
+        float room = capOf(st) - stockOf(st);
+        if (tot <= 0 || room <= 0) return 0;
+        float f = std::min(1.f, room / tot), stored = 0;
+        bool th = reg.get<Info>(st).kind == K_TownHall;
+        for (int r = 0; r < R_Count; r++) {
+            float add = cargo[r] * f;
+            if (th) pl[o].res[r] += add; else reg.get<Building>(st).stock[r] += add;
+            cargo[r] -= add;
+            stored += add;
+        }
+        return stored;
     }
     std::string ownerName(int o) const { return isFactionOwner(o) ? FACTION_NAME[o - FACTION_BASE] : (isPlayer(o) ? pl[o].name : std::string("Wildlife")); }
     int colorOf(int id) const { return (id - 1) % TEAM_COLORS; }
@@ -222,6 +253,7 @@ struct Server {
         auto e = makeBase(k, owner);
         reg.emplace<Pos>(e, Pos{x, y});
         reg.emplace<Unit>(e);
+        { auto& h = reg.get<Health>(e); h.hp = h.maxhp = KINFO[k].hp * unitHpMul(ulv(owner, k)); }
         if (k == K_Sheep) reg.emplace<Wander>(e, Wander{float(rng() % 300) / 100.f});
         return e;
     }
@@ -380,6 +412,27 @@ struct Server {
             reg.emplace_or_replace<Attack>(e, Attack{by});
         }
     }
+    // Whoever damages a storage building (Town Hall, Outpost, Storage House) takes resources in proportion to the damage dealt.
+    void lootStorage(entt::entity e, float amt, int attacker) {
+        Kind k = reg.get<Info>(e).kind;
+        if (!isStorage(k) || !complete(e)) return;
+        int o = reg.get<Owner>(e).id;
+        float hpBefore = reg.get<Health>(e).hp + amt, frac = std::clamp(amt / std::max(1.f, hpBefore), 0.f, 1.f);
+        float* stock = (k == K_TownHall && isPlayer(o)) ? pl[o].res : reg.get<Building>(e).stock;
+        float taken[R_Count], tot = 0;
+        for (int r = 0; r < R_Count; r++) { taken[r] = stock[r] * frac; stock[r] -= taken[r]; tot += taken[r]; }
+        if (tot <= 0) return;
+        if (isPlayer(attacker)) {
+            std::vector<int> mates;
+            for (int i = 1; i <= MAX_PLAYERS; i++) if (i != attacker && pl[i].used && sameClan(attacker, i)) mates.push_back(i);
+            float mine = mates.empty() ? 1.f : .5f;              // a clan shares half of its raiders' loot
+            for (int r = 0; r < R_Count; r++) {
+                pl[attacker].res[r] += taken[r] * mine;
+                for (int m : mates) pl[m].res[r] += taken[r] * (1.f - mine) / float(mates.size());
+            }
+        } else if (isFactionOwner(attacker)) facDonated[attacker - FACTION_BASE] += tot;
+        if (isPlayer(o) && pl[o].online && clock - pl[o].lastLootWarn > 10) { pl[o].lastLootWarn = clock; say(o, std::string("Your ") + KINFO[k].name + " is being looted by " + ownerName(attacker) + "!"); }
+    }
     void damage(entt::entity e, float amt, int attacker, uint32_t by = 0) {
         auto& h = reg.get<Health>(e);
         h.hp -= amt;
@@ -390,6 +443,7 @@ struct Server {
             addRep(attacker, o - FACTION_BASE, -amt * .06f);
             alertTown(e, by);
         }
+        if (attacker > 0 && attacker != o && hostile(attacker, o)) lootStorage(e, amt, attacker);
         if (isPlayer(o) && attacker != o && pl[o].online && clock - pl[o].lastWarn > 8) { pl[o].lastWarn = clock; say(o, "Your forces are under attack!"); }
         uint32_t uid = reg.get<Uid>(e).id;
         if (h.hp <= 0 && dying.insert(uid).second) toKill.push_back({e, attacker});
@@ -408,12 +462,13 @@ struct Server {
                 if (tot <= 0) return;
                 if (isPlayer(killer) && killer != owner && !sameClan(killer, owner)) {
                     for (int r = 0; r < R_Count; r++) pl[killer].res[r] += cargo[r];
-                    say(killer, "You raided a supply convoy: +" + std::to_string(int(tot)) + " resources!");
+                    say(killer, "You raided a supply party: +" + std::to_string(int(tot)) + " resources!");
                 }
                 say(owner, "Your convoy was destroyed!");
             };
             if (const Worker* w = reg.try_get<Worker>(e)) raid(w->cargo);
             if (const Convoy* c = reg.try_get<Convoy>(e)) raid(c->cargo);
+            if (const Haul* hl = reg.try_get<Haul>(e)) raid(hl->cargo);
             if (k == K_Sheep && isPlayer(killer)) { pl[killer].res[R_Meat] += 12; say(killer, "Hunted a sheep: +12 meat."); }
             if (isFactionOwner(owner) && isPlayer(killer)) addRep(killer, owner - FACTION_BASE, k == K_TownHall ? -40.f : (isBuilding(k) ? -10.f : -4.f));
             uint16_t town = reg.all_of<TownTag>(e) ? reg.get<TownTag>(e).town : uint16_t(0);
@@ -498,6 +553,9 @@ struct Server {
             pl[id].used = true;
             pl[id].uuid = uuid;
             resetProfile(id);
+            for (int f = 0; f < FACTION_COUNT; f++)                  // about a quarter of the factions are aggressive towards each newcomer
+                if (hash2(int(std::hash<std::string>{}(uuid) & 0x7fffffff), f, seed + 71) % 100 < 25) pl[id].rep[f] = -50.f;
+            if (const char* ag = std::getenv("BW_AGGRO")) { int v = std::atoi(ag); for (int f = 0; f < FACTION_COUNT; f++) if (v >= FACTION_COUNT || v == f) pl[id].rep[f] = -50.f; }      // test hook
         }
         Profile& p = pl[id];
         p.name = name;
@@ -587,7 +645,7 @@ struct Server {
             int n = r.get<uint8_t>();
             for (int i = 0; i < n; i++) {
                 auto e = find(r.get<uint32_t>());
-                if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e) || reg.all_of<Convoy>(e)) continue;
+                if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e)) continue;
                 Kind k = reg.get<Info>(e).kind;
                 if (combatOnly && (k == K_Ship || k == K_Monk)) continue;
                 us.push_back(e);
@@ -600,6 +658,7 @@ struct Server {
             auto k = Kind(r.get<uint8_t>());
             int tx = r.get<int32_t>(), ty = r.get<int32_t>();
             if (!r.ok || k >= K_Count || !isBuilding(k)) return;
+            if (k == K_TownHall) { say(id, "You can only have one Town Hall."); return; }
             PlaceWorld w{*this, id};
             int err = checkPlace(w, k, tx, ty);
             if (err) { say(id, std::string("Cannot build here: ") + PLACE_TEXT[err] + "."); return; }
@@ -615,6 +674,7 @@ struct Server {
             auto k = Kind(r.get<uint8_t>());
             if (!r.ok || be == entt::null || k >= K_Count || isBuilding(k) || !reg.all_of<Building>(be)) return;
             if (reg.get<Owner>(be).id != id || !complete(be) || !canTrain(reg.get<Info>(be).kind, k)) return;
+            if (reg.get<Info>(be).level < unitUnlockLevel(k)) { say(id, std::string(KINFO[k].name) + "s unlock at Archery level " + std::to_string(unitUnlockLevel(k)) + "."); return; }
             if (!afford(id, KINFO[k].cost)) { say(id, "Not enough resources."); return; }
             if (unitCount(id) >= UNIT_CAP) { say(id, "Unit cap reached."); return; }
             Pos at;
@@ -662,6 +722,61 @@ struct Server {
             break;
         }
         case C_ClanLeave: leaveClan(id); break;
+        case C_ClanLeader: {
+            int to = r.get<uint8_t>();
+            int c = p.clan;
+            if (!r.ok || !c || clans[c].leader != id || !isPlayer(to) || to == id || pl[to].clan != c) { say(id, "Only the clan leader can hand over leadership to a clan member."); return; }
+            clans[c].leader = uint8_t(to);
+            notifyClan(c, pl[to].name + " is now the clan leader. Their Town Hall is the clan hall.");
+            sendRoster();
+            break;
+        }
+        case C_SetHaul: {
+            auto be = find(r.get<uint32_t>());
+            int pct = r.get<uint8_t>();
+            if (!r.ok || be == entt::null || !reg.all_of<Building>(be) || reg.get<Owner>(be).id != id) return;
+            Kind k = reg.get<Info>(be).kind;
+            if (k != K_Outpost && k != K_Storage) return;
+            reg.get<Building>(be).haulPct = uint8_t(std::clamp(pct, 10, 100));
+            break;
+        }
+        case C_UpgradeUnit: {
+            auto k = Kind(r.get<uint8_t>());
+            if (!r.ok || !isTroop(k)) return;
+            int cur = std::max<int>(1, p.ulevel[k]), to = cur + 1;
+            if (to > MAX_UNIT_LEVEL) { say(id, "Already at the maximum troop level."); return; }
+            int archery = 0;
+            reg.view<Info, Building, Owner>().each([&](const Info& i, const Building& b, const Owner& o) { if (i.kind == K_Archery && o.id == id && b.progress >= 1.f) archery = std::max<int>(archery, i.level); });
+            if (archery < troopUpgradeNeedsArchery(to)) { say(id, "Upgrade your Archery to level " + std::to_string(troopUpgradeNeedsArchery(to)) + " first."); return; }
+            float cost[R_Count];
+            for (int i = 0; i < R_Count; i++) cost[i] = std::ceil(KINFO[k].cost[i] * 2.5f * float(cur) + (i == R_Gold ? 30.f * float(cur) : 0.f));
+            if (!afford(id, cost)) { say(id, "Not enough resources."); return; }
+            spend(id, cost);
+            float oldMul = unitHpMul(cur);
+            p.ulevel[k] = uint8_t(to);
+            float ratio = unitHpMul(to) / oldMul;
+            reg.view<Info, Owner, Health>().each([&](const Info& i, const Owner& o, Health& h) { if (i.kind == k && o.id == id) { h.maxhp *= ratio; h.hp *= ratio; } });
+            say(id, std::string(KINFO[k].name) + "s upgraded to level " + std::to_string(to) + ".");
+            break;
+        }
+        case C_Chat: {
+            int ch = r.get<uint8_t>();
+            std::string text = r.str();
+            for (char& c : text) if (c < 32 || c == 127) c = ' ';
+            if (!r.ok || ch > 2 || text.empty()) return;
+            if (text.size() > 160) text.resize(160);
+            if (ch == 1 && !p.clan) { say(id, "You are not in a clan."); return; }
+            Writer w;
+            w.put<uint8_t>(S_Chat).put<uint8_t>(uint8_t(ch)).put<uint8_t>(uint8_t(id));
+            w.str(p.name);
+            w.str(text);
+            for (int i = 1; i <= MAX_PLAYERS; i++) {
+                if (!pl[i].online) continue;
+                bool to = ch == 0 || i == id || (ch == 1 && pl[i].clan == p.clan) || (ch == 2 && pl[id].allied[i]);
+                if (to) sendPacket(pl[i].peer, w);
+            }
+            break;
+        }
         case C_Transfer: {
             int to = r.get<uint8_t>();
             float amt[R_Count];
@@ -819,7 +934,7 @@ struct Server {
     void buildTown(Town& t) {
         uint8_t owner = uint8_t(FACTION_BASE + t.faction);
         struct Piece { Kind k; int dx, dy; };
-        static const Piece pieces[] = {{K_TownHall, -2, -1}, {K_Barracks, 3, -1}, {K_Outpost, -5, -3}, {K_Outpost, 3, 3}, {K_Lumber, -5, 1}, {K_Lumber, 0, 3}};
+        static const Piece pieces[] = {{K_TownHall, -2, -1}, {K_Storage, 3, -1}, {K_Outpost, -5, -3}, {K_Outpost, 3, 3}, {K_Lumber, -5, 1}, {K_Lumber, 0, 3}};
         for (const Piece& pc : pieces) {
             if (!footprintFree(pc.k, t.cx + pc.dx, t.cy + pc.dy)) continue;
             auto e = makeBuilding(pc.k, owner, t.cx + pc.dx, t.cy + pc.dy, true);
@@ -984,6 +1099,7 @@ struct Server {
     void updateSpotting() {                                             // convoys seen by a clan member are shown to the whole clan
         std::vector<entt::entity> cvs;
         reg.view<Convoy>().each([&](entt::entity e, const Convoy&) { cvs.push_back(e); });
+        reg.view<Haul>().each([&](entt::entity e, const Haul&) { cvs.push_back(e); });
         for (auto& [c, m] : clanSpot) std::erase_if(m, [&](auto& kv) { return kv.second.until < clock; });
         if (cvs.empty()) return;
         std::vector<Source> srcs[MAX_PLAYERS + 1];
@@ -1001,6 +1117,125 @@ struct Server {
             }
         }
     }
+    // ---------------------------------------------------------------- hauling troops (outpost / storage house -> Town Hall)
+    entt::entity townHallOf(int id) {
+        entt::entity th = entt::null;
+        reg.view<Info, Building, Owner>().each([&](entt::entity b, const Info& i, const Building& bb, const Owner& o) { if (th == entt::null && i.kind == K_TownHall && o.id == id && bb.progress >= 1.f) th = b; });
+        return th;
+    }
+    void spawnHauls() {
+        std::unordered_set<uint32_t> busy;
+        reg.view<Haul>().each([&](const Haul& h) { busy.insert(h.storage); });
+        std::vector<entt::entity> blds;
+        reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info& i, const Building& b, const Owner& o) { if ((i.kind == K_Outpost || i.kind == K_Storage) && b.progress >= 1.f && isPlayer(o.id)) blds.push_back(e); });
+        for (auto e : blds) {
+            uint32_t uid = reg.get<Uid>(e).id;
+            if (busy.count(uid)) continue;
+            auto& b = reg.get<Building>(e);
+            int ow = reg.get<Owner>(e).id;
+            float stock = stockOf(e), cap = capOf(e);
+            if (stock < 20.f || stock / cap * 100.f < float(b.haulPct)) continue;
+            auto th = townHallOf(ow);
+            Pos at;
+            if (th == entt::null || !spawnSpot(th, false, at)) continue;
+            auto u = makeUnit(K_Pawn, uint8_t(ow), at.x, at.y);
+            Haul h;
+            h.storage = uid;
+            reg.emplace<Haul>(u, h);
+            say(ow, std::string("A hauling party leaves the Town Hall for your ") + KINFO[reg.get<Info>(e).kind].name + ".");
+        }
+    }
+    void runHaul(entt::entity e, Unit& u, Haul& h, float dt) {
+        Pos p = reg.get<Pos>(e);
+        int ow = reg.get<Owner>(e).id;
+        auto st = find(h.storage);
+        auto th = townHallOf(ow);
+        auto giveUp = [&]() {                                           // return whatever we carry to the storage house if we can
+            if (st != entt::null) storeCargo(st, h.cargo);
+            destroyNow(e);
+        };
+        if (th == entt::null) { giveUp(); return; }
+        entt::entity target = h.phase == 0 ? st : th;
+        if (target == entt::null) { destroyNow(e); return; }
+        float d = rectDist(p, target);
+        if (d <= 1.6f) {
+            u.path.clear();
+            h.stuck = 0;
+            h.bestDist = 1e9f;
+            if (h.phase == 0) {
+                auto& sb = reg.get<Building>(st);
+                float tot = 0;
+                for (float v : sb.stock) tot += v;
+                float f = tot > 0 ? std::min(1.f, HAULER_CARRY / tot) : 0.f;
+                for (int r = 0; r < R_Count; r++) { h.cargo[r] = sb.stock[r] * f; sb.stock[r] -= h.cargo[r]; }
+                h.phase = 1;
+            } else {
+                storeCargo(th, h.cargo);
+                giveUp();
+            }
+            return;
+        }
+        h.repath -= dt;
+        if (u.path.empty() && h.repath <= 0) {
+            h.repath = 3.f;
+            if (d < h.bestDist - 2.f) { h.bestDist = d; h.stuck = 0; }
+            else if (++h.stuck >= 8) { giveUp(); return; }
+            if (!order(e, posOf(target), reg.get<Uid>(target).id, 40000)) h.stuck += 2;
+        }
+    }
+
+    // ---------------------------------------------------------------- faction raids
+    void spawnRaid(int player, int f) {
+        auto th = townHallOf(player);
+        if (th == entt::null) return;
+        Pos tp = posOf(th);
+        const Town* best = nullptr;
+        float bd = 400.f;
+        for (auto& t : towns) {
+            if (!t.alive || t.faction != f) continue;
+            float d = std::hypot(float(t.cx) - tp.x, float(t.cy) - tp.y);
+            if (d < bd) { bd = d; best = &t; }
+        }
+        if (!best) return;
+        int n = 3 + std::min(6, int(clock / 900.0)) + int(rng() % 2);
+        int sent = 0;
+        static const Kind mix[] = {K_Warrior, K_Archer, K_Lancer, K_Warrior, K_Archer};
+        for (int i = 0; i < n; i++) {
+            Kind k = mix[i % 5];
+            float a = float(i) * 0.9f;
+            float x = float(best->cx) + .5f + std::cos(a) * 3.2f, y = float(best->cy) + 3.5f + std::sin(a) * 1.2f;
+            if (!walkable(int(std::floor(x)), int(std::floor(y)), false, 0)) { x = float(best->cx) + .5f; y = float(best->cy) + 3.5f; }
+            auto u = makeUnit(k, uint8_t(FACTION_BASE + f), x, y);
+            reg.emplace<Raider>(u, Raider{uint8_t(player), clock + 600.0, 0});
+            if (order(u, tp, 0, 40000)) { reg.emplace_or_replace<AMove>(u, AMove{tp}); sent++; }
+            else destroyNow(u);
+        }
+        if (sent) say(player, std::string("A raiding party of the ") + FACTION_NAME[f] + " marches on your base from (" + std::to_string(best->cx) + ", " + std::to_string(best->cy) + ")!");
+    }
+    void runRaider(entt::entity e, Unit& u, Raider& rd, float dt) {
+        if (clock > rd.until || !isPlayer(rd.target) || townHallOf(rd.target) == entt::null) { destroyNow(e); return; }
+        Pos p = reg.get<Pos>(e);
+        auto th = townHallOf(rd.target);
+        Pos tp = posOf(th);
+        rd.repath -= dt;
+        if (!reg.all_of<Attack>(e) && u.path.empty() && rd.repath <= 0 && std::hypot(p.x - tp.x, p.y - tp.y) > 3.f) {
+            rd.repath = 4.f;
+            order(e, tp, 0, 40000);
+            reg.emplace_or_replace<AMove>(e, AMove{tp});
+        }
+    }
+    void raidTick() {
+        for (int id = 1; id <= MAX_PLAYERS; id++) {
+            if (!pl[id].used || townHallOf(id) == entt::null) continue;
+            for (int f = 0; f < FACTION_COUNT; f++) {
+                if (pl[id].rep[f] > float(HOSTILE_REP)) { pl[id].raidNext[f] = 0; continue; }       // peace: no raids
+                static const bool fastRaids = std::getenv("BW_RAIDNOW") != nullptr;      // test hook
+                if (pl[id].raidNext[f] <= 0) { pl[id].raidNext[f] = clock + (fastRaids ? 6.0 : 180.0 + double(rng() % 120)); continue; }
+                if (clock >= pl[id].raidNext[f]) { spawnRaid(id, f); pl[id].raidNext[f] = clock + 360.0 + double(rng() % 420); }
+            }
+        }
+    }
+
     bool spottedForClan(int id, uint32_t uid) const {
         if (!isPlayer(id) || !pl[id].clan) return false;
         auto it = clanSpot.find(pl[id].clan);
@@ -1084,6 +1319,8 @@ struct Server {
             if (isFactionOwner(ow)) factionAI(e, u, p, dt);
             if (auto* wk = reg.try_get<Worker>(e)) { runWorker(e, u, *wk, dt); }
             else if (auto* cv = reg.try_get<Convoy>(e)) { runConvoy(e, u, *cv, dt); }
+            else if (auto* hl = reg.try_get<Haul>(e)) { runHaul(e, u, *hl, dt); }
+            else if (auto* rd = reg.try_get<Raider>(e)) { runRaider(e, u, *rd, dt); if (reg.valid(e) && KINFO[k].dps > 0) combat(e, u, k, ow, p, dt); }
             else if (k == K_Monk) {                                  // heal the most wounded friendly unit in range
                 entt::entity best = entt::null;
                 float bn = 1e9f;
@@ -1097,7 +1334,7 @@ struct Server {
                 }
                 if (best != entt::null) {
                     auto& h = reg.get<Health>(best);
-                    h.hp = std::min(h.maxhp, h.hp + KINFO[K_Monk].dps * dt);
+                    h.hp = std::min(h.maxhp, h.hp + KINFO[K_Monk].dps * unitDmgMul(ulv(ow, K_Monk)) * dt);
                     u.state = US_Heal;
                     u.path.clear();
                     Pos q = reg.get<Pos>(best);
@@ -1117,7 +1354,7 @@ struct Server {
             Pos& p = reg.get<Pos>(e);
             Kind k = reg.get<Info>(e).kind;
             if (u.i >= u.path.size()) { if (!u.path.empty()) u.path.clear(); u.i = 0; if (reg.all_of<AMove>(e) && u.state != US_Attack) reg.remove<AMove>(e); continue; }
-            float step = KINFO[k].speed * dt;
+            float step = KINFO[k].speed * unitSpeedMul(ulv(reg.get<Owner>(e).id, k)) * dt;
             Pos t = u.path[u.i];
             float dx = t.x - p.x, dy = t.y - p.y, d = std::hypot(dx, dy);
             u.aim = uint8_t(int((std::atan2(dy, dx) + 3.14159f) / 6.28319f * 255.f));
@@ -1161,6 +1398,8 @@ struct Server {
             townTick();
             callHelp();
             updateSpotting();
+            spawnHauls();
+            raidTick();
         }
         if (tick % 4 == 0)                                             // exploration by online players' units
             for (auto e : units) {
@@ -1215,7 +1454,7 @@ struct Server {
             u.path.clear();
             u.i = 0;
             u.state = US_Attack;
-            damage(tg, KINFO[k].dps * dt, ow, reg.get<Uid>(e).id);
+            damage(tg, KINFO[k].dps * unitDmgMul(ulv(ow, k)) * damageVs(k, reg.get<Info>(tg).kind) * armorOf(reg.get<Info>(tg).kind) * dt, ow, reg.get<Uid>(e).id);
             if (k == K_Archer && u.cd <= 0) { u.cd = .8f; fx(E_Arrow, p.x, p.y - .4f, tp.x, tp.y); }
         } else if (u.repath <= 0 || u.path.empty()) {
             u.repath = 1.f;
@@ -1233,13 +1472,14 @@ struct Server {
         auto& hb = reg.get<Building>(home);
         int ow = reg.get<Owner>(e).id;
         auto toward = [&](entt::entity b) { return order(e, posOf(b), reg.get<Uid>(b).id); };
-        auto findStorage = [&]() {
+        auto findStorage = [&]() {                              // nearest own storage that still has room
             entt::entity best = entt::null;
             float bd = 1e9f;
-            reg.view<Info, Building, Owner>().each([&](entt::entity s, const Info& i, const Building& sb, const Owner& so) {
-                if (!isStorage(i.kind) || sb.progress < 1.f || !allied(ow, so.id)) return;
-                float d = std::hypot(p.x - footCenter(i.kind, sb.tx, sb.ty).x, p.y - footCenter(i.kind, sb.tx, sb.ty).y);
-                if (d < bd) { bd = d; best = s; }
+            reg.view<Info, Building, Owner>().each([&](entt::entity st, const Info& i, const Building& sb, const Owner& so) {
+                if (!isStorage(i.kind) || sb.progress < 1.f || so.id != ow || capOf(st) - stockOf(st) < 1.f) return;
+                Pos c = footCenter(i.kind, sb.tx, sb.ty);
+                float d = std::hypot(p.x - c.x, p.y - c.y);
+                if (d < bd) { bd = d; best = st; }
             });
             return best;
         };
@@ -1250,6 +1490,7 @@ struct Server {
             float tot = 0;
             for (float s : hb.stock) tot += s;
             if (tot >= 8.f && findStorage() != entt::null) {
+                w.dest = 0;
                 float f = std::min(1.f, 30.f / tot);
                 for (int r = 0; r < R_Count; r++) { w.cargo[r] = hb.stock[r] * f; hb.stock[r] -= w.cargo[r]; }
                 w.phase = 1;
@@ -1264,11 +1505,15 @@ struct Server {
             if (w.timer <= 0) w.phase = 2;
             break;
         case 2: {
-            auto st = findStorage();
-            if (st == entt::null) return;
+            auto st = find(w.dest);
+            if (st == entt::null || !complete(st) || capOf(st) - stockOf(st) < 1.f) { st = findStorage(); w.dest = st == entt::null ? 0 : reg.get<Uid>(st).id; u.path.clear(); }
+            if (st == entt::null) return;                       // every storage is full: wait with the cargo
             if (rectDist(p, st) <= 1.5f) {
-                for (int r = 0; r < R_Count; r++) { pl[ow].res[r] += w.cargo[r]; w.cargo[r] = 0; }
-                w.phase = 3;
+                storeCargo(st, w.cargo);
+                float left = 0;
+                for (float c : w.cargo) left += c;
+                if (left < .5f) { for (float& c : w.cargo) c = 0; w.phase = 3; w.dest = 0; }
+                else w.dest = 0;                                // partly full: try the next nearest storage
                 u.path.clear();
                 return;
             }
@@ -1305,18 +1550,19 @@ struct Server {
         w.put<uint8_t>(S_State);
         for (int r = 0; r < R_Count; r++) w.put<float>(p.res[r]);
         for (int f = 0; f < FACTION_COUNT; f++) w.put<int8_t>(int8_t(std::lround(p.rep[f])));
+        for (int k = K_Pawn; k <= K_Monk; k++) w.put<uint8_t>(uint8_t(std::max<int>(1, p.ulevel[k])));
         size_t cp = w.b.size();
         w.put<uint16_t>(0);
         uint16_t n = 0;
         reg.view<Uid, Owner, Info, Health>().each([&](entt::entity e, const Uid& uid, const Owner& o, const Info& in, const Health& h) {
             Pos ps = posOf(e);
             static const bool seeAll = std::getenv("BW_SEEALL") != nullptr;      // test hook: show every entity
-            if (!seeAll && !allied(id, o.id) && !seen(src, ps.x, ps.y, isBuilding(in.kind) ? 2.f : 0.f) && !(reg.all_of<Convoy>(e) && spottedForClan(id, uid.id))) return;
+            if (!seeAll && !allied(id, o.id) && !seen(src, ps.x, ps.y, isBuilding(in.kind) ? 2.f : 0.f) && !((reg.all_of<Convoy>(e) || reg.all_of<Haul>(e)) && spottedForClan(id, uid.id))) return;
             uint8_t state = 0, aux = 0, aim = 0, prog = 100;
             uint16_t stock = 0;
             if (const Unit* u = reg.try_get<Unit>(e)) {
                 state = u->state;
-                if (reg.all_of<Convoy>(e)) state |= UNIT_CONVOY_FLAG;
+                if (reg.all_of<Convoy>(e) || reg.all_of<Haul>(e)) state |= UNIT_CONVOY_FLAG;
                 aim = u->aim;
                 if (const Worker* wk = reg.try_get<Worker>(e)) {
                     float best = 0;
@@ -1325,6 +1571,7 @@ struct Server {
             } else {
                 const Building& b = reg.get<Building>(e);
                 aux = in.level;
+                aim = b.haulPct;
                 prog = uint8_t(std::min(1.f, b.progress) * 100.f);
                 float tot = 0;
                 for (float s : b.stock) tot += s;
@@ -1458,6 +1705,7 @@ void Server::save() {
         w.put<float>(p.cam.x).put<float>(p.cam.y);
         w.put<uint8_t>(p.clan);
         for (float rp : p.rep) w.put<float>(rp);
+        for (int k = K_Pawn; k <= K_Monk; k++) w.put<uint8_t>(uint8_t(std::max<int>(1, p.ulevel[k])));
         w.put<uint32_t>(uint32_t(p.expl.size()));
         for (auto& [k, b] : p.expl) { w.put<int64_t>(k); w.bytes(b.data(), 32); }
     }
@@ -1469,22 +1717,28 @@ void Server::save() {
     for (auto& t : towns) w.put<uint16_t>(t.id).put<uint8_t>(t.faction).put<int32_t>(t.cx).put<int32_t>(t.cy).put<uint32_t>(t.th).put<uint8_t>(t.alive ? 1 : 0).put<double>(t.respawnAt);
     w.put<uint32_t>(uint32_t(spawned.size()));
     for (auto k : spawned) w.put<int64_t>(k);
-    w.put<uint32_t>(uint32_t(byUid.size()));
+    uint32_t saved = 0;
+    reg.view<Uid>().each([&](entt::entity e, const Uid&) { if (!reg.all_of<Raider>(e)) saved++; });
+    w.put<uint32_t>(saved);
     reg.view<Uid, Owner, Info, Health>().each([&](entt::entity e, const Uid& uid, const Owner& o, const Info& in, const Health& h) {
+        if (reg.all_of<Raider>(e)) return;
         w.put<uint32_t>(uid.id).put<uint8_t>(in.kind).put<uint8_t>(o.id).put<uint8_t>(in.level).put<float>(h.hp).put<float>(h.maxhp);
         w.put<uint16_t>(reg.all_of<TownTag>(e) ? reg.get<TownTag>(e).town : uint16_t(0));
         if (const Building* b = reg.try_get<Building>(e)) {
             w.put<uint8_t>(1).put<int32_t>(b->tx).put<int32_t>(b->ty).put<float>(b->progress);
             for (float s : b->stock) w.put<float>(s);
             w.put<float>(b->respawn);
+            w.put<uint8_t>(b->haulPct);
         } else {
             Pos p = reg.get<Pos>(e);
             w.put<uint8_t>(0).put<float>(p.x).put<float>(p.y);
             const Worker* wk = reg.try_get<Worker>(e);
             const Convoy* cv = reg.try_get<Convoy>(e);
-            w.put<uint8_t>(uint8_t((wk ? 1 : 0) | (cv ? 2 : 0)));
+            const Haul* hl = reg.try_get<Haul>(e);
+            w.put<uint8_t>(uint8_t((wk ? 1 : 0) | (cv ? 2 : 0) | (hl ? 4 : 0)));
             if (wk) { w.put<uint32_t>(wk->home).put<uint8_t>(wk->phase); for (float c : wk->cargo) w.put<float>(c); }
             if (cv) { w.put<uint8_t>(cv->from).put<uint8_t>(cv->to); for (float c : cv->cargo) w.put<float>(c); }
+            if (hl) { w.put<uint32_t>(hl->storage).put<uint8_t>(hl->phase); for (float c : hl->cargo) w.put<float>(c); }
         }
     });
     std::string tmp = savePath + ".tmp";
@@ -1523,6 +1777,7 @@ bool Server::load() {
         p.cam.y = r.get<float>();
         p.clan = r.get<uint8_t>();
         for (float& rp : p.rep) rp = r.get<float>();
+        for (int k = K_Pawn; k <= K_Monk; k++) p.ulevel[k] = r.get<uint8_t>();
         uint32_t ne = r.get<uint32_t>();
         for (uint32_t i = 0; i < ne && r.ok; i++) {
             int64_t k = r.get<int64_t>();
@@ -1565,6 +1820,7 @@ bool Server::load() {
             b.tx = r.get<int32_t>(); b.ty = r.get<int32_t>(); b.progress = r.get<float>();
             for (float& s : b.stock) s = r.get<float>();
             b.respawn = r.get<float>();
+            b.haulPct = r.get<uint8_t>();
             reg.emplace<Building>(e, b);
             for (int y = b.ty; y < b.ty + KINFO[k].fh; y++)
                 for (int x = b.tx; x < b.tx + KINFO[k].fw; x++) occ[tkey(x, y)] = uid;
@@ -1590,6 +1846,12 @@ bool Server::load() {
                 cv.from = r.get<uint8_t>(); cv.to = r.get<uint8_t>();
                 for (float& c : cv.cargo) c = r.get<float>();
                 reg.emplace<Convoy>(e, cv);
+            }
+            if (fl & 4) {
+                Haul hl;
+                hl.storage = r.get<uint32_t>(); hl.phase = r.get<uint8_t>();
+                for (float& c : hl.cargo) c = r.get<float>();
+                reg.emplace<Haul>(e, hl);
             }
         }
     }
