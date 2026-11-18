@@ -340,7 +340,9 @@ void dispatchDefense(int victim, Pos at, int attacker) {
         reg.view<Support, Owner>().each([&](const Support& s, const Owner& o) { if (o.id == m && s.defense && s.victim == victim) existing++; });
         int need = int(bp[m].quota) - existing;
         if (need <= 0) continue;
-        DefRoute rt = planDefenseRoute(m, posOf(th), at);
+        Pos from = posOf(th);
+        spawnSpot(th, false, from);                                              // a free tile beside the hall (its centre is blocked)
+        DefRoute rt = planDefenseRoute(m, from, at);
         if (std::getenv("BW_BASEDEBUG")) std::printf("[defense] %s -> victim %s: route ok=%d eta=%.0f need=%d\n", pl[m].name.c_str(), pl[victim].name.c_str(), int(rt.ok), rt.eta, need);
         if (!rt.ok) continue;
         auto us = pickIdleArmy(m, at, need);
