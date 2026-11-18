@@ -123,6 +123,7 @@ struct App {
     std::vector<Kind> ctxNextUnits;
     TMap mTrain;
 #include "client_menu.inc"
+#include "client_world.inc"                           // [world] clearing, drops, gold sparkle, land clouds
     bool socialOpen = false, bigMapOpen = false, textFocus = false, bmDragging = false;
     int socialTab = 0, socialScroll = 0, bmZoom = 4, bmW = 0, bmH = 0;
     std::string searchText;
@@ -397,7 +398,7 @@ struct App {
             facTowns = v;
             break;
         }
-        default: break;
+        default: worldPacket(d, n); break;                               // [world] S_Cleared / S_ClearJobs / S_Drop
         }
     }
     void pump() {
@@ -638,8 +639,11 @@ struct App {
             if (isResourceBuilding(in.kind)) {
                 Yield yv = yieldOf(in.kind, b, in.kind == K_Harbour);
                 std::string pr;
-                for (int r = 0; r < R_Count; r++) if (yv.r[r] > 0) pr += TextFormat("%s %.1f/s  ", RES_NAME[r], yv.r[r] * levelMul(in.aux));
+                int goldN = in.kind == K_Mine ? worldGoldNear(c) : 0;                       // [world] nearby gold deposits boost mines
+                float gb = 1.f + goldBonusOf(goldN);
+                for (int r = 0; r < R_Count; r++) if (yv.r[r] > 0) pr += TextFormat("%s %.1f/s  ", RES_NAME[r], yv.r[r] * levelMul(in.aux) * gb);
                 line("Output: " + pr, ink);
+                if (in.kind == K_Mine) line(goldN ? TextFormat("Gold deposits nearby: %d (+%d%% output)", goldN, int(std::lround((gb - 1.f) * 100.f))) : "No gold deposits nearby (+20% each, max +100%)", goldN ? rgb(150, 105, 0) : rgb(130, 90, 30));
                 bool pref = preferredBiome(in.kind, b);
                 line(pref ? "Preferred biome: BONUS ACTIVE" : (in.kind == K_Lumber ? "Best in: Forest" : (in.kind == K_Mine ? "Best in: Highlands, Desert" : "Coastal fishing")), pref ? rgb(30, 110, 40) : rgb(130, 90, 30));
                 line(TextFormat("Stock waiting: %d", in.stock), ink);
@@ -783,8 +787,9 @@ struct App {
                 int err = checkPlace(pw, k, t.x, t.y);
                 if (err) msg(std::string("Cannot build here: ") + PLACE_TEXT[err] + ".");
                 else if (!affordable(KINFO[k].cost)) msg("Not enough resources" + std::string(roster.empty() ? "." : " (allies may cover the rest)."));
-                if (!err) cmdBuild(k, t);
-                if (!shift) buildKind = -1;
+                bool clearing = !err && worldPlaceClick(k, t);                // [world] only features block: start clearing exactly those tiles
+                if (!err && !clearing) cmdBuild(k, t);
+                if (!shift && !clearing) buildKind = -1;
             } else if (mode == M_Move) {
                 cmdMove(w);
                 if (!shift) mode = M_None;
@@ -1070,12 +1075,15 @@ struct App {
                 int b = B(x, y);
                 if (!isLand(b) || !exploredAt(x, y) || isCliffTile(b, B(x, y - 1))) continue;
                 uint8_t f = featureAt(x, y, b, seed);
-                if (!f) continue;
+                if (!f || clearedT.count(chunkKey(x, y))) continue;           // [world] cleared features are gone
                 bool blocked = false;
-                for (int dy = -1; dy <= 1 && !blocked; dy++) for (int dx = -1; dx <= 1; dx++) if (occ.count(chunkKey(x + dx, y + dy))) { blocked = true; break; }
+                if (occ.count(chunkKey(x, y))) blocked = true;               // [world] only the building's own tiles hide features (neighbours must stay clickable/visible)
                 if (blocked) continue;
                 uint32_t h = hash2(x, y, seed + 31);
                 float cx = (float(x) + .5f) * TILE + float(int(h & 15) - 8), by = (float(y) + 1.f) * TILE - 6 - float((h >> 4) & 7);
+                float jp = -1.f;                                              // [world] clearing in progress: shake + progress bar
+                if (auto jit = cjobs.find(chunkKey(x, y)); jit != cjobs.end()) { jp = jit->second.pct; cx += std::sin(float(t) * 46.f + float(h % 7)) * 3.f; }
+                bool nearMine = f == F_Gold && goldNearMine(x, y);
                 items.push_back({by, [=, this]() {
                     switch (f) {
                     case F_Pine: { Anim a = mkAnim(std::string("Terrain/Resources/Wood/Trees/Tree") + (h & 1 ? "1" : "2") + ".png", 192, 256, 6, 96, 238); drawAnim(a, frameFor(a, t, float(h % 8)), cx, by, false, 1.f); break; }
@@ -1085,6 +1093,8 @@ struct App {
                     case F_Gold: { Anim a = mkAnim(std::string("Terrain/Resources/Gold/Gold Stones/Gold Stone ") + char('1' + h % 6) + "_Highlight.png", 128, 128, 6, 64, 78); drawAnim(a, frameFor(a, t, float(h % 6)), cx, by, false, 1.f); break; }
                     default: break;
                     }
+                    if (f == F_Gold) goldGlints(cx, by, h, t, nearMine);       // [world] sparkling deposits (stronger near our mines)
+                    if (jp >= 0.f) clearBar(cx, by, jp);
                 }});
             }
     }
@@ -1176,6 +1186,7 @@ struct App {
 
         std::vector<DrawItem> items;
         items.reserve(512);
+        worldFrame();
         drawFeatures(x0, y0 - 0, x1, y1 + 4, bio, wx0, wy0, bw, items, t);
         for (auto& mk : markers) { Marker m = mk; items.push_back({-1e9f, [=]() { float a = float(GetTime() - m.t); DrawCircleLines(int(m.x), int(m.y), 6 + a * 40, rgb(255, 255, 255, int(255 * std::max(0.f, 1 - a * 2)))); }}); }
         std::erase_if(markers, [](const Marker& m) { return GetTime() - m.t > .5; });
@@ -1210,6 +1221,7 @@ struct App {
         }
         std::erase_if(ghosts, [&](const Ghost& g) { return t - g.t > 1.6; });
         drawFx(items, t);
+        worldDrawFx(items, t);                                              // [world] bouncing resource drops
 
         // building ghost (placement preview)
         if (buildKind >= 0 && !overUI(GetMousePosition())) {
@@ -1229,7 +1241,8 @@ struct App {
                 for (int y = tt.y; y < tt.y + KINFO[k].fh; y++) for (int x = tt.x; x < tt.x + KINFO[k].fw; x++) {
                     PW p2{*this};
                     bool tileOk = p2.explored(x, y) && isLand(p2.biome(x, y)) && !isCliffTile(p2.biome(x, y), p2.biome(x, y - 1)) && !p2.occupied(x, y);
-                    DrawRectangle(x * 64, y * 64, 64, 64, (ok && tileOk) ? rgb(80, 255, 90, 110) : (tileOk && err != P_OK ? rgb(255, 190, 60, 110) : rgb(255, 60, 60, 120)));
+                    bool feat = tileOk && featBlocking(x, y);                  // [world] uncleared tree / rock / gold vein: orange
+                    DrawRectangle(x * 64, y * 64, 64, 64, (ok && tileOk && !feat) ? rgb(80, 255, 90, 110) : (tileOk && (err != P_OK || feat) ? rgb(255, 150, 40, 130) : rgb(255, 60, 60, 120)));
                     DrawRectangleLines(x * 64, y * 64, 64, 64, rgb(255, 255, 255, 140));
                 }
                 float cx = (float(tt.x) + float(KINFO[k].fw) * .5f) * TILE, bottom = float(tt.y + KINFO[k].fh) * TILE;
@@ -1240,8 +1253,10 @@ struct App {
                     DrawTexturePro(bt, {0, 0, s.artW, s.artH}, {cx - dw / 2, bottom - 6 - s.artBottom * s.scale, dw, dh}, {0, 0}, 0, rgb(255, 255, 255, 150));
                 }
                 std::string label = err ? PLACE_TEXT[err] : (ok ? costText(KINFO[k].cost) : "Not enough resources");
+                if (!err) { std::string wl = worldGhostLabel(k, tt); if (!wl.empty()) label = wl; }          // [world]
                 textShadow(label, int(cx) - MeasureText(label.c_str(), 18) / 2, int(bottom) + 10, 18, ok ? rgb(160, 255, 160) : rgb(255, 150, 130));
                 if (k == K_Campfire) DrawCircleLinesV({cx, bottom - 30}, WARMTH_RADIUS * TILE, rgb(255, 170, 70, 160));
+                if (k == K_Mine) worldMineGhost(tt, cx, bottom);              // [world]
             }});
         }
         std::sort(items.begin(), items.end(), [](const DrawItem& a, const DrawItem& b) { return a.y < b.y; });
@@ -1263,6 +1278,7 @@ struct App {
                 float drift = std::sin(t * .12f + float(h % 100)) * 48.f;
                 DrawTexturePro(ct, {0, 0, 576, 256}, {float(cx) * TILE - 220 + drift, float(cy) * TILE - 110, 576, 256}, {0, 0}, 0, rgb(255, 255, 255, 235));
             }
+        worldDrawClouds(x0, y0, x1, y1, t, E, B);                           // [world] translucent clouds over discovered land
     }
 
     // ---------------------------------------------------------------- social menu (players / friends / clans / factions)

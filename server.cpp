@@ -610,6 +610,7 @@ struct Server {
         net.send(conn, w);
         sendFog(id);
         sendClearedFull(id);                                     // [world] cleared surface features
+        worldTestSpawn(id, fresh);
         sendRoster();
         say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu." : "Welcome back, " + p.name + "! Your base is just as you left it.");
         std::printf("%s (%d) %s\n", p.name.c_str(), id, fresh ? "joined" : "rejoined");

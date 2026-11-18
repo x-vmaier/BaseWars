@@ -171,6 +171,8 @@ float mineMul(entt::entity e, Kind k, Pos c) {                  // output multip
     WorldAdapter wa{*this};
     float m = 1.f + goldBonusOf(goldNear(wa, c));
     mineCache[uid] = {clearVer, m};
+    static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;           // test hook
+    if (logIt) std::printf("[world] mine %u at %.1f,%.1f: %d gold deposits -> output x%.2f\n", uid, c.x, c.y, goldNear(wa, c), m);
     return m;
 }
 
@@ -276,7 +278,12 @@ void sheepSecond() {
         if (rng() % 100 >= 45) continue;
         for (int tries = 0; tries < 6; tries++) {
             int x = cx * CH + int(rng() % CH), y = cy * CH + int(rng() % CH);
-            if (walkable(x, y, false, 0) && biome(x, y) == b) { makeUnit(K_Sheep, 0, float(x) + .5f, float(y) + .5f); break; }
+            if (walkable(x, y, false, 0) && biome(x, y) == b) {
+                makeUnit(K_Sheep, 0, float(x) + .5f, float(y) + .5f);
+                static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;
+                if (logIt) std::printf("[world] sheep repopulated in chunk %d,%d (total %zu)\n", cx, cy, sheepList.size() + 1);
+                break;
+            }
         }
     }
 }
@@ -314,6 +321,8 @@ void spawnPatrol(uint32_t gid, PatGroup& g) {
         g.m.push_back(reg.get<Uid>(u).id);
     }
     g.leader = g.m.front();
+    static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;
+    if (logIt) std::printf("[world] patrol %u of town %u spawned with %d units\n", gid, g.town, n);
     g.hasWp = false;
     g.wait = clock + 2.0;
     g.pending = false;
@@ -340,6 +349,8 @@ void worldOnKill(entt::entity e, Kind k, int owner, int killer, Pos p) {
         g.tgt = 0;
         told = true;
     }
+    static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;
+    if (told && logIt) std::printf("[world] retaliation against player %d started (patrol unit killed)\n", killer);
     if (told) say(killer, std::string("The ") + FACTION_NAME[owner - FACTION_BASE] + " patrol is hunting you!");
 }
 Pos groupPos(const PatGroup& g) {
@@ -487,6 +498,15 @@ void patrolSecond() {
             if (std::hypot(lp.x - g.retPos.x, lp.y - g.retPos.y) < 5.f) g.retPos = anyPos;   // nothing here: hunt the nearest entity of that player
         }
     }
+}
+// test hook (BW_ARMY=<n>): a freshly spawned player also gets n extra warriors
+void worldTestSpawn(int id, bool fresh) {
+    static const char* a = std::getenv("BW_ARMY");
+    if (!a || !fresh) return;
+    auto th = townHallOf(id);
+    if (th == entt::null) return;
+    Pos at;
+    for (int i = 0; i < std::atoi(a); i++) if (spawnSpot(th, false, at)) { makeUnit(K_Warrior, uint8_t(id), at.x + float(i) * .01f, at.y); }
 }
 bool ephemeral(entt::entity e) const { return reg.all_of<Raider>(e) || reg.all_of<Patrol>(e); }   // hook for save(): not persisted
 bool isPatrol(entt::entity e) const { return reg.all_of<Patrol>(e); }
