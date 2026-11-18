@@ -12,6 +12,8 @@
 | `client_menu.inc` | Main menu + server browser. |
 | `server_world.inc` | World/NPC life (inside `struct Server`): clearing of surface features + persisted cleared tiles, gold-deposit mine bonus, hunting free pawns, sheep repopulation, faction patrols with loot and retaliation. Env test hooks: `BW_WORLDLOG`, `BW_PATROLNOW`, `BW_ARMY=<n>`. |
 | `client_world.inc` | Client side of the above (inside `struct App`): cleared-tile sync, clear UX/progress, resource drops, gold sparkle, land clouds. |
+| `server_ships.inc` | Naval transport: ship tiers/capacity, embark/disembark, ferry planner `planTransport`/`startTransport`, path-line (`S_Paths`) and `S_ShipInfo` senders, ship save section. API documented at the top of the file. |
+| `client_ships.inc` | Ship drawing (3 tiers), ship panel, right-click embark, path-line rendering. |
 | `tools/gen_ui_maps.py` | Generates the Tiled UI maps in `assets/ui/`. |
 | `tools/bots/*.cpp` | Headless protocol bots; each file becomes an executable (see CMake) for verifying server behaviour without a window. |
 | `assets/shaders/*.fs` | GLSL: outline, water, dissolve, bloom, post (AgX, grading, lighting). |

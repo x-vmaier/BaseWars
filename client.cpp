@@ -123,6 +123,7 @@ struct App {
 #include "client_pause.inc"
 #include "client_menu.inc"
 #include "client_world.inc"                           // [world] clearing, drops, gold sparkle, land clouds
+#include "client_ships.inc"
     bool socialOpen = false, bigMapOpen = false, textFocus = false, bmDragging = false;
     int socialTab = 0, socialScroll = 0, bmZoom = 4, bmW = 0, bmH = 0;
     std::string searchText;
@@ -272,6 +273,7 @@ struct App {
                 uint16_t stock = r.get<uint16_t>();
                 if (!r.ok || k >= K_Count) return;
                 Info inf{k, ow, st, aux, aim, prog, hp, mhp, stock};
+                if (aboardUnit(inf)) { sel.erase(id); if (hovered == id) hovered = 0; }   // embarked: hidden, cannot be selected
                 auto it = ents.find(id);
                 if (it == ents.end()) {
                     auto e = reg.create();
@@ -397,6 +399,8 @@ struct App {
             facTowns = v;
             break;
         }
+        case S_Paths: if (welcomed) onShipsPaths(r); break;
+        case S_ShipInfo: if (welcomed) onShipsInfo(r); break;
         default: worldPacket(d, n); break;                               // [world] S_Cleared / S_ClearJobs / S_Drop
         }
     }
@@ -475,6 +479,7 @@ struct App {
         if (CheckCollisionPointRec(m, coordRect()) || CheckCollisionPointRec(m, socialTabBtn())) return true;
         if (socialOpen || bigMapOpen || trainOpen || chatOpen) return true;
         if (ctxOpen && CheckCollisionPointRec(m, ctxRect())) return true;
+        if (shipPanelOver(m)) return true;
         return false;
     }
 
@@ -546,10 +551,10 @@ struct App {
         uint32_t best = 0;
         float bd = 1e9f;
         reg.view<RPos, Info, NetId>().each([&](const RPos& p, const Info& i, const NetId& n) {
-            if (isBuilding(i.kind)) return;
-            float cy = p.y * TILE - (i.kind == K_Sheep ? 14.f : 28.f), cx = p.x * TILE;
+            if (isBuilding(i.kind) || aboardUnit(i)) return;
+            float cy = p.y * TILE - (i.kind == K_Sheep ? 14.f : (i.kind == K_Ship ? 20.f : 28.f)), cx = p.x * TILE;
             float d = std::hypot(w.x - cx, w.y - cy);
-            if (d < 34.f && d < bd) { bd = d; best = n.id; }
+            if (d < (i.kind == K_Ship ? 54.f : 34.f) && d < bd) { bd = d; best = n.id; }
         });
         if (best || !includeBuildings) return best;
         reg.view<RPos, Info, NetId>().each([&](const RPos& p, const Info& i, const NetId& n) {
@@ -565,7 +570,7 @@ struct App {
         if (std::abs(b.x - a.x) > 6 || std::abs(b.y - a.y) > 6) {
             Rectangle R{std::min(a.x, b.x), std::min(a.y, b.y), std::abs(b.x - a.x), std::abs(b.y - a.y)};
             reg.view<RPos, Info, NetId>().each([&](const RPos& p, const Info& i, const NetId& n) {
-                if (i.owner != me || isBuilding(i.kind)) return;
+                if (i.owner != me || isBuilding(i.kind) || aboardUnit(i)) return;
                 if (CheckCollisionPointRec(GetWorldToScreen2D({p.x * TILE, p.y * TILE - 24}, cam), R)) sel.insert(n.id);
             });
         } else {
@@ -749,6 +754,7 @@ struct App {
         hovered = ui || dragging ? 0 : pick(rm);
         bool lp = IsMouseButtonPressed(MOUSE_BUTTON_LEFT), lr = IsMouseButtonReleased(MOUSE_BUTTON_LEFT), rp = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
         bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+        if (shipUiInput(m, lp, rp)) return;
 
         if (dragging && lr) { dragging = false; doSelect(dragStart, rm, shift); return; }
         if (ctxOpen) rebuildContext();
@@ -808,6 +814,7 @@ struct App {
             if (buildKind >= 0 || mode != M_None) { buildKind = -1; mode = M_None; return; }
             uint32_t id = pick(rm);
             auto it = id ? ents.find(id) : ents.end();
+            if (shipRightClick(id)) return;
             if (it != ents.end() && isBuilding(reg.get<Info>(it->second).kind)) {
                 const Info& bi = reg.get<Info>(it->second);
                 if (bi.kind == K_Archery && bi.owner == me && bi.prog >= 100) { trainOpen = true; trainTarget = id; trainSel = 0; ctxOpen = false; }
@@ -1029,28 +1036,6 @@ struct App {
         }});
     }
 
-    void drawShip(float px, float py, int owner, bool flip, bool hover, double t, uint32_t id) {
-        float bob = std::sin(float(t) * 2.f + float(id)) * 2.5f;
-        py += bob;
-        float d = flip ? -1.f : 1.f;
-        DrawEllipse(int(px), int(py + 6), 46, 12, rgb(0, 40, 80, 70));
-        Vector2 a{px - 44 * d, py - 10}, b{px + 44 * d, py - 10}, c2{px + 30 * d, py + 8}, e{px - 30 * d, py + 8};
-        DrawTriangle(a, e, c2, rgb(122, 84, 48));
-        DrawTriangle(a, c2, b, rgb(138, 96, 56));
-        DrawLineEx(a, b, 3, rgb(88, 58, 32));
-        DrawLineEx(a, e, 2, rgb(70, 44, 26));
-        DrawLineEx(e, c2, 2, rgb(70, 44, 26));
-        DrawLineEx(c2, b, 2, rgb(70, 44, 26));
-        DrawRectangle(int(px - 2), int(py - 64), 4, 56, rgb(96, 66, 38));
-        Vector2 s1{px + 2, py - 62}, s2{px + 2 + 34 * d, py - 30}, s3{px + 2, py - 20};
-        if (d > 0) DrawTriangle(s1, s3, s2, rgb(240, 236, 220)); else DrawTriangle(s1, s2, s3, rgb(240, 236, 220));
-        Vector2 f1{px - 2, py - 62}, f2{px - 2 - 18 * d, py - 56}, f3{px - 2, py - 50};
-        if (d > 0) DrawTriangle(f1, f3, f2, teamColor(owner)); else DrawTriangle(f1, f2, f3, teamColor(owner));
-        Anim w = mkAnim(std::string("Units/") + COLOR_NAME[colorIdx(owner)] + " Units/Warrior/Warrior_Idle.png", 192, 192, 7, 96, 135);
-        drawAnim(w, frameFor(w, t, float(id % 5)), px - 14 * d, py - 8, flip, .55f, WHITE, hover ? 1 : 0, rgb(255, 255, 255));
-        if (hover) DrawEllipseLines(int(px), int(py - 4), 50, 16, WHITE);
-    }
-
     void drawUnit(const RPos& p, Info& i, Face& fc, uint32_t id, bool selected, bool hover, std::vector<DrawItem>& items, double t, int biome) {
         float px = p.x * TILE, py = p.y * TILE;
         bool moving = (i.state & 7) == US_Move, convoy = (i.state & UNIT_CONVOY_FLAG) != 0;
@@ -1058,7 +1043,7 @@ struct App {
         Color oc = i.owner == me || alliedWith(i.owner) ? rgb(255, 255, 255) : (hostileTo(i.owner) ? rgb(255, 90, 90) : rgb(255, 225, 130));
         if (i.kind == K_Sheep) oc = rgb(255, 235, 140);
         items.push_back({py, [=, this]() {
-            if (i.kind == K_Ship) { drawShip(px, py, i.owner, fc.left, hover, t, id); return; }
+            if (i.kind == K_Ship) { drawShip(px, py, i.owner, fc.left, hover, t, id, i.aux, i.prog); drawShipLabel(px, py, i, selected, hover); if (selected) DrawEllipseLines(int(px), int(py + 4), 56, 18, rgb(255, 235, 90)); return; }
             Anim a = unitAnim(i.kind, i.owner, i.state & 7, carry, i.aim, moving, biome, t);
             DrawEllipse(int(px), int(py + 2), 16, 6, rgb(0, 0, 0, 60));
             if (selected) DrawEllipseLines(int(px), int(py + 2), 24, 10, rgb(255, 235, 90));
@@ -1193,11 +1178,13 @@ struct App {
         items.reserve(512);
         worldFrame();
         drawFeatures(x0, y0 - 0, x1, y1 + 4, bio, wx0, wy0, bw, items, t);
+        queuePathLines(items);
         for (auto& mk : markers) { Marker m = mk; items.push_back({-1e9f, [=]() { float a = float(GetTime() - m.t); DrawCircleLines(int(m.x), int(m.y), 6 + a * 40, rgb(255, 255, 255, int(255 * std::max(0.f, 1 - a * 2)))); }}); }
         std::erase_if(markers, [](const Marker& m) { return GetTime() - m.t > .5; });
         Rectangle vr{tl.x - 400, tl.y - 400, br.x - tl.x + 800, br.y - tl.y + 800};
         reg.view<RPos, Info, NetId, Face>().each([&](const RPos& p, Info& i, const NetId& n, Face& fc) {
             if (!CheckCollisionPointRec({p.x * TILE, p.y * TILE}, vr)) return;
+            if (aboardUnit(i)) return;
             bool selected = sel.count(n.id) > 0, hover = hovered == n.id;
             if (isBuilding(i.kind)) drawBuilding(p, i, n.id, selected, hover, items, t);
             else drawUnit(p, i, fc, n.id, selected, hover, items, t, B(int(std::floor(p.x)), int(std::floor(p.y))));
@@ -2027,10 +2014,11 @@ struct App {
             Rectangle R{std::min(ds.x, m.x), std::min(ds.y, m.y), std::abs(m.x - ds.x), std::abs(m.y - ds.y)};
             if (R.width > 6 || R.height > 6) { DrawRectangleRec(R, rgb(255, 235, 90, 36)); DrawRectangleLinesEx(R, 1, rgb(255, 235, 90)); }
         }
+        drawShipPanel();
         // hover label
         if (hovered && ents.count(hovered)) {
             const Info& in = reg.get<Info>(ents[hovered]);
-            std::string s = std::string(KINFO[in.kind].name) + (in.owner ? " - " + nameOf(in.owner) : "");
+            std::string s = std::string(KINFO[in.kind].name) + (in.owner ? " - " + nameOf(in.owner) : "") + shipTooltip(in);
             int w = MeasureText(s.c_str(), 14);
             DrawRectangleRounded({m.x + 16, m.y + 18, float(w) + 12, 22}, .3f, 4, rgb(30, 22, 16, 220));
             DrawText(s.c_str(), int(m.x) + 22, int(m.y) + 22, 14, WHITE);
