@@ -305,7 +305,7 @@ std::vector<entt::entity> pickIdleArmy(int owner, Pos near2, int n) {
     return out;
 }
 Pos homeOf(int id, Pos fallback) { auto th = townHallOf(id); return th == entt::null ? fallback : posOf(th); }
-void sendPatrol(entt::entity e, Pos dest, int victim, bool defense) {
+void sendPatrol(entt::entity e, Pos dest, int victim, bool defense, bool route = true) {
     int ow = reg.get<Owner>(e).id;
     Pos p = reg.get<Pos>(e);
     Support s;
@@ -315,6 +315,7 @@ void sendPatrol(entt::entity e, Pos dest, int victim, bool defense) {
     s.defense = defense;
     reg.remove<Attack>(e);
     reg.emplace_or_replace<Support>(e, s);
+    if (!route) return;                                                          // a ship carries the unit; it is ordered to the fight after landing
     reg.emplace_or_replace<AMove>(e, AMove{dest});
     order(e, dest, 0, 12000);
 }
@@ -335,13 +336,18 @@ void dispatchDefense(int victim, Pos at, int attacker) {
         spawnSpot(th, false, from);                                              // a free tile beside the hall (its centre is blocked)
         DefRoute rt = planDefenseRoute(m, from, at);
         if (std::getenv("BW_BASEDEBUG")) std::printf("[defense] %s -> victim %s: route ok=%d eta=%.0f need=%d\n", pl[m].name.c_str(), pl[victim].name.c_str(), int(rt.ok), rt.eta, need);
-        if (!rt.ok) continue;
         auto us = pickIdleArmy(m, at, need);
-        for (auto e : us) sendPatrol(e, at, victim, true);
         if (us.empty()) continue;
+        // [ships] cross the water by boat when that is clearly faster than marching around (planner lives in server_ships.inc)
+        TransportPlan plan = planTransport(m, us, at);
+        bool boat = plan.useBoat && !plan.deferred && startTransport(plan, us, at);
+        if (!rt.ok && !boat) continue;                                            // neither a land route nor a free ship: cannot help
+        float eta = boat ? plan.etaBoat : rt.eta;
+        for (auto e : us) sendPatrol(e, at, victim, true, !boat);
         total += int(us.size());
-        say(m, "Defending " + pl[victim].name + " against " + ownerName(attacker) + ": " + std::to_string(us.size()) + " troops dispatched (ETA " + std::to_string(int(rt.eta)) + " s).");
-        say(victim, pl[m].name + " sends " + std::to_string(us.size()) + " troops to defend you (ETA " + std::to_string(int(rt.eta)) + " s).");
+        std::string how = boat ? " by ship" : "";
+        say(m, "Defending " + pl[victim].name + " against " + ownerName(attacker) + ": " + std::to_string(us.size()) + " troops dispatched" + how + " (ETA " + std::to_string(int(eta)) + " s).");
+        say(victim, pl[m].name + " sends " + std::to_string(us.size()) + " troops to defend you" + how + " (ETA " + std::to_string(int(eta)) + " s).");
     }
 }
 void alertFriends(int victim, Pos at, int attacker) {
@@ -386,7 +392,7 @@ void supportSecond() {
     reg.view<Support, Unit, Pos, Owner>().each([&](entt::entity e, const Support&, const Unit&, const Pos&, const Owner&) { v.push_back(e); });
     int budget = 8;                                                              // path searches per second
     for (auto e : v) {
-        if (!reg.valid(e) || dying.count(reg.get<Uid>(e).id)) continue;
+        if (!reg.valid(e) || dying.count(reg.get<Uid>(e).id) || reg.any_of<Aboard, Boarding>(e)) continue;     // [ships] ferried units are handled by the ship
         auto& s = reg.get<Support>(e);
         auto& u = reg.get<Unit>(e);
         Pos p = reg.get<Pos>(e);
