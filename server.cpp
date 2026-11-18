@@ -25,7 +25,7 @@ namespace {
 
 volatile std::sig_atomic_t g_quit = 0;
 using Bits = std::array<uint8_t, 32>;
-constexpr uint32_t SAVE_MAGIC = 0x35535742u;  // "BWS5"
+constexpr uint32_t SAVE_MAGIC = 0x36535742u;  // "BWS6" (world + ships + base sections appended)
 
 struct Uid { uint32_t id; };
 struct Owner { uint8_t id; };                                   // 0 = neutral
@@ -87,6 +87,7 @@ struct Server {
     std::mt19937 rng;
     std::string savePath;
     double clock = 0, lastSave = 0;
+    bool loadStarted = false;
     Clan clans[MAX_CLANS + 1];
     std::vector<Town> towns;
     std::unordered_set<int64_t> regionsDone;
@@ -99,10 +100,13 @@ struct Server {
         bool loaded = load();
         if (!loaded && existed) {
             std::error_code ec;
-            std::filesystem::rename(savePath, savePath + ".bad", ec);
-            std::printf("Savegame could not be read; kept as %s.bad. Restart the server to begin a fresh world.\n", savePath.c_str());
-            std::fflush(stdout);
-            std::_Exit(2);                                            // no destructor: never overwrite the save with a half-loaded state
+            std::filesystem::rename(savePath, savePath + ".bad", ec);               // never lose the old file
+            if (loadStarted) {
+                std::printf("Savegame could not be read; kept as %s.bad. Restart the server to begin a fresh world.\n", savePath.c_str());
+                std::fflush(stdout);
+                std::_Exit(2);                                        // no destructor: never overwrite the save with a half-loaded state
+            }
+            std::printf("Old savegame kept as %s.bad; starting a fresh world.\n", savePath.c_str());
         }
         if (!net.start(port, MAX_PLAYERS + 4, serverName)) { std::puts("Failed to bind port"); std::exit(1); }
         std::printf("Server listening on UDP port %d (seed %u, %s, steam %s)\n", port, seed, loaded ? "savegame loaded" : "fresh world", net.steamActive() ? "on" : "off");
@@ -1855,7 +1859,8 @@ bool Server::load() {
     if (!f) return false;
     std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
     Reader r{data.data(), data.data() + data.size()};
-    if (r.get<uint32_t>() != SAVE_MAGIC) { std::puts("Savegame has an unknown format; starting fresh."); return false; }
+    if (r.get<uint32_t>() != SAVE_MAGIC) { std::puts("Savegame has an older or unknown format."); return false; }
+    loadStarted = true;                                          // from here on a failure leaves a half-loaded world behind
     seed = r.get<uint32_t>();
     rng.seed(seed ^ uint32_t(nowSec()));
     nextUid = r.get<uint32_t>();

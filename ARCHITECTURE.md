@@ -10,6 +10,9 @@
 | `server.cpp` | Authoritative simulation (`struct Server`). Feature code that is large lives in `server_*.inc`, included inside the struct. |
 | `client.cpp` | Raylib client (`struct App`). Large features live in `client_*.inc`, included inside the struct. |
 | `client_menu.inc` | Main menu + server browser. |
+| `client_pause.inc` | Pause menu (ESC), UI scale and window modes. Inside `struct App` the `GetScreenWidth/Height/MousePosition` calls are shadowed by UI-scale-aware versions; world code must use `::GetMousePosition()` etc. |
+| `server_base.inc` | Base mechanics (inside `struct Server`): campfire rules, fire arrows / burning / extinguishing, training queues (`spawnTrained`), clan alerts, defense quota + support patrols (`planDefenseRoute`, which calls the ferry planner), homeless clan members, town move and building relocation, territory-dependent functionality. Env hooks: `BW_BASETEST`, `BW_BASESPEED`, `BW_BASEDEBUG`. |
+| `client_base.inc` | Client side of the above: queue strip, alert toasts, quota slider, move/relocate placement modes, fire / red-cross indicators, big-map support-patrol menu. |
 | `server_world.inc` | World/NPC life (inside `struct Server`): clearing of surface features + persisted cleared tiles, gold-deposit mine bonus, hunting free pawns, sheep repopulation, faction patrols with loot and retaliation. Env test hooks: `BW_WORLDLOG`, `BW_PATROLNOW`, `BW_ARMY=<n>`. |
 | `client_world.inc` | Client side of the above (inside `struct App`): cleared-tile sync, clear UX/progress, resource drops, gold sparkle, land clouds. |
 | `server_ships.inc` | Naval transport: ship tiers/capacity, embark/disembark, ferry planner `planTransport`/`startTransport`, path-line (`S_Paths`) and `S_ShipInfo` senders, ship save section. API documented at the top of the file. |
@@ -23,3 +26,6 @@ Conventions
 * Protocol: append new enumerators to the END of the `C_*` group / `S_*` group in `shared.hpp`'s `Msg`. The `state` byte bit registry is documented next to `UnitState`.
 * Savegame: bump `SAVE_MAGIC` in `server.cpp` whenever the save layout changes.
 * Windows: never name a variable `near` / `far` (macros in `windef.h`).
+
+Savegame
+* One binary file (`savegame.bin`): mandatory part (profiles, entities) followed by optional appended sections (world, ships, base). A damaged optional section is skipped; an unreadable mandatory part is moved to `savegame.bin.bad` and the server stops instead of overwriting it. An older format is moved aside and a fresh world starts.
