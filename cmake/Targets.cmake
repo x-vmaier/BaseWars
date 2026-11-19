@@ -29,7 +29,8 @@ set(BW_CLIENT_SOURCES ${BW_CLIENT_SOURCES}
 add_executable(client ${BW_CLIENT_SOURCES})
 target_link_libraries(client PRIVATE bw_common raylib)
 bw_copy_steam_runtime(client)
+bw_link_assets(client)
 # default client config next to the executable (server address for the direct-connect tab)
 add_custom_command(TARGET client POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -DOUT="$<TARGET_FILE_DIR:client>/config.txt" -P "${CMAKE_SOURCE_DIR}/cmake/WriteClientConfig.cmake"
+    COMMAND ${CMAKE_COMMAND} "-DOUT=$<TARGET_FILE_DIR:client>/config.txt" -P "${CMAKE_SOURCE_DIR}/cmake/WriteClientConfig.cmake"
     VERBATIM)

@@ -3,10 +3,13 @@
 #include <steam/isteamnetworkingutils.h>
 #include <steam/steam_api.h>
 
+#include <cstdio>
+
 namespace net {
 
 bool SteamClient::init() {
-    if (!SteamAPI_Init()) return false;
+    SteamErrMsg err{};
+    if (SteamAPI_InitEx(&err) != k_ESteamAPIInitResult_OK) { std::fprintf(stderr, "SteamAPI_Init failed: %s\n", err); return false; }
     ok = true;
     id = SteamUser()->GetSteamID().ConvertToUint64();
     name = SteamFriends()->GetPersonaName();
