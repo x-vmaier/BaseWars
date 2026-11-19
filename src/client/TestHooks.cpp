@@ -225,6 +225,8 @@ void TestHooks::siteCommands()
         {
             if (verb == "upgrade")
                 app.cmd.upgrade(id);
+            else if (verb == "train" && std::sscanf(args.c_str(), "%d:%d", &kind, &dx) == 2)
+                app.cmd.train(id, Kind(dx));
             else if (verb == "repair")
                 app.cmd.repair(id, 0);
             else if (verb == "cancel")
