@@ -14,7 +14,8 @@ void HuntSystem::spawnChunkNpcs(int cx, int cy) {
     if (!world.spawned.insert(chunkKey(cx, cy)).second) return;
     int b = world.biome(cx * CH + 8, cy * CH + 8);
     if (b != B_Plains && b != B_Flowers) return;
-    int n = int(hash2(cx, cy, world.seed + 901) % 4);
+    float sd = b == B_Plains ? cfg().sheepDensityPlains : cfg().sheepDensityFlowers;
+    int n = int(float(hash2(cx, cy, world.seed + 901) % 4) * sd + .5f);
     for (int i = 0; i < n; i++) {
         int x = cx * CH + int(hash2(cx, cy * 7 + i, world.seed + 5) % CH), y = cy * CH + int(hash2(cx * 5 + i, cy, world.seed + 6) % CH);
         if (world.walkable(x, y, false, 0) && (b == world.biome(x, y))) world.makeUnit(K_Sheep, 0, float(x) + .5f, float(y) + .5f);
@@ -104,7 +105,7 @@ void HuntSystem::sheepSecond() {
     std::erase_if(sheepClaim, [&](auto& kv) { return world.find(kv.first) == entt::null || world.find(kv.second) == entt::null; });
     if (world.clock < nextRepop) return;
     nextRepop = world.clock + 8.0;
-    if (sheepList.size() >= 900) return;
+    if (int(sheepList.size()) >= cfg().sheepMax) return;
     std::unordered_set<int64_t> awake;                          // chunks around online players' things
     reg.view<Owner, Info>().each([&](entt::entity e, const Owner& o, const Info&) {
         if (!isPlayer(o.id) || !world.pl[o.id].online) return;
@@ -119,7 +120,7 @@ void HuntSystem::sheepSecond() {
         if (b != B_Plains && b != B_Flowers) continue;
         auto it = perChunk.find(k);
         if (it != perChunk.end() && it->second >= 4) continue;
-        if (world.rng() % 100 >= 45) continue;
+        if (world.rng() % 100 >= uint32_t(45.f * (b == B_Plains ? cfg().sheepDensityPlains : cfg().sheepDensityFlowers))) continue;
         for (int tries = 0; tries < 6; tries++) {
             int x = cx * CH + int(world.rng() % CH), y = cy * CH + int(world.rng() % CH);
             if (world.walkable(x, y, false, 0) && world.biome(x, y) == b) {

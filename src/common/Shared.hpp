@@ -6,6 +6,8 @@
 #define NOGDI   // keep windows.h from clashing with raylib (Rectangle, DrawText...)
 #define NOUSER  // (CloseWindow, ShowCursor...)
 #endif
+#include "common/ServerConfig.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -153,26 +155,27 @@ inline float stretch(float v) { return std::clamp((v - .5f) * 2.1f + .5f, 0.f, 1
 
 // ---------------------------------------------------------------- world generation (infinite, deterministic)
 inline uint8_t genBiome(int x, int y, uint32_t seed) {
-    float fx = float(x), fy = float(y);
+    const ServerConfig& c = cfg();
+    float fx = float(x) / c.biomeScale, fy = float(y) / c.biomeScale;
     float e = stretch(fbm(fx * .0105f, fy * .0105f, seed, 4));
     float m = stretch(fbm(fx * .016f + 311.f, fy * .016f - 97.f, seed + 11, 3));
     float t = stretch(fbm(fx * .0085f - 57.f, fy * .0085f + 143.f, seed + 23, 3));
     float d = fbm(fx * .09f, fy * .09f, seed + 37, 3);
     float f = fbm(fx * .045f, fy * .045f, seed + 53, 3);
     e += (d - .5f) * .07f;
-    if (e < OCEAN_LEVEL) {
+    if (e < c.oceanLevel) {
         // rare small islands in open (deep) ocean: a regional gate keeps them scattered, a finer noise shapes 1-3 chunk wide blobs
-        if (e > OCEAN_LEVEL - ISLAND_DEPTH) return B_Ocean;
+        if (e > c.oceanLevel - ISLAND_DEPTH) return B_Ocean;
         float gate = vnoise(fx * .021f + 17.f, fy * .021f - 41.f, seed + 91);
         float blob = vnoise(fx * .033f - 9.f, fy * .033f + 23.f, seed + 93) * .88f + vnoise(fx * .12f, fy * .12f, seed + 95) * .12f;
-        if (gate < ISLAND_GATE || blob < ISLAND_BLOB) return B_Ocean;
+        if (gate < c.islandGate || blob < ISLAND_BLOB) return B_Ocean;
         e = .5f;                                                      // classify the island like ordinary lowland
     }
-    if (e > .80f) return B_Highlands;
-    if (t < .27f) return B_Snow;
-    if (t > .62f && m < .52f) return B_Desert;
-    if (m > .58f) return B_Forest;
-    if (f > .54f && m > .25f) return B_Flowers;
+    if (e > c.highlandsHeight) return B_Highlands;
+    if (t < c.snowCold) return B_Snow;
+    if (t > c.desertHeat && m < .52f) return B_Desert;
+    if (m > c.forestMoisture) return B_Forest;
+    if (f > c.flowerNoise && m > .25f) return B_Flowers;
     return B_Plains;
 }
 inline bool isLand(int b) { return b != B_Ocean && b != INVALID_BIOME; }
@@ -216,7 +219,9 @@ inline constexpr float COLD_UNIT_DPS = 2.f, COLD_BUILDING_FRAC = .01f, WARMTH_RA
 // ---------------------------------------------------------------- [world] surface features, clearing, gold bonus (server + client)
 enum Feat : uint8_t { F_None, F_Pine, F_Oak, F_Bush, F_Rock, F_Gold };
 inline uint8_t featureAt(int x, int y, int b, uint32_t seed) {
-    uint32_t h = hash2(x, y, seed + 777) % 1000;
+    float dens = b >= 0 && b < 8 ? cfg().featureDensity[b] : 1.f;
+    if (dens <= 0.f) return F_None;
+    uint32_t h = uint32_t(float(hash2(x, y, seed + 777) % 1000) / dens);      // density > 1 compresses the roll so more tiles hit the feature thresholds
     switch (b) {
     case B_Forest: return h < 250 ? (hash2(x, y, 3) % 100 < 30 ? F_Oak : F_Pine) : (h < 290 ? F_Bush : (h < 315 ? F_Rock : F_None));
     case B_Plains: return h < 35 ? F_Oak : (h < 80 ? F_Bush : (h < 92 ? F_Rock : F_None));
@@ -228,7 +233,7 @@ inline uint8_t featureAt(int x, int y, int b, uint32_t seed) {
     }
 }
 inline bool featureBlocks(uint8_t f) { return f == F_Pine || f == F_Oak || f == F_Rock || f == F_Gold; }   // bushes are decoration only
-inline float clearSeconds(uint8_t f) { return f == F_Gold ? 5.f : (f == F_Rock ? 3.5f : 2.5f); }
+inline float clearSeconds(uint8_t f) { return (f == F_Gold ? 5.f : (f == F_Rock ? 3.5f : 2.5f)) * (cfg().instantClear ? 0.f : cfg().clearTimeScale); }
 inline int clearCostWood(uint8_t f) { return f == F_Gold ? 8 : (f == F_Rock ? 5 : 3); }              // paid up front by the player
 inline Res dropRes(uint8_t f) { return f == F_Gold ? R_Gold : (f == F_Rock ? R_Stone : R_Wood); }      // what the cleared feature yields
 inline int dropAmount(uint8_t f) { return f == F_Gold ? 14 : (f == F_Rock ? 8 : 10); }

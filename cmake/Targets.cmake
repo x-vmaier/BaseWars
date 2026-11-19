@@ -1,10 +1,11 @@
 file(GLOB_RECURSE BW_COMMON_HEADERS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/common/*.hpp" "${CMAKE_SOURCE_DIR}/src/components/*.hpp")
 
-add_library(bw_common INTERFACE)
-target_include_directories(bw_common INTERFACE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(bw_common INTERFACE EnTT::EnTT steamworks)
+file(GLOB_RECURSE BW_COMMON_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/common/*.cpp")
+add_library(bw_common STATIC ${BW_COMMON_SOURCES})
+target_include_directories(bw_common PUBLIC "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(bw_common PUBLIC EnTT::EnTT steamworks)
 if(WIN32)
-    target_link_libraries(bw_common INTERFACE ws2_32 winmm)
+    target_link_libraries(bw_common PUBLIC ws2_32 winmm)
 endif()
 
 # ---- authoritative server ----

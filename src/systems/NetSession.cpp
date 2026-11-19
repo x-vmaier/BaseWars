@@ -45,8 +45,8 @@ void NetSession::onHello(uint64_t conn, Reader& r) {
         world.pl[id].used = true;
         world.pl[id].uuid = uuid;
         world.resetProfile(id);
-        for (int f = 0; f < FACTION_COUNT; f++)                  // about a quarter of the factions are aggressive towards each newcomer
-            if (hash2(int(std::hash<std::string>{}(uuid) & 0x7fffffff), f, world.seed + 71) % 100 < 25) world.pl[id].rep[f] = -50.f;
+        for (int f = 0; f < FACTION_COUNT; f++)                  // a configurable share of the factions are aggressive towards each newcomer
+            if (hash2(int(std::hash<std::string>{}(uuid) & 0x7fffffff), f, world.seed + 71) % 100 < uint32_t(cfg().hostileFactionPercent)) world.pl[id].rep[f] = -50.f;
         if (const char* ag = std::getenv("BW_AGGRO")) { int v = std::atoi(ag); for (int f = 0; f < FACTION_COUNT; f++) if (v >= FACTION_COUNT || v == f) world.pl[id].rep[f] = -50.f; }      // test hook
     }
     Profile& p = world.pl[id];

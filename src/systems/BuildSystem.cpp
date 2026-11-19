@@ -12,7 +12,7 @@
 
 float BuildSystem::buildTimeFor(entt::entity e, Kind k) const {                              // construction time; relocations take much longer
     if (auto* rn = reg.try_get<RelocNew>(e)) return std::max(1.f, rn->total / baseTestSpeed());
-    return KINFO[k].buildTime;
+    return cfg().instantBuild ? .05f : KINFO[k].buildTime;
 }
 
 bool BuildSystem::buildingTick(entt::entity e, float dt) {

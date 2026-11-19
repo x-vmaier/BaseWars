@@ -11,6 +11,7 @@
 #include <string>
 
 static float trainTime(Kind k) {
+    if (cfg().instantTrain) return .05f;
     switch (k) {
     case K_Pawn: return 6.f;
     case K_Warrior: return 9.f;

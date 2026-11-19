@@ -18,7 +18,7 @@ bool TownSystem::townSiteOk(int cx, int cy) {
         }
     bool nearTh = false;
     reg.view<Info, Building>().each([&](const Info& i, const Building& b) {
-        if (i.kind == K_TownHall && std::max(std::abs(b.tx - cx), std::abs(b.ty - cy)) < 45) nearTh = true;
+        if (i.kind == K_TownHall && std::max(std::abs(b.tx - cx), std::abs(b.ty - cy)) < cfg().townMinDistance) nearTh = true;
     });
     return !nearTh;
 }
@@ -53,7 +53,7 @@ void TownSystem::spawnTownUnit(const Town& t, Kind k, int i) {
 }
 void TownSystem::processRegion(int rx, int ry) {
     if (!world.regionsDone.insert(chunkKey(rx, ry)).second) return;
-    if (hash2(rx, ry, world.seed + 1111) % 100 >= 85) return;
+    if (hash2(rx, ry, world.seed + 1111) % 100 >= uint32_t(cfg().townRegionChance)) return;
     int span = REGION_CHUNKS * CH, x0 = rx * span, y0 = ry * span;
     for (int n = 0; n < 40; n++) {
         int x = x0 + 14 + int(hash2(rx * 40 + n, ry, world.seed + 21) % uint32_t(span - 28)), y = y0 + 14 + int(hash2(rx, ry * 40 + n, world.seed + 22) % uint32_t(span - 28));

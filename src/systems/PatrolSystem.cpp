@@ -142,7 +142,7 @@ void PatrolSystem::runPatrol(entt::entity e, Unit& u, Patrol& pt, float dt) {
 }
 void PatrolSystem::patrolSecond() {
     for (auto& t : world.towns) {                                      // make sure each living town owns its patrol groups
-        int want = 1 + int(hash2(t.id, 0, world.seed + 444) & 1), have = 0;
+        int span = cfg().patrolsPerTownMax - cfg().patrolsPerTownMin, want = cfg().patrolsPerTownMin + (span > 0 ? int(hash2(t.id, 0, world.seed + 444) % uint32_t(span + 1)) : 0), have = 0;
         for (auto& [id, g] : pgroups) if (g.town == t.id) have++;
         if (t.alive && have < want) {
             static const bool fast = std::getenv("BW_PATROLNOW") != nullptr;      // test hook: patrols appear immediately
@@ -161,7 +161,7 @@ void PatrolSystem::patrolSecond() {
         Town* t = world.townById(g.town);
         if (g.m.empty()) {
             g.ret = 0;
-            if (!g.pending) { g.pending = true; g.respawnAt = world.clock + (fastAll ? 8.0 : 90.0 + double(world.rng() % 90)); }
+            if (!g.pending) { g.pending = true; g.respawnAt = world.clock + (fastAll ? 8.0 : cfg().patrolRespawnMin + double(world.rng() % uint32_t(std::max(1.0, cfg().patrolRespawnRandom)))); }
             else if (world.clock >= g.respawnAt && t && t->alive) spawnPatrol(gid, g);
             continue;
         }

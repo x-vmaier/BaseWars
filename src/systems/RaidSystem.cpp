@@ -55,8 +55,8 @@ void RaidSystem::raidTick() {
         for (int f = 0; f < FACTION_COUNT; f++) {
             if (world.pl[id].rep[f] > float(HOSTILE_REP)) { world.pl[id].raidNext[f] = 0; continue; }       // peace: no raids
             static const bool fastRaids = std::getenv("BW_RAIDNOW") != nullptr;      // test hook
-            if (world.pl[id].raidNext[f] <= 0) { world.pl[id].raidNext[f] = world.clock + (fastRaids ? 6.0 : 180.0 + double(world.rng() % 120)); continue; }
-            if (world.clock >= world.pl[id].raidNext[f]) { spawnRaid(id, f); world.pl[id].raidNext[f] = world.clock + 360.0 + double(world.rng() % 420); }
+            if (world.pl[id].raidNext[f] <= 0) { world.pl[id].raidNext[f] = world.clock + (fastRaids ? 6.0 : cfg().raidFirstDelay + double(world.rng() % uint32_t(std::max(1.0, cfg().raidFirstRandom)))); continue; }
+            if (world.clock >= world.pl[id].raidNext[f]) { spawnRaid(id, f); world.pl[id].raidNext[f] = world.clock + cfg().raidInterval + double(world.rng() % uint32_t(std::max(1.0, cfg().raidIntervalRandom))); }
         }
     }
 }

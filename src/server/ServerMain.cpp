@@ -131,6 +131,7 @@ int main(int argc, char** argv) {
     std::string serverName = argc > 4 ? argv[4] : "Base Wars Server";
     bool localOnly = false;                                             // --local: no Steam backend login/advertising (direct IP only)
     for (int i = 1; i < argc; i++) if (std::string(argv[i]) == "--local") localOnly = true;
+    for (const char* path : {"server.cfg", "config/server.cfg"}) if (cfg().load(path)) break;      // optional tuning file, see config/server.cfg
     std::signal(SIGINT, [](int) { g_quit = 1; });
     std::signal(SIGTERM, [](int) { g_quit = 1; });
     {
