@@ -8,21 +8,32 @@
 
 class App;
 
-class BigMap {
+class BigMap
+{
 public:
-    explicit BigMap(App& app) : app(app) {}
+    explicit BigMap(App &app) : app(app) {}
     void load();
 
     bool isOpen = false;
-    int zoom = 4;                       // index into the tiles-per-pixel table
+    int zoom = 4; // index into the tiles-per-pixel table
 
     void open();
     void input(Vector2 m);
     void draw();
 
 private:
-    struct Cand { std::string name; float x, y; };
-    struct Menu { bool open = false; Vector2 at{}; float tx = 0, ty = 0; std::string name; };
+    struct Cand
+    {
+        std::string name;
+        float x, y;
+    };
+    struct Menu
+    {
+        bool open = false;
+        Vector2 at{};
+        float tx = 0, ty = 0;
+        std::string name;
+    };
     float tpp() const;
     Rectangle frameRect() const;
     Rectangle inner() const;
@@ -34,11 +45,11 @@ private:
     Rectangle minusBtn() const;
     Rectangle plusBtn() const;
     Rectangle sendBtn() const;
-    bool rightClick(Vector2 m);         // true when the click opened the menu
-    bool menuInput(Vector2 m);          // consumes all input while the menu is open
+    bool rightClick(Vector2 m); // true when the click opened the menu
+    bool menuInput(Vector2 m);  // consumes all input while the menu is open
     void drawMenu();
 
-    App& app;
+    App &app;
     TMap mMapFrame;
     bool dragging = false;
     int w = 0, h = 0, patrolN = 5;

@@ -4,15 +4,16 @@
 
 struct Systems;
 
-class UnitSystem {
+class UnitSystem
+{
 public:
-    UnitSystem(World& world, Systems& s) : world(world), reg(world.reg), s(s) {}
+    UnitSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
-    void behave(const std::vector<entt::entity>& units, float dt);
-    void move(const std::vector<entt::entity>& units, float dt);
+    void behave(const std::vector<entt::entity> &units, float dt);
+    void move(const std::vector<entt::entity> &units, float dt);
 
 private:
-    World& world;
-    entt::registry& reg;
-    Systems& s;
+    World &world;
+    entt::registry &reg;
+    Systems &s;
 };

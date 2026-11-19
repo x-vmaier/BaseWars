@@ -8,25 +8,27 @@
 #include <deque>
 #include <string>
 
-namespace net {
+namespace net
+{
 
-class SteamServerNet {
-public:
-    ~SteamServerNet();
-    // localOnly: skip the Steam backend login/advertising (offline testing); direct IP still works.
-    bool start(uint16_t port, const std::string& serverName, bool localOnly);
-    bool relayActive() const { return advertised; }
-    void publish(int players, int maxPlayers, const std::string& map);
-    bool poll(NetEvent& out);
-    void send(uint64_t conn, const Writer& w);
-    void kick(uint64_t conn, bool linger);
-    void flush();                           // push queued messages out now (called once per tick)
+    class SteamServerNet
+    {
+    public:
+        ~SteamServerNet();
+        // localOnly: skip the Steam backend login/advertising (offline testing); direct IP still works.
+        bool start(uint16_t port, const std::string &serverName, bool localOnly);
+        bool relayActive() const { return advertised; }
+        void publish(int players, int maxPlayers, const std::string &map);
+        bool poll(NetEvent &out);
+        void send(uint64_t conn, const Writer &w);
+        void kick(uint64_t conn, bool linger);
+        void flush(); // push queued messages out now (called once per tick)
 
-private:
-    void pump();
-    std::deque<NetEvent> queue;
-    bool running = false, advertised = false;
-    uint32_t listenIp = 0, listenP2P = 0, group = 0;
-};
+    private:
+        void pump();
+        std::deque<NetEvent> queue;
+        bool running = false, advertised = false;
+        uint32_t listenIp = 0, listenP2P = 0, group = 0;
+    };
 
-}  // namespace net
+} // namespace net

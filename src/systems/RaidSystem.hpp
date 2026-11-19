@@ -4,16 +4,17 @@
 
 struct Systems;
 
-class RaidSystem {
+class RaidSystem
+{
 public:
-    RaidSystem(World& world, Systems& s) : world(world), reg(world.reg), s(s) {}
+    RaidSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void spawnRaid(int player, int f);
-    void runRaider(entt::entity e, Unit& u, Raider& rd, float dt);
+    void runRaider(entt::entity e, Unit &u, Raider &rd, float dt);
     void raidTick();
 
 private:
-    World& world;
-    entt::registry& reg;
-    Systems& s;
+    World &world;
+    entt::registry &reg;
+    Systems &s;
 };

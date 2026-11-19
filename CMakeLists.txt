@@ -3,8 +3,16 @@ project(BaseWars LANGUAGES C CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
-include(Compiler)       # C++23, compile_commands.json, warnings, build type
-include(Dependencies)   # raylib, EnTT
-include(Steamworks)     # mandatory Steamworks SDK (fails the configure when it is missing)
-include(Assets)        # bw_link_assets()
-include(Targets)        # bw_common, server, client, asset/config/steam-library copy steps
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+include(Dependencies)
+include(Steamworks)
+include(Assets)
+include(Targets)

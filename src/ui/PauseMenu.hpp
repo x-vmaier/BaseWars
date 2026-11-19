@@ -4,9 +4,10 @@
 
 class App;
 
-class PauseMenu {
+class PauseMenu
+{
 public:
-    explicit PauseMenu(App& app) : app(app) {}
+    explicit PauseMenu(App &app) : app(app) {}
     void load();
 
     bool isOpen = false;
@@ -22,7 +23,7 @@ private:
     Rectangle slider() const;
     Rectangle arrow(int dir) const;
 
-    App& app;
+    App &app;
     TMap mPause;
     bool sliderDrag = false;
     double savedAt = -100;

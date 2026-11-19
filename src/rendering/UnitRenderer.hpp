@@ -5,12 +5,13 @@
 
 class App;
 
-class UnitRenderer {
+class UnitRenderer
+{
 public:
-    explicit UnitRenderer(App& app) : app(app) {}
-    void queue(const RPos& p, Info& i, Face& fc, uint32_t id, bool selected, bool hover, DrawList& items, double t, int biome);
+    explicit UnitRenderer(App &app) : app(app) {}
+    void queue(const RPos &p, Info &i, Face &fc, uint32_t id, bool selected, bool hover, DrawList &items, double t, int biome);
 
 private:
     static void extinguishSplash(float px, float py, bool left, double t, uint32_t id);
-    App& app;
+    App &app;
 };

@@ -15,24 +15,35 @@
 class App;
 struct Info;
 
-class TownHallWindow {
+class TownHallWindow
+{
 public:
-    enum Tab { T_Main, T_Storage, T_Clan, T_Count };
-    explicit TownHallWindow(App& app) : app(app) {}
+    enum Tab
+    {
+        T_Main,
+        T_Storage,
+        T_Clan,
+        T_Count
+    };
+    explicit TownHallWindow(App &app) : app(app) {}
     void load();
 
     bool isOpen = false;
     int tab = T_Main;
-    uint32_t target = 0;                // own Town Hall
+    uint32_t target = 0; // own Town Hall
 
-    bool openFor(uint32_t id);          // false (and stays closed) unless id is our own completed Town Hall
-    void close() { isOpen = false; dragRes = -1; }
+    bool openFor(uint32_t id); // false (and stays closed) unless id is our own completed Town Hall
+    void close()
+    {
+        isOpen = false;
+        dragRes = -1;
+    }
     void input(Vector2 mouse);
     void draw();
 
     // panel-space layout (public for the screenshot test hook)
     Vector2 size() const { return mPanel.size(); }
-    Vector2 toScreen(Vector2 p) const;  // panel space -> UI space
+    Vector2 toScreen(Vector2 p) const; // panel space -> UI space
     Rectangle tabRect(int i) const;
     Rectangle content() const;
     Rectangle trainBtn() const;
@@ -40,38 +51,45 @@ public:
     Rectangle allocSlider(int r) const;
     Rectangle disposeBtn(int r) const;
     Rectangle quotaArrow(int t, int dir) const;
-    void armDisposeForTest(int r) { disposeArm = r; disposeAt = GetTime(); }
+    void armDisposeForTest(int r)
+    {
+        disposeArm = r;
+        disposeAt = GetTime();
+    }
 
 private:
-    struct PanelXf { float ox, oy, sc; };
+    struct PanelXf
+    {
+        float ox, oy, sc;
+    };
     PanelXf xf() const;
     Vector2 toPanel(Vector2 m) const;
-    const Info* hall() const;           // null when the target vanished or is not ours
+    const Info *hall() const; // null when the target vanished or is not ours
 
     // main tab (TownHallWindow.cpp)
     Rectangle pawnCard() const;
     Rectangle queueSlot(int i) const;
     Rectangle repairBtn() const;
     Rectangle moveBtn() const;
-    void inputMain(Vector2 m, const Info& in);
-    void drawMain(Vector2 m, const Info& in);
-    void drawHallSection(Vector2 m, const Info& in);
+    void inputMain(Vector2 m, const Info &in);
+    void drawMain(Vector2 m, const Info &in);
+    void drawHallSection(Vector2 m, const Info &in);
     // storage + clan tabs (TownHallTabs.cpp)
     Rectangle slot(int r) const;
     Rectangle clanBtn() const;
     Rectangle troopCard(int t) const;
     void inputStorage(Vector2 m);
-    void drawStorage(Vector2 m, const Info& in);
+    void drawStorage(Vector2 m, const Info &in);
     void drawCapacityChart(Rectangle r, int level);
     void inputClan(Vector2 m);
     void drawClan(Vector2 m);
-    void card(Rectangle c, Kind k, bool selected, bool hover, bool dim, float phase);   // Archery-style animated troop card
+    void card(Rectangle c, Kind k, bool selected, bool hover, bool dim, float phase); // Archery-style animated troop card
     void sendQuotas();
 
-    App& app;
+    App &app;
     TMap mPanel;
-    int dragRes = -1;                   // storage share slider being dragged
-    int disposeArm = -1;                // resource whose Dispose waits for the confirm click
+    int dragRes = -1;    // storage share slider being dragged
+    int disposeArm = -1; // resource whose Dispose waits for the confirm click
     double disposeAt = 0;
     bool leaveArm = false;
     double leaveAt = 0;

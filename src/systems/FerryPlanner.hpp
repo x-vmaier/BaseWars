@@ -20,36 +20,44 @@ struct Systems;
 
 inline constexpr float FERRY_MIN_DIST = 14.f, FERRY_IDLE = 6.f, BOARD_REACH = 2.6f, INF_T = 1e9f;
 
-struct TransportPlan {
+struct TransportPlan
+{
     bool useBoat = false, deferred = false;
     entt::entity ship = entt::null;
     uint32_t shipUid = 0;
-    IV board{0, 0}, boardWater{0, 0}, land{0, 0}, landWater{0, 0};   // land shore tiles / ocean tiles next to them
-    float etaBoat = 1e9f, etaLand = 1e9f;                             // seconds; 1e9 = unreachable
+    IV board{0, 0}, boardWater{0, 0}, land{0, 0}, landWater{0, 0}; // land shore tiles / ocean tiles next to them
+    float etaBoat = 1e9f, etaLand = 1e9f;                          // seconds; 1e9 = unreachable
 };
 
-class FerryPlanner {
+class FerryPlanner
+{
 public:
-    FerryPlanner(World& world, Systems& s) : world(world), reg(world.reg), s(s) {}
+    FerryPlanner(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     // Land tiles that touch the ocean (4-neighbourhood), nearest to `around` first, at least 5 tiles apart.
-    void shoreTiles(Pos around, int maxR, size_t want, std::vector<IV>& out);
-    IV waterNextTo(IV s);                                    // the ocean neighbour with the most ocean around it (open water)
+    void shoreTiles(Pos around, int maxR, size_t want, std::vector<IV> &out);
+    IV waterNextTo(IV s); // the ocean neighbour with the most ocean around it (open water)
     // Route length in tiles from `a` to `b`; INF when there is no complete route (cached for 45 s).
     float routeLen(Pos a, IV b, bool water, uint32_t ignore, int maxNodes, float tol = 2.6f);
-    TransportPlan planTransport(int owner, const std::vector<entt::entity>& group, Pos to, uint32_t destUid = 0, float boatFactor = .75f);
-    bool startTransport(const TransportPlan& plan, const std::vector<entt::entity>& group, Pos dest, uint32_t destUid = 0);
-    int tryFerryHaul(entt::entity e, Haul& h, entt::entity target);   // 0 = walk, 1 = a voyage was started, 2 = budget exhausted
+    TransportPlan planTransport(int owner, const std::vector<entt::entity> &group, Pos to, uint32_t destUid = 0, float boatFactor = .75f);
+    bool startTransport(const TransportPlan &plan, const std::vector<entt::entity> &group, Pos dest, uint32_t destUid = 0);
+    int tryFerryHaul(entt::entity e, Haul &h, entt::entity target); // 0 = walk, 1 = a voyage was started, 2 = budget exhausted
     int planBudget = 0;
 
 private:
-    World& world;
-    entt::registry& reg;
-    Systems& s;
-    struct RouteKey {
-        int ax, ay, bx, by; bool water; uint32_t ignore;
-        bool operator==(const RouteKey& o) const { return ax == o.ax && ay == o.ay && bx == o.bx && by == o.by && water == o.water && ignore == o.ignore; }
+    World &world;
+    entt::registry &reg;
+    Systems &s;
+    struct RouteKey
+    {
+        int ax, ay, bx, by;
+        bool water;
+        uint32_t ignore;
+        bool operator==(const RouteKey &o) const { return ax == o.ax && ay == o.ay && bx == o.bx && by == o.by && water == o.water && ignore == o.ignore; }
     };
-    struct RouteKeyHash { size_t operator()(const RouteKey& k) const { return size_t(hash2(k.ax * 31 + k.bx, k.ay * 17 + k.by, k.ignore * 2u + (k.water ? 1u : 0u))); } };
+    struct RouteKeyHash
+    {
+        size_t operator()(const RouteKey &k) const { return size_t(hash2(k.ax * 31 + k.bx, k.ay * 17 + k.by, k.ignore * 2u + (k.water ? 1u : 0u))); }
+    };
     std::unordered_map<RouteKey, std::pair<float, double>, RouteKeyHash> routeCache;
 };

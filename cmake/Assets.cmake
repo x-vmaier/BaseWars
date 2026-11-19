@@ -1,4 +1,4 @@
-# Makes the asset folder available next to an executable (symlink on Unix to avoid copying hundreds of PNGs, copy on Windows).
+# Makes the asset folder available next to an executable (symlink on Unix, copy on Windows)
 function(bw_link_assets target)
     if(WIN32)
         add_custom_command(TARGET ${target} POST_BUILD

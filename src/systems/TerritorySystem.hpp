@@ -4,9 +4,10 @@
 
 struct Systems;
 
-class TerritorySystem {
+class TerritorySystem
+{
 public:
-    TerritorySystem(World& world, Systems& s) : world(world), reg(world.reg), s(s) {}
+    TerritorySystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void evalFunctional();
     void doMoveTown(int id, int tx, int ty);
@@ -14,9 +15,9 @@ public:
     void relocSecond();
 
 private:
-    World& world;
-    entt::registry& reg;
-    Systems& s;
+    World &world;
+    entt::registry &reg;
+    Systems &s;
     void migrateTown(int ow, entt::entity nth);
     void finishReloc(entt::entity n);
 };

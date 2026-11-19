@@ -6,18 +6,19 @@
 
 class App;
 
-class BaseMenus {
+class BaseMenus
+{
 public:
-    explicit BaseMenus(App& app) : app(app) {}
+    explicit BaseMenus(App &app) : app(app) {}
 
-    void push(const Toast& t);
+    void push(const Toast &t);
     bool over(Vector2 m) const;
-    bool input(Vector2 m);              // true when a click was consumed
+    bool input(Vector2 m); // true when a click was consumed
     void draw();
 
 private:
     Rectangle toastRect(int i) const;
     Rectangle homelessBanner() const;
-    App& app;
+    App &app;
     std::vector<Toast> toasts;
 };

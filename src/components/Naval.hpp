@@ -6,11 +6,29 @@
 #include <cstdint>
 #include <vector>
 
-struct Ship { std::vector<uint32_t> pax; double idleSince = 0; };
-struct Aboard { uint32_t ship; };
-struct Boarding { uint32_t ship; bool meetSet = false; Pos meet{0, 0}; float repath = 0; int stuck = 0; };
-struct Voyage {
-    uint8_t phase = 0;                                   // 0 gather, 1 sail, 2 unload
+struct Ship
+{
+    std::vector<uint32_t> pax;
+    double idleSince = 0;
+};
+
+struct Aboard
+{
+    uint32_t ship;
+};
+
+struct Boarding
+{
+    uint32_t ship;
+    bool meetSet = false;
+    Pos meet{0, 0};
+    float repath = 0;
+    int stuck = 0;
+};
+
+struct Voyage
+{
+    uint8_t phase = 0; // 0 gather, 1 sail, 2 unload
     std::vector<uint32_t> units;
     IV board{0, 0}, boardWater{0, 0}, land{0, 0}, landWater{0, 0};
     Pos dest{0, 0};

@@ -8,7 +8,7 @@ if(WIN32)
     target_link_libraries(bw_common PUBLIC ws2_32 winmm)
 endif()
 
-# ---- authoritative server ----
+# Server
 file(GLOB_RECURSE BW_SERVER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/server/*.cpp" "${CMAKE_SOURCE_DIR}/src/systems/*.cpp")
 set(BW_SERVER_SOURCES ${BW_SERVER_SOURCES}
@@ -20,7 +20,7 @@ add_custom_command(TARGET server POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/config" "$<TARGET_FILE_DIR:server>"
     VERBATIM)
 
-# ---- client ----
+# Client
 file(GLOB_RECURSE BW_CLIENT_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/client/*.cpp" "${CMAKE_SOURCE_DIR}/src/rendering/*.cpp" "${CMAKE_SOURCE_DIR}/src/ui/*.cpp")
 set(BW_CLIENT_SOURCES ${BW_CLIENT_SOURCES}

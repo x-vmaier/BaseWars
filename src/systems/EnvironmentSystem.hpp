@@ -4,15 +4,16 @@
 
 struct Systems;
 
-class EnvironmentSystem {
+class EnvironmentSystem
+{
 public:
-    EnvironmentSystem(World& world, Systems& s) : world(world), reg(world.reg), s(s) {}
+    EnvironmentSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
-    void coldAndWake(const std::vector<entt::entity>& units, const std::vector<entt::entity>& blds);   // once per second
-    void explore(const std::vector<entt::entity>& units, const std::vector<entt::entity>& blds);       // every 4th tick
+    void coldAndWake(const std::vector<entt::entity> &units, const std::vector<entt::entity> &blds); // once per second
+    void explore(const std::vector<entt::entity> &units, const std::vector<entt::entity> &blds);     // every 4th tick
 
 private:
-    World& world;
-    entt::registry& reg;
-    Systems& s;
+    World &world;
+    entt::registry &reg;
+    Systems &s;
 };

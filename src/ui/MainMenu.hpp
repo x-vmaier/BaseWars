@@ -8,14 +8,15 @@
 
 class App;
 
-class MainMenu {
+class MainMenu
+{
 public:
-    explicit MainMenu(App& app) : app(app) {}
+    explicit MainMenu(App &app) : app(app) {}
     void load();
 
-    std::string status, directAddr;     // status line under the panel, Direct-tab address
+    std::string status, directAddr; // status line under the panel, Direct-tab address
 
-    void refresh();                     // re-query the server browser
+    void refresh(); // re-query the server browser
     void update();
     void draw();
 
@@ -30,9 +31,9 @@ private:
     Rectangle quitBtn() const;
     void joinDirect();
 
-    App& app;
+    App &app;
     TMap mMenu;
-    int tab = 0, sel = -1, focus = 0;   // tab, selected row, focused text field (0 none, 1 name, 2 address)
+    int tab = 0, sel = -1, focus = 0; // tab, selected row, focused text field (0 none, 1 name, 2 address)
     double lastClick = 0;
     std::vector<ServerEntry> list;
 };

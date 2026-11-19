@@ -3,5 +3,10 @@
 #include <functional>
 #include <vector>
 
-struct DrawItem { float y; std::function<void()> fn; };
+struct DrawItem
+{
+    float y;
+    std::function<void()> fn;
+};
+
 using DrawList = std::vector<DrawItem>;

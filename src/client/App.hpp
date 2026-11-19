@@ -39,17 +39,18 @@
 
 #include <string>
 
-class App {
+class App
+{
 public:
     App();
-    App(const App&) = delete;
-    App& operator=(const App&) = delete;
+    App(const App &) = delete;
+    App &operator=(const App &) = delete;
 
     // ---- shared state
     Settings settings;
     Camera2D cam{};
     ClientWorld world;
-    entt::dispatcher disp;              // LogEvent -> Hud
+    entt::dispatcher disp; // LogEvent -> Hud
     bool wantQuit = false;
 
     // ---- client logic
@@ -82,11 +83,11 @@ public:
     ShipPanel shipPanel;
     BaseMenus baseMenus;
 
-    void run(const std::string& autoJoin);
-    void msg(const std::string& s) { disp.enqueue(LogEvent{s}); }
-    bool overUI(Vector2 m);             // m in UI space (ui::mouse())
-    void resetWorld();                  // drop all replicated state and close panels (join / leave)
-    void travelTo(float tx, float ty);  // move the camera to a tile and close the social menu / world map
+    void run(const std::string &autoJoin);
+    void msg(const std::string &s) { disp.enqueue(LogEvent{s}); }
+    bool overUI(Vector2 m);            // m in UI space (ui::mouse())
+    void resetWorld();                 // drop all replicated state and close panels (join / leave)
+    void travelTo(float tx, float ty); // move the camera to a tile and close the social menu / world map
 
 private:
     void loadGfx();

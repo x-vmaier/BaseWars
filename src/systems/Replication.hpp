@@ -4,22 +4,23 @@
 
 struct Systems;
 
-class Replication {
+class Replication
+{
 public:
-    Replication(World& world, Systems& s) : world(world), reg(world.reg), s(s) {}
+    Replication(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void sendState(int id);
     void sendFog(int id);
     void sendRoster();
-    void sendMap(int id);                        // faction towns the player has discovered
+    void sendMap(int id); // faction towns the player has discovered
     void sendQueues(int id);
     void sendBaseInfo(int id);
     void sendShipInfo(int id);
-    void sendPaths(int id);                      // path lines of the viewer's units and those of players sharing vision
+    void sendPaths(int id); // path lines of the viewer's units and those of players sharing vision
 
 private:
-    World& world;
-    entt::registry& reg;
-    Systems& s;
-    std::unordered_map<uint32_t, uint64_t> pathSent[MAX_PLAYERS + 1];   // per player: uid -> hash of the path last sent
+    World &world;
+    entt::registry &reg;
+    Systems &s;
+    std::unordered_map<uint32_t, uint64_t> pathSent[MAX_PLAYERS + 1]; // per player: uid -> hash of the path last sent
 };

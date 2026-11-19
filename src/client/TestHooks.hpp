@@ -10,17 +10,18 @@
 // Also read elsewhere: BW_CAM / BW_ZOOM (S_Welcome), BW_SCALE / BW_MENU (main).
 class App;
 
-class TestHooks {
+class TestHooks
+{
 public:
-    explicit TestHooks(App& app);
+    explicit TestHooks(App &app);
     bool active() const { return shotPath != nullptr; }
-    void update();                      // before drawing: scripted commands and UI state
-    void siteCommands();                // BW_SITE
-    void townHallHook();                // BW_UI=townhall
-    bool captureIfDue();                // after drawing the UI: true when the screenshot was taken (quit)
+    void update();       // before drawing: scripted commands and UI state
+    void siteCommands(); // BW_SITE
+    void townHallHook(); // BW_UI=townhall
+    bool captureIfDue(); // after drawing the UI: true when the screenshot was taken (quit)
 
 private:
-    App& app;
-    const char* shotPath;
+    App &app;
+    const char *shotPath;
     int shotFrames = 0, shotAfter;
 };
