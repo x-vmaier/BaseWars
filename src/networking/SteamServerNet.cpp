@@ -39,8 +39,9 @@ void onStatus(SteamNetConnectionStatusChangedCallback_t* info) {
 
 bool SteamServerNet::start(uint16_t port, const std::string& serverName, bool localOnly) {
     // Game port = direct listen port, query port = port + 1 (server browser).
-    if (!SteamGameServer_Init(0, port, uint16_t(port + 1), eServerModeNoAuthentication, "0.2.0")) {
-        std::puts("SteamGameServer_Init failed (is steam_api present and steam_appid.txt next to the executable?)");
+    SteamErrMsg err{};
+    if (SteamGameServer_InitEx(0, port, uint16_t(port + 1), eServerModeNoAuthentication, "0.2.0", &err) != k_ESteamAPIInitResult_OK) {
+        std::printf("SteamGameServer_Init failed: %s\n", err);
         return false;
     }
     ISteamGameServer* gs = SteamGameServer();
@@ -55,7 +56,7 @@ bool SteamServerNet::start(uint16_t port, const std::string& serverName, bool lo
     if (!localOnly) {
         gs->LogOnAnonymous();
         gs->SetAdvertiseServerActive(true);
-        SteamGameServerNetworkingUtils()->InitRelayNetworkAccess();
+        SteamNetworkingUtils()->InitRelayNetworkAccess();
     }
     g_queue = &queue;
     SteamNetworkingConfigValue_t opt;

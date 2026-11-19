@@ -150,3 +150,6 @@ savegame.bin.tmp
 profile.txt
 
 .claude/
+
+# Steamworks SDK (not redistributable)
+third_party/
