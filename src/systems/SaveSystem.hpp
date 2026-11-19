@@ -1,6 +1,8 @@
+/**
+ * @file SaveSystem.hpp
+ * @brief Binary savegame: a mandatory part followed by optional appended sections.
+ */
 #pragma once
-// Binary savegame: mandatory part (profiles, clans, towns, entities) followed by optional appended sections (world,
-// ships, base). Bump SAVE_MAGIC whenever the layout changes.
 #include "server/World.hpp"
 
 struct Systems;

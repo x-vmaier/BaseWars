@@ -1,5 +1,8 @@
+/**
+ * @file ConvoyHaulSystem.hpp
+ * @brief Resource logistics: building workers, clan tribute convoys (+ clan spotting), hauling parties.
+ */
 #pragma once
-// Resource logistics: building workers, clan tribute convoys (+ clan spotting), hauling parties.
 #include "server/World.hpp"
 
 struct Systems;

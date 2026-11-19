@@ -1,6 +1,9 @@
+/**
+ * @file TrainingPanel.hpp
+ * @brief Archery window: troop cards, troop details / training / troop upgrades, building upgrade, and the training
+ * queue strip.
+ */
 #pragma once
-// Archery window: troop cards, troop details / training / troop upgrades, building upgrade, and the training queue
-// strip.
 #include "common/Shared.hpp"
 #include "rendering/Assets.hpp"
 

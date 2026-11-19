@@ -1,5 +1,8 @@
+/**
+ * @file WaterRenderer.hpp
+ * @brief Full-screen animated water (water.fs) with click / splash ripples; plain tiled texture without the shader.
+ */
 #pragma once
-// Full-screen animated water (water.fs) with click / splash ripples; plain tiled texture without the shader.
 #include <raylib.h>
 
 class App;

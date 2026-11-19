@@ -1,7 +1,9 @@
+/**
+ * @file BuildSystem.hpp
+ * @brief Buildings per tick: self-raising construction (sites without a pawn job), production + worker respawn,
+ * defensive fire.
+ */
 #pragma once
-// Buildings per tick: self-raising construction (sites without a pawn job), production + worker respawn, defensive
-// fire. Damaged buildings work at reduced efficiency; buildings with site work (construction / upgrade / repair)
-// neither produce nor train.
 #include "server/World.hpp"
 
 struct Systems;

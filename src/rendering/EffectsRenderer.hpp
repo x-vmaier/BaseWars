@@ -1,7 +1,8 @@
+/**
+ * @file EffectsRenderer.hpp
+ * @brief Transient effects: fx events, drops, ghosts, markers, building status and land clouds.
+ */
 #pragma once
-// Transient effects: S_State effect events (explosions, dust, splashes, heals, arrows, fire arrows, extinguishing),
-// resource drops, dissolving ghosts of destroyed entities, command markers, building fire / disabled / moving status,
-// and translucent clouds drifting over discovered land.
 #include "client/ClientState.hpp"
 #include "client/Components.hpp"
 #include "rendering/BuildingView.hpp"

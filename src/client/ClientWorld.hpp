@@ -1,7 +1,8 @@
+/**
+ * @file ClientWorld.hpp
+ * @brief Replicated world state on the client plus the read-only queries renderers and UI share.
+ */
 #pragma once
-// Replicated world state on the client: ECS registry of server entities, terrain/fog chunks, roster, resources and the
-// server-sent side tables (cleared tiles, clear jobs, training queues, ship details, path lines, base info).
-// Also the read-only queries the renderers and UI share (terrain, diplomacy, names, placement features).
 #include "client/ClientCommon.hpp"
 #include "client/ClientState.hpp"
 #include "client/Components.hpp"

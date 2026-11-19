@@ -1,5 +1,8 @@
+/**
+ * @file SteamClient.hpp
+ * @brief Local Steam user: login, display name, friend list.
+ */
 #pragma once
-// Local Steam user: login, display name, friend list.
 #include <cstdint>
 #include <string>
 #include <vector>

@@ -1,3 +1,7 @@
+/**
+ * @file Chat.cpp
+ * @brief Chat (global / clan / friends): recent lines fade out; Enter opens the input bar.
+ */
 #include "ui/Chat.hpp"
 
 #include "client/App.hpp"

@@ -1,3 +1,7 @@
+/**
+ * @file ShipPanel.cpp
+ * @brief Ship panel (right-click an own ship without troops selected): load, cargo, disembark.
+ */
 #include "ui/ShipPanel.hpp"
 
 #include "client/App.hpp"

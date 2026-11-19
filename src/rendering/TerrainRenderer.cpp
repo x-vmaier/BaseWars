@@ -1,3 +1,7 @@
+/**
+ * @file TerrainRenderer.cpp
+ * @brief Terrain: shore foam, autotiled ground, cliffs, fog dimming and clouds over unexplored land.
+ */
 #include "rendering/TerrainRenderer.hpp"
 
 #include "client/App.hpp"

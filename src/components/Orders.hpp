@@ -1,5 +1,8 @@
+/**
+ * @file Orders.hpp
+ * @brief Unit orders and simple behaviours.
+ */
 #pragma once
-// Unit orders and simple behaviours.
 #include "common/Shared.hpp"
 
 #include <cstdint>

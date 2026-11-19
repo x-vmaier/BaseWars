@@ -1,3 +1,7 @@
+/**
+ * @file MainMenu.cpp
+ * @brief Main menu and server browser: Internet / Friends / Direct tabs, name box, server list, connecting overlay.
+ */
 #include "ui/MainMenu.hpp"
 
 #include "client/App.hpp"

@@ -1,5 +1,8 @@
+/**
+ * @file PauseMenu.hpp
+ * @brief Pause menu (Esc): UI scale slider, window mode, save settings, resume, leave, quit.
+ */
 #pragma once
-// Pause menu (Esc): UI scale slider, window mode, save settings, resume, leave, quit.
 #include "rendering/Assets.hpp"
 
 class App;

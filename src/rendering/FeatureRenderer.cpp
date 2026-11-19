@@ -1,3 +1,7 @@
+/**
+ * @file FeatureRenderer.cpp
+ * @brief Surface features (trees, bushes, rocks, gold veins) with clearing progress and gold sparkle near own mines.
+ */
 #include "rendering/FeatureRenderer.hpp"
 
 #include "client/App.hpp"

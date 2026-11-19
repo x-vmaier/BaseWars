@@ -1,5 +1,8 @@
+/**
+ * @file NetTypes.hpp
+ * @brief Plain data shared by the client and server network layers.
+ */
 #pragma once
-// Plain data shared by the client and server network layers.
 #include "common/Shared.hpp"
 
 #include <cstdint>

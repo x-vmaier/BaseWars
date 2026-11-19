@@ -1,3 +1,8 @@
+/**
+ * @file BaseMenus.cpp
+ * @brief Base-mechanics HUD: clan alert toasts (click to jump), homeless banner, town-move progress, placement-mode
+ * banner.
+ */
 #include "ui/BaseMenus.hpp"
 
 #include "client/App.hpp"

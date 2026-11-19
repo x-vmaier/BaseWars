@@ -1,5 +1,8 @@
+/**
+ * @file TownSystem.hpp
+ * @brief NPC faction towns: founding per region, garrisons, destruction / respawn, regeneration.
+ */
 #pragma once
-// NPC faction towns: founding per region, garrisons, destruction / respawn, regeneration.
 #include "server/World.hpp"
 
 struct Systems;

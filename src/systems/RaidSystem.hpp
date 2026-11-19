@@ -1,5 +1,8 @@
+/**
+ * @file RaidSystem.hpp
+ * @brief Faction raiding parties against hostile players.
+ */
 #pragma once
-// Faction raiding parties against hostile players.
 #include "server/World.hpp"
 
 struct Systems;

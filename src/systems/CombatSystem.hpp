@@ -1,5 +1,8 @@
+/**
+ * @file CombatSystem.hpp
+ * @brief Damage, looting, kills (incl.
+ */
 #pragma once
-// Damage, looting, kills (incl. Town Hall defeat) and the per-unit attack logic.
 #include "server/World.hpp"
 
 struct Systems;

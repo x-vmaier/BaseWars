@@ -1,4 +1,7 @@
-// Asset loading: asset directory lookup, texture/animation cache, a tiny JSON parser and Tiled (.tmj) UI maps.
+/**
+ * @file Assets.cpp
+ * @brief Asset loading: asset directory lookup, texture/animation cache, a tiny JSON parser and Tiled (.tmj) UI maps.
+ */
 #include "rendering/Assets.hpp"
 
 #include <algorithm>

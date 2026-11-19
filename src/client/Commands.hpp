@@ -1,5 +1,8 @@
+/**
+ * @file Commands.hpp
+ * @brief Client -> server commands (C_*).
+ */
 #pragma once
-// Client -> server commands (C_*). Each method writes one message (cmdClear may split into several).
 #include "common/Shared.hpp"
 
 #include <raylib.h>

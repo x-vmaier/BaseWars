@@ -1,5 +1,8 @@
+/**
+ * @file PacketHandler.hpp
+ * @brief Decodes client commands (C_*) and dispatches them to the systems.
+ */
 #pragma once
-// Decodes client commands (C_*) and dispatches them to the systems.
 #include "server/World.hpp"
 
 struct Systems;

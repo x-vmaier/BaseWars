@@ -1,6 +1,9 @@
+/**
+ * @file BigMap.hpp
+ * @brief World map (N / minimap click): pan, zoom, travel, friend arrows, and the support-patrol menu (right-click an
+ * allied / clan town).
+ */
 #pragma once
-// World map (N / minimap click): pan, zoom, travel, friend arrows, and the support-patrol menu (right-click an
-// allied / clan town).
 #include "rendering/Assets.hpp"
 
 #include <string>

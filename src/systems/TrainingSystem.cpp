@@ -1,3 +1,7 @@
+/**
+ * @file TrainingSystem.cpp
+ * @brief Per-building training queues (C_Train / C_Dequeue) and spawning of trained units.
+ */
 #include "systems/TrainingSystem.hpp"
 
 #include "common/Progression.hpp"

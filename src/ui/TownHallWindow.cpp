@@ -1,3 +1,7 @@
+/**
+ * @file TownHallWindow.cpp
+ * @brief Town Hall window (own Town Hall only), styled like the Archery window: a large paper frame with a tab strip.
+ */
 #include "ui/TownHallWindow.hpp"
 
 #include "client/App.hpp"

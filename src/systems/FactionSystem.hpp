@@ -1,10 +1,9 @@
+/**
+ * @file FactionSystem.hpp
+ * @brief NPC faction reputation, town self-defense, garrison AI and help for friendly players, donations and town
+ * demand.
+ */
 #pragma once
-// NPC faction reputation, town self-defense, garrison AI and help for friendly players, donations and town demand.
-//
-// Donations (C_Donate to a faction, C_Transfer to a clan mate) share one per-player cooldown (donation_cooldown).
-// Each faction's towns want one resource at a time; it changes every demand_change_min..max seconds, or as soon as
-// demand_satisfy of it was given. Gifts of the wanted resource earn demand_bonus x reputation; repeated gifts of the
-// same resource earn less (1 / (1 + recent / donation_diminish), the memory fades over donation_memory seconds).
 #include "server/World.hpp"
 
 struct Systems;

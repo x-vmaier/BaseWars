@@ -1,3 +1,7 @@
+/**
+ * @file PacketHandler.cpp
+ * @brief Decodes client commands (C_*) and dispatches them to the systems.
+ */
 #include "systems/PacketHandler.hpp"
 
 #include "common/Progression.hpp"

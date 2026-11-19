@@ -1,5 +1,8 @@
+/**
+ * @file UnitAnims.hpp
+ * @brief Sprite selection: unit animations by state, firefighting animations, building sprite metrics.
+ */
 #pragma once
-// Sprite selection: unit animations by state, firefighting animations, building sprite metrics.
 #include "common/Shared.hpp"
 #include "rendering/Assets.hpp"
 

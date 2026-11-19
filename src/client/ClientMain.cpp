@@ -1,4 +1,7 @@
-// Client entry point: window setup, config.txt / settings.txt / profile loading, optional auto-join.
+/**
+ * @file ClientMain.cpp
+ * @brief Client entry point: window setup, config.txt / settings.txt / profile loading, optional auto-join.
+ */
 #include "client/App.hpp"
 
 #include <raylib.h>

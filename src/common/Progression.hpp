@@ -1,7 +1,8 @@
+/**
+ * @file Progression.hpp
+ * @brief Progression rules shared by server and client: Town Hall gates, level cost / time curves, capacity.
+ */
 #pragma once
-// Progression rules shared by server (enforcement) and client (previews, greyed-out buttons with the reason):
-// building levels 1..MAX_LEVEL gated by the Town Hall level (one table), exponential upgrade cost / time curves,
-// storage capacity, food (meat) cost shares, site jobs (construction / upgrade / repair) and damage efficiency.
 // Tunables come from ServerConfig; the server sends them to clients in S_Welcome (putRules / getRules).
 #include "common/Shared.hpp"
 

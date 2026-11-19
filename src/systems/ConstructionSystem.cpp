@@ -1,3 +1,7 @@
+/**
+ * @file ConstructionSystem.cpp
+ * @brief Building sites: construction, upgrades (C_Upgrade) and repairs (C_Repair) are SiteJobs worked by a pawn.
+ */
 #include "systems/ConstructionSystem.hpp"
 
 #include "common/Progression.hpp"

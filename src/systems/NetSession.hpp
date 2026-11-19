@@ -1,5 +1,8 @@
+/**
+ * @file NetSession.hpp
+ * @brief Connection lifecycle: hello (profile lookup / creation / respawn), disconnect.
+ */
 #pragma once
-// Connection lifecycle: hello (profile lookup / creation / respawn), disconnect.
 #include "server/World.hpp"
 
 struct Systems;

@@ -1,3 +1,7 @@
+/**
+ * @file TownSystem.cpp
+ * @brief NPC faction towns: founding per region, garrisons, destruction / respawn, regeneration.
+ */
 #include "systems/TownSystem.hpp"
 
 #include "systems/Systems.hpp"

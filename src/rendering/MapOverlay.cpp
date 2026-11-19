@@ -1,3 +1,7 @@
+/**
+ * @file MapOverlay.cpp
+ * @brief Icons shared by the world map and the minimap: territory, towns, faction towns, convoys and support patrols.
+ */
 #include "rendering/MapOverlay.hpp"
 
 #include "client/App.hpp"

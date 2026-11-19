@@ -1,4 +1,7 @@
-// Town Hall window: the Storage and Clan tabs (the frame and the Main tab are in TownHallWindow.cpp).
+/**
+ * @file TownHallTabs.cpp
+ * @brief Town Hall window: the Storage and Clan tabs (the frame and the Main tab are in TownHallWindow.cpp).
+ */
 #include "ui/TownHallWindow.hpp"
 
 #include "client/App.hpp"

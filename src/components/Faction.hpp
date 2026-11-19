@@ -1,5 +1,8 @@
+/**
+ * @file Faction.hpp
+ * @brief NPC faction units (raids, town garrisons, patrols) and free hunting pawns.
+ */
 #pragma once
-// NPC faction units (raids, town garrisons, patrols) and free hunting pawns.
 #include <cstdint>
 
 struct Raider

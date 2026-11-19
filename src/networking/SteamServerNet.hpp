@@ -1,5 +1,8 @@
+/**
+ * @file SteamServerNet.hpp
+ * @brief Server transport: Steam GameServer + Steam Networking Sockets.
+ */
 #pragma once
-// Server transport: Steam GameServer + Steam Networking Sockets.
 //  * one IP listen socket   - direct connections (LAN / localhost testing, port forwarded hosting)
 //  * one P2P listen socket  - Steam Datagram Relay, reachable by SteamID from the server browser without port
 //  forwarding

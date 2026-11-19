@@ -1,5 +1,8 @@
+/**
+ * @file ClientCommon.hpp
+ * @brief Client-wide constants.
+ */
 #pragma once
-// Client-wide constants.
 #include "common/Progression.hpp"
 #include "common/Shared.hpp"
 

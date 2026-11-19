@@ -1,3 +1,7 @@
+/**
+ * @file SocialMenu.cpp
+ * @brief Social menu: players / friends / clans / my clan / factions, with search, travel and diplomacy buttons.
+ */
 #include "ui/SocialMenu.hpp"
 
 #include "client/App.hpp"

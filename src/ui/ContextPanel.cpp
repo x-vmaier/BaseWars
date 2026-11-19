@@ -1,3 +1,7 @@
+/**
+ * @file ContextPanel.cpp
+ * @brief Context panel of a building: stats lines, action buttons with cost rows, haul slider, next-level preview.
+ */
 #include "ui/ContextPanel.hpp"
 
 #include "client/App.hpp"

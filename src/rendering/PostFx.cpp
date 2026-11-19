@@ -1,3 +1,7 @@
+/**
+ * @file PostFx.cpp
+ * @brief Scene render target, bloom and the post shader (grading, day/night, vignette, lights).
+ */
 #include "rendering/PostFx.hpp"
 
 #include "client/App.hpp"

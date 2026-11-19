@@ -1,5 +1,7 @@
-// Authoritative server: infinite biome world, persistence, economy with physical supply lines, combat, naval units,
-// alliances. main(), signal handling and the fixed-rate tick loop that owns the World and all systems.
+/**
+ * @file ServerMain.cpp
+ * @brief Authoritative server entry point and tick loop.
+ */
 #include "server/World.hpp"
 #include "systems/Systems.hpp"
 

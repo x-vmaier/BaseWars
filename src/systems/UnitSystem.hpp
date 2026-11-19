@@ -1,6 +1,8 @@
+/**
+ * @file UnitSystem.hpp
+ * @brief Per-tick unit behaviour dispatch and movement.
+ */
 #pragma once
-// Units per tick: behaviour dispatch (wander, firefighting, workers, convoys, raids, hunting, patrols, monks, combat)
-// and movement.
 #include "server/World.hpp"
 
 struct Systems;

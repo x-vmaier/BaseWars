@@ -1,5 +1,8 @@
+/**
+ * @file DefenseSystem.hpp
+ * @brief Clan alerts, defense quota dispatch and support patrols.
+ */
 #pragma once
-// Clan alerts, defense quota dispatch and support patrols.
 #include "server/World.hpp"
 
 struct Systems;

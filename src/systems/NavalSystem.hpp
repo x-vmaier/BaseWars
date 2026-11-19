@@ -1,5 +1,8 @@
+/**
+ * @file NavalSystem.hpp
+ * @brief Ships: capacity, embark / disembark, voyages, ship commands (C_Board, C_Disembark) and ship fields of S_State.
+ */
 #pragma once
-// Ships: capacity, embark / disembark, voyages, ship commands (C_Board, C_Disembark) and ship fields of S_State.
 #include "server/World.hpp"
 
 struct Systems;

@@ -1,7 +1,8 @@
+/**
+ * @file TerrainRenderer.hpp
+ * @brief Terrain: shore foam, autotiled ground, cliffs, fog dimming and clouds over unexplored land.
+ */
 #pragma once
-// Terrain: shore foam, autotiled ground / plateaus / cliff faces, unexplored tiles, fog dimming and the clouds over
-// unexplored land. Works on a TerrainView: the visible tile window plus a margin, with biome / explored / visible
-// samples cached once per frame.
 #include <raylib.h>
 
 #include <cstdint>

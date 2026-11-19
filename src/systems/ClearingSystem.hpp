@@ -1,12 +1,8 @@
+/**
+ * @file ClearingSystem.hpp
+ * @brief Clearing of surface features by pawns, buildings queued behind clearing, resource drops.
+ */
 #pragma once
-// Clearing of surface features (trees, bushes, rocks, gold veins) by pawns, buildings queued behind clearing, resource
-// drops, gold-deposit mine bonus.
-//
-// A clear job belongs to one tile. A pawn (one of the pawns the player selected, else the nearest free pawn) is
-// assigned, its previous work (Worker / move order) is stored in its ClearTask, it walks to the tile and the timer only
-// runs while it stands there working. On completion the feature turns into resource drops and the pawn resumes its
-// prior work (or chains to the next waiting job nearby). A building placed over features is a PendingBuild: placed once
-// its tiles are cleared.
 #include "server/World.hpp"
 
 struct Systems;

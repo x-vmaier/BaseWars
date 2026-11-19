@@ -1,3 +1,7 @@
+/**
+ * @file TownHallWindow.hpp
+ * @brief Town Hall window (own Town Hall only), styled like the Archery window: a large paper frame with a tab strip.
+ */
 #pragma once
 // Town Hall window (own Town Hall only), styled like the Archery window: a large paper frame with a tab strip.
 //   Main     train pawns (card + queue, C_Train / C_Dequeue), upgrade / repair / cancel the hall with cost rows and the

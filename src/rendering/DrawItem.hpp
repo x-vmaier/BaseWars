@@ -1,5 +1,8 @@
+/**
+ * @file DrawItem.hpp
+ * @brief A deferred world draw call, sorted by its foot y so sprites overlap correctly.
+ */
 #pragma once
-// A deferred world draw call, sorted by its foot y so sprites overlap correctly.
 #include <functional>
 #include <vector>
 

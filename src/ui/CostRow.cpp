@@ -1,3 +1,8 @@
+/**
+ * @file CostRow.cpp
+ * @brief Cost row widget: every resource requirement drawn as [resource icon][numeric value], with a fixed icon size,
+ * padding and margin.
+ */
 #include "ui/CostRow.hpp"
 
 #include "rendering/Assets.hpp"

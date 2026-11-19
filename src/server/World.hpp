@@ -1,7 +1,8 @@
+/**
+ * @file World.hpp
+ * @brief Shared server state plus the entity and query helpers every system uses.
+ */
 #pragma once
-// Shared server state: the ECS registry, player profiles, clans, NPC towns, terrain cache, cleared tiles, time and
-// seed, plus the entity / query helpers every system uses (creation, lookup, pathfinding, vision, relations,
-// messaging).
 #include "common/Shared.hpp"
 #include "components/Components.hpp"
 #include "networking/SteamServerNet.hpp"

@@ -1,3 +1,7 @@
+/**
+ * @file World.cpp
+ * @brief Shared server state plus the entity and query helpers every system uses.
+ */
 #include "server/World.hpp"
 
 #include "common/Progression.hpp"

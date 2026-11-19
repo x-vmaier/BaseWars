@@ -1,5 +1,8 @@
+/**
+ * @file Sprites.hpp
+ * @brief Sprite drawing with the optional outline (hover) and dissolve (destroyed) shaders.
+ */
 #pragma once
-// Sprite drawing with the optional outline (hover) and dissolve (destroyed) shaders.
 #include "rendering/Assets.hpp"
 
 enum SpriteMode

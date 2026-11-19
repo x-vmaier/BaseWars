@@ -1,3 +1,7 @@
+/**
+ * @file ConvoyHaulSystem.cpp
+ * @brief Resource logistics: building workers, clan tribute convoys (+ clan spotting), hauling parties.
+ */
 #include "systems/ConvoyHaulSystem.hpp"
 
 #include "systems/Systems.hpp"

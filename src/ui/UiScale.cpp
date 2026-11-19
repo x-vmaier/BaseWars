@@ -1,3 +1,7 @@
+/**
+ * @file UiScale.cpp
+ * @brief UI scale.
+ */
 #include "ui/UiScale.hpp"
 
 #include <rlgl.h>

@@ -1,5 +1,8 @@
+/**
+ * @file WorldRenderer.hpp
+ * @brief Draws the world in camera space: terrain, then all sprites sorted by foot y, then fog and clouds.
+ */
 #pragma once
-// Draws the world in camera space: terrain, then all sprites sorted by foot y, then fog and clouds.
 #include "rendering/BuildingRenderer.hpp"
 #include "rendering/EffectsRenderer.hpp"
 #include "rendering/FeatureRenderer.hpp"

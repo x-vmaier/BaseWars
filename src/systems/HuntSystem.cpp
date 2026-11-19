@@ -1,3 +1,7 @@
+/**
+ * @file HuntSystem.cpp
+ * @brief Wildlife: sheep spawning / repopulation and free pawns hunting them.
+ */
 #include "systems/HuntSystem.hpp"
 
 #include "systems/Systems.hpp"

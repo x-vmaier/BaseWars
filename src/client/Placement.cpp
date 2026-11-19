@@ -1,3 +1,7 @@
+/**
+ * @file Placement.cpp
+ * @brief Building placement: modes, checks, costs and the feature-clearing step before building.
+ */
 #include "client/Placement.hpp"
 
 #include "client/App.hpp"

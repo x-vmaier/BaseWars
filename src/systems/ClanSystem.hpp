@@ -1,5 +1,8 @@
+/**
+ * @file ClanSystem.hpp
+ * @brief Alliances, clans, and players who lost their town (homeless clan members / normal respawn).
+ */
 #pragma once
-// Alliances, clans, and players who lost their town (homeless clan members / normal respawn).
 #include "server/World.hpp"
 
 struct Systems;

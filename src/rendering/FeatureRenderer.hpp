@@ -1,5 +1,8 @@
+/**
+ * @file FeatureRenderer.hpp
+ * @brief Surface features (trees, bushes, rocks, gold veins) with clearing progress and gold sparkle near own mines.
+ */
 #pragma once
-// Surface features (trees, bushes, rocks, gold veins) with clearing progress and gold sparkle near own mines.
 #include "common/Shared.hpp"
 #include "rendering/DrawItem.hpp"
 

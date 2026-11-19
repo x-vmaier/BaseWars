@@ -1,3 +1,7 @@
+/**
+ * @file Widgets.cpp
+ * @brief Shared UI widgets: Tiled-skinned buttons, title ribbon, text boxes, resource icons, stat bars.
+ */
 #include "ui/Widgets.hpp"
 
 #include "common/Shared.hpp"

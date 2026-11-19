@@ -42,25 +42,25 @@ enum Kind : uint8_t
 // Behaviour flags. Systems and UI ask for a tag instead of comparing against a kind.
 enum KindTag : uint32_t
 {
-    KT_Storage = 1u << 0,     // holds resources (Town Hall, Outpost, Storage House)
-    KT_Depot = 1u << 1,       // a storage that is not the Town Hall: donation / haul target
-    KT_Producer = 1u << 2,    // yields resources over time (mine, lumber camp, harbour)
-    KT_Trainer = 1u << 3,     // has a training window besides production
-    KT_Army = 1u << 4,        // fights for a base (warrior, archer, lancer)
-    KT_Troop = 1u << 5,       // trainable and upgradable unit (pawn included)
-    KT_Anchor = 1u << 6,      // claims territory (Town Hall, Outpost)
-    KT_Warm = 1u << 7,        // warms nearby units
-    KT_SingleLevel = 1u << 8, // cannot be upgraded or relocated
-    KT_Naval = 1u << 9,       // moves on water
-    KT_Animal = 1u << 10,     // neutral huntable wildlife
-    KT_Fireproof = 1u << 11,  // never catches fire
-    KT_Coastal = 1u << 12,    // produces from the sea (needs adjacent ocean)
-    KT_GoldBoosted = 1u << 13, // output grows with nearby gold deposits
+    KT_Storage = 1u << 0,       // holds resources (Town Hall, Outpost, Storage House)
+    KT_Depot = 1u << 1,         // a storage that is not the Town Hall: donation / haul target
+    KT_Producer = 1u << 2,      // yields resources over time (mine, lumber camp, harbour)
+    KT_Trainer = 1u << 3,       // has a training window besides production
+    KT_Army = 1u << 4,          // fights for a base (warrior, archer, lancer)
+    KT_Troop = 1u << 5,         // trainable and upgradable unit (pawn included)
+    KT_Anchor = 1u << 6,        // claims territory (Town Hall, Outpost)
+    KT_Warm = 1u << 7,          // warms nearby units
+    KT_SingleLevel = 1u << 8,   // cannot be upgraded or relocated
+    KT_Naval = 1u << 9,         // moves on water
+    KT_Animal = 1u << 10,       // neutral huntable wildlife
+    KT_Fireproof = 1u << 11,    // never catches fire
+    KT_Coastal = 1u << 12,      // produces from the sea (needs adjacent ocean)
+    KT_GoldBoosted = 1u << 13,  // output grows with nearby gold deposits
     KT_Freestanding = 1u << 14, // needs no territory: never disabled, never relocated
-    KT_NonCombat = 1u << 15,  // ignored by "select all combat units" and combat-only orders
-    KT_Firefighter = 1u << 16, // idle units of this kind put out fires
-    KT_Worker = 1u << 17,      // builds, clears obstacles, hauls, hunts (pawn)
-    KT_Healer = 1u << 18,      // heals allies instead of fighting (dps is healing per second)
+    KT_NonCombat = 1u << 15,    // ignored by "select all combat units" and combat-only orders
+    KT_Firefighter = 1u << 16,  // idle units of this kind put out fires
+    KT_Worker = 1u << 17,       // builds, clears obstacles, hauls, hunts (pawn)
+    KT_Healer = 1u << 18,       // heals allies instead of fighting (dps is healing per second)
 };
 
 struct KindInfo

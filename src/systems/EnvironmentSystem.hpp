@@ -1,5 +1,8 @@
+/**
+ * @file EnvironmentSystem.hpp
+ * @brief Cold attrition in the snow, waking NPC chunks / regions near players, exploration by units and buildings.
+ */
 #pragma once
-// Cold attrition in the snow, waking NPC chunks / regions near players, exploration by units and buildings.
 #include "server/World.hpp"
 
 struct Systems;

@@ -1,3 +1,7 @@
+/**
+ * @file Bars.cpp
+ * @brief Health / progress bars and selection brackets.
+ */
 #include "rendering/Bars.hpp"
 
 #include "rendering/Assets.hpp"

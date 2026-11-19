@@ -1,3 +1,7 @@
+/**
+ * @file Shaders.cpp
+ * @brief Shader loading with graceful fallback, and a uniform setter that ignores missing uniforms.
+ */
 #include "rendering/Shaders.hpp"
 
 #include "rendering/Assets.hpp"

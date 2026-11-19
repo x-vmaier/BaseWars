@@ -1,3 +1,7 @@
+/**
+ * @file Palette.cpp
+ * @brief Team / clan / biome colours and the sprite colour set of an owner.
+ */
 #include "rendering/Palette.hpp"
 
 #include "rendering/Assets.hpp"

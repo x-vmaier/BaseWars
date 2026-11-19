@@ -1,3 +1,7 @@
+/**
+ * @file FireSystem.cpp
+ * @brief Fire arrows, burning buildings and firefighting units.
+ */
 #include "systems/FireSystem.hpp"
 
 #include "systems/Systems.hpp"

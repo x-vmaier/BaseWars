@@ -1,3 +1,7 @@
+/**
+ * @file EnvironmentSystem.cpp
+ * @brief Cold attrition in the snow, waking NPC chunks / regions near players, exploration by units and buildings.
+ */
 #include "systems/EnvironmentSystem.hpp"
 
 #include "systems/Systems.hpp"

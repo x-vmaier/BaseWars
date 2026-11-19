@@ -1,6 +1,9 @@
+/**
+ * @file Base.hpp
+ * @brief Base mechanics: building flags (fire, territory), relocation, training queues, support patrols, firefighting,
+ * site jobs.
+ */
 #pragma once
-// Base mechanics: building flags (fire, territory), relocation, training queues, support patrols, firefighting, site
-// jobs.
 #include "common/Shared.hpp"
 
 #include <cstdint>

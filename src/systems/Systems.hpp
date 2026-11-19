@@ -1,5 +1,8 @@
+/**
+ * @file Systems.hpp
+ * @brief Every server system, owned together.
+ */
 #pragma once
-// Every server system, owned together. Systems reach each other through this aggregate (explicit, no inheritance).
 #include "systems/BuildSystem.hpp"
 #include "systems/ClanSystem.hpp"
 #include "systems/ClearingSystem.hpp"

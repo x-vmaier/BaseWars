@@ -1,3 +1,7 @@
+/**
+ * @file MenuBackdrop.cpp
+ * @brief Main-menu backdrop: drifting camera over a few tiny islands with buildings, idle units, sheep and clouds.
+ */
 #include "rendering/MenuBackdrop.hpp"
 
 #include "client/App.hpp"

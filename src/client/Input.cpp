@@ -1,3 +1,7 @@
+/**
+ * @file Input.cpp
+ * @brief Per-frame input routing while playing: modal panels first, then camera, hotkeys, selection and world commands.
+ */
 #include "client/Input.hpp"
 
 #include "client/App.hpp"

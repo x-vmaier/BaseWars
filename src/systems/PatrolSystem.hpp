@@ -1,5 +1,8 @@
+/**
+ * @file PatrolSystem.hpp
+ * @brief Faction patrol groups: waypoints, attacks on sight, loot drops and retaliation against players.
+ */
 #pragma once
-// Faction patrol groups: waypoints, attacks on sight, loot drops and retaliation against players.
 #include "server/World.hpp"
 
 struct Systems;

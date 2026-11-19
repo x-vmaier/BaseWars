@@ -1,5 +1,8 @@
+/**
+ * @file TrainingSystem.hpp
+ * @brief Per-building training queues (C_Train / C_Dequeue) and spawning of trained units.
+ */
 #pragma once
-// Per-building training queues (C_Train / C_Dequeue) and spawning of trained units.
 #include "server/World.hpp"
 
 struct Systems;

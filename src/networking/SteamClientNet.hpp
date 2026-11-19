@@ -1,6 +1,8 @@
+/**
+ * @file SteamClientNet.hpp
+ * @brief Client transport: Steam Networking Sockets by IP or by server SteamID (Datagram Relay).
+ */
 #pragma once
-// Client transport: Steam Networking Sockets, either by IP (local testing) or by server SteamID through Steam Datagram
-// Relay.
 #include "networking/NetTypes.hpp"
 
 #include <deque>

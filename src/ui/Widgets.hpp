@@ -1,5 +1,8 @@
+/**
+ * @file Widgets.hpp
+ * @brief Shared UI widgets: Tiled-skinned buttons, title ribbon, text boxes, resource icons, stat bars.
+ */
 #pragma once
-// Shared UI widgets: Tiled-skinned buttons, title ribbon, text boxes, resource icons, stat bars.
 #include "rendering/Assets.hpp"
 
 #include <string>

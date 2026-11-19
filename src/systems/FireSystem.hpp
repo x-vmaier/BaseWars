@@ -1,5 +1,8 @@
+/**
+ * @file FireSystem.hpp
+ * @brief Fire arrows, burning buildings and firefighting units.
+ */
 #pragma once
-// Fire arrows, burning buildings and firefighting units.
 #include "server/World.hpp"
 
 struct Systems;

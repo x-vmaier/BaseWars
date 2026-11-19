@@ -1,3 +1,7 @@
+/**
+ * @file ClientWorld.cpp
+ * @brief Replicated world state on the client plus the read-only queries renderers and UI share.
+ */
 #include "client/ClientWorld.hpp"
 
 #include <algorithm>

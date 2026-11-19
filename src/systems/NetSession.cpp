@@ -1,3 +1,7 @@
+/**
+ * @file NetSession.cpp
+ * @brief Connection lifecycle: hello (profile lookup / creation / respawn), disconnect.
+ */
 #include "systems/NetSession.hpp"
 
 #include "systems/Systems.hpp"

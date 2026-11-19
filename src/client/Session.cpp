@@ -1,3 +1,7 @@
+/**
+ * @file Session.cpp
+ * @brief Connection lifecycle: profile, Steam login, transport, hello handshake and the network event pump.
+ */
 #include "client/Session.hpp"
 
 #include "client/App.hpp"

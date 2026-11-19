@@ -1,6 +1,8 @@
+/**
+ * @file Hud.hpp
+ * @brief HUD: resource ribbon, banners, message log, help line, drag selection and the cursor.
+ */
 #pragma once
-// HUD: resource ribbon, name banner, message log, help line, command-mode banner, camera coordinates, the social
-// menu tab, hovered biome (bottom right), drag-selection rectangle, hover label and the cursor.
 #include "client/ClientState.hpp"
 #include "rendering/Assets.hpp"
 

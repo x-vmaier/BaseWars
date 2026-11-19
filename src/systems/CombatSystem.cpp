@@ -1,3 +1,7 @@
+/**
+ * @file CombatSystem.cpp
+ * @brief Damage, looting, kills (incl.
+ */
 #include "systems/CombatSystem.hpp"
 
 #include "systems/Systems.hpp"

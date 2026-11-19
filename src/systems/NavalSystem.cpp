@@ -1,3 +1,7 @@
+/**
+ * @file NavalSystem.cpp
+ * @brief Ships: capacity, embark / disembark, voyages, ship commands (C_Board, C_Disembark) and ship fields of S_State.
+ */
 #include "systems/NavalSystem.hpp"
 
 #include "systems/Systems.hpp"

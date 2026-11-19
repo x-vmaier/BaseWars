@@ -1,5 +1,8 @@
+/**
+ * @file TerritorySystem.hpp
+ * @brief Functional territory of buildings, town move and building relocation.
+ */
 #pragma once
-// Functional territory of buildings, town move and building relocation.
 #include "server/World.hpp"
 
 struct Systems;

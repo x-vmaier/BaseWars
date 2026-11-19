@@ -1,3 +1,7 @@
+/**
+ * @file SpawnSystem.cpp
+ * @brief Where new or defeated players found their base, plus the spawn test hooks.
+ */
 #include "systems/SpawnSystem.hpp"
 
 #include "systems/Systems.hpp"

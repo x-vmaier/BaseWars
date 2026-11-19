@@ -1,3 +1,7 @@
+/**
+ * @file SteamClientNet.cpp
+ * @brief Client transport: Steam Networking Sockets by IP or by server SteamID (Datagram Relay).
+ */
 #include "networking/SteamClientNet.hpp"
 
 #include <steam/isteamnetworkingutils.h>

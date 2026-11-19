@@ -1,3 +1,7 @@
+/**
+ * @file WaterRenderer.cpp
+ * @brief Full-screen animated water (water.fs) with click / splash ripples; plain tiled texture without the shader.
+ */
 #include "rendering/WaterRenderer.hpp"
 
 #include "client/App.hpp"

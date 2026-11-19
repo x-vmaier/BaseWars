@@ -1,5 +1,8 @@
+/**
+ * @file ShipPanel.hpp
+ * @brief Ship panel (right-click an own ship without troops selected): load, cargo, disembark.
+ */
 #pragma once
-// Ship panel (right-click an own ship without troops selected): load, cargo, disembark. Also right-click embarking.
 #include "client/Components.hpp"
 
 #include <raylib.h>

@@ -1,5 +1,8 @@
+/**
+ * @file ServerBrowser.hpp
+ * @brief Internet / Friends server lists through Steam matchmaking.
+ */
 #pragma once
-// Internet / Friends server lists through Steam matchmaking.
 #include "networking/NetTypes.hpp"
 
 #include <steam/steam_api.h>

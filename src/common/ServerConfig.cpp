@@ -1,3 +1,7 @@
+/**
+ * @file ServerConfig.cpp
+ * @brief Server tuning loaded from config/server.cfg (key = value, '#' comments).
+ */
 #include "common/ServerConfig.hpp"
 
 #include <algorithm>

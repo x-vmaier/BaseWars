@@ -1,3 +1,7 @@
+/**
+ * @file Commands.cpp
+ * @brief Client -> server commands (C_*).
+ */
 #include "client/Commands.hpp"
 
 #include "client/App.hpp"

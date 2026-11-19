@@ -1,3 +1,7 @@
+/**
+ * @file WorldRenderer.cpp
+ * @brief Draws the world in camera space: terrain, then all sprites sorted by foot y, then fog and clouds.
+ */
 #include "rendering/WorldRenderer.hpp"
 
 #include "client/App.hpp"

@@ -1,7 +1,8 @@
+/**
+ * @file ServerConfig.hpp
+ * @brief Server tuning loaded from config/server.cfg (key = value, '#' comments).
+ */
 #pragma once
-// Server tuning loaded from config/server.cfg (key = value, '#' comments). Every key has a default that reproduces
-// the previous hard-coded behaviour, so a missing file or key changes nothing. Only the server reads it; the client
-// receives the generated world through the protocol.
 #include <string>
 
 struct ServerConfig

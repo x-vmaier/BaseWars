@@ -1,5 +1,8 @@
+/**
+ * @file ClientState.hpp
+ * @brief Plain client-side data received from the server (non-ECS).
+ */
 #pragma once
-// Plain client-side data received from the server (non-ECS).
 #include "common/Shared.hpp"
 
 #include <raylib.h>

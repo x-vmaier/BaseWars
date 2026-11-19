@@ -1,5 +1,8 @@
+/**
+ * @file Palette.hpp
+ * @brief Team / clan / biome colours and the sprite colour set of an owner.
+ */
 #pragma once
-// Team / clan / biome colours and the sprite colour set of an owner.
 #include "common/Shared.hpp"
 
 #include <raylib.h>

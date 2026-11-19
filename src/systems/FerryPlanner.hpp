@@ -1,3 +1,7 @@
+/**
+ * @file FerryPlanner.hpp
+ * @brief Ferry planner: decides whether one of the owner's idle ships beats walking, and starts the transport.
+ */
 #pragma once
 // Ferry planner: decides whether one of the owner's idle ships beats walking, and starts the transport.
 //

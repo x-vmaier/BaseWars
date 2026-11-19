@@ -1,3 +1,8 @@
+/**
+ * @file TrainingPanel.cpp
+ * @brief Archery window: troop cards, troop details / training / troop upgrades, building upgrade, and the training
+ * queue strip.
+ */
 #include "ui/TrainingPanel.hpp"
 
 #include "client/App.hpp"

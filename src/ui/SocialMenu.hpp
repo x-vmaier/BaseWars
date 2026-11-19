@@ -1,5 +1,8 @@
+/**
+ * @file SocialMenu.hpp
+ * @brief Social menu: players / friends / clans / my clan / factions, with search, travel and diplomacy buttons.
+ */
 #pragma once
-// Social menu: players / friends / clans / my clan / factions, with search, travel and diplomacy buttons.
 #include "rendering/Assets.hpp"
 
 #include <string>

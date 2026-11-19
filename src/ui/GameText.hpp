@@ -1,6 +1,9 @@
+/**
+ * @file GameText.hpp
+ * @brief Game rules rendered as text for panels (costs are drawn with ui/CostRow): unlocks, next-level previews, troop
+ * descriptions.
+ */
 #pragma once
-// Game rules rendered as text for panels (costs are drawn with ui/CostRow): unlocks, next-level previews, troop
-// descriptions.
 #include "client/ClientCommon.hpp"
 #include "client/Components.hpp"
 

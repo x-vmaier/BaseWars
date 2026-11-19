@@ -1,5 +1,8 @@
+/**
+ * @file PacketHandler.hpp
+ * @brief Decodes server messages (S_*) into the ClientWorld and the UI queues (chat, toasts, log).
+ */
 #pragma once
-// Decodes server messages (S_*) into the ClientWorld and the UI queues (chat, toasts, log).
 #include <cstddef>
 #include <cstdint>
 

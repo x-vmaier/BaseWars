@@ -1,6 +1,6 @@
 /**
  * @file EffectsRenderer.cpp
- * @brief Transient effects: markers, ghosts, fx events, resource drops, building status and land clouds.
+ * @brief Transient effects: fx events, drops, ghosts, markers, building status and land clouds.
  */
 #include "rendering/EffectsRenderer.hpp"
 

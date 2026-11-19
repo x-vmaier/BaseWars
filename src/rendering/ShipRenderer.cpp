@@ -1,3 +1,7 @@
+/**
+ * @file ShipRenderer.cpp
+ * @brief Ships (three visibly different tiers), their load label, and the path lines the server shares with us.
+ */
 #include "rendering/ShipRenderer.hpp"
 
 #include "client/App.hpp"

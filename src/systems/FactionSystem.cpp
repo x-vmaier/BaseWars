@@ -1,3 +1,8 @@
+/**
+ * @file FactionSystem.cpp
+ * @brief NPC faction reputation, town self-defense, garrison AI and help for friendly players, donations and town
+ * demand.
+ */
 #include "systems/FactionSystem.hpp"
 
 #include "systems/Systems.hpp"

@@ -1,3 +1,8 @@
+/**
+ * @file BigMap.cpp
+ * @brief World map (N / minimap click): pan, zoom, travel, friend arrows, and the support-patrol menu (right-click an
+ * allied / clan town).
+ */
 #include "ui/BigMap.hpp"
 
 #include "client/App.hpp"

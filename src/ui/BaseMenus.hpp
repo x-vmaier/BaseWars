@@ -1,5 +1,9 @@
+/**
+ * @file BaseMenus.hpp
+ * @brief Base-mechanics HUD: clan alert toasts (click to jump), homeless banner, town-move progress, placement-mode
+ * banner.
+ */
 #pragma once
-// Base-mechanics HUD: clan alert toasts (click to jump), homeless banner, town-move progress, placement-mode banner.
 #include "client/ClientState.hpp"
 
 #include <vector>

@@ -1,6 +1,8 @@
+/**
+ * @file Session.hpp
+ * @brief Connection lifecycle: profile, Steam login, transport, hello handshake and the network event pump.
+ */
 #pragma once
-// Connection lifecycle: profile (uuid), Steam login, server browser, transport, hello handshake, join / leave,
-// and the network event pump that feeds the PacketHandler.
 #include "common/Shared.hpp"
 #include "networking/ServerBrowser.hpp"
 #include "networking/SteamClient.hpp"

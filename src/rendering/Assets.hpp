@@ -1,5 +1,8 @@
+/**
+ * @file Assets.hpp
+ * @brief Asset loading: asset directory lookup, texture/animation cache, a tiny JSON parser and Tiled (.tmj) UI maps.
+ */
 #pragma once
-// Asset loading: asset directory lookup, texture/animation cache, a tiny JSON parser and Tiled (.tmj) UI maps.
 #include <raylib.h>
 
 #include <algorithm>

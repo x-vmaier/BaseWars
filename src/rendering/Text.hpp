@@ -1,5 +1,8 @@
+/**
+ * @file Text.hpp
+ * @brief Text helpers.
+ */
 #pragma once
-// Text helpers.
 #include <raylib.h>
 
 #include <string>

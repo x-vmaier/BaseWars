@@ -1,12 +1,8 @@
+/**
+ * @file ConstructionSystem.hpp
+ * @brief Building sites: construction, upgrades (C_Upgrade) and repairs (C_Repair) are SiteJobs worked by a pawn.
+ */
 #pragma once
-// Building sites: construction, upgrades (C_Upgrade) and repairs (C_Repair) are SiteJobs worked by a pawn.
-//
-// A player building under construction (except a freshly founded Town Hall) gets a SiteJob automatically; upgrades and
-// repairs are paid up front and add one. The nearest free pawn (idle pawns before workers, no range limit, so far-away
-// Outposts get one too) is assigned, its previous work is stored in its BuildTask and it walks there normally (no
-// teleport: hostiles can catch it on the way). The job timer only runs while the pawn stands at the site; if it leaves
-// or dies the job pauses ("Waiting for a pawn") until another pawn takes over. While a building has a SiteJob (or is
-// still under construction) it neither produces nor trains. Debug instant_build / instant_upgrade skip the pawn.
 #include "common/Progression.hpp"
 #include "server/World.hpp"
 

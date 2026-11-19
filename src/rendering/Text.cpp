@@ -1,3 +1,7 @@
+/**
+ * @file Text.cpp
+ * @brief Text helpers.
+ */
 #include "rendering/Text.hpp"
 
 #include "rendering/Assets.hpp"

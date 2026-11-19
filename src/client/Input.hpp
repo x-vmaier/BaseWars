@@ -1,5 +1,8 @@
+/**
+ * @file Input.hpp
+ * @brief Per-frame input routing while playing: modal panels first, then camera, hotkeys, selection and world commands.
+ */
 #pragma once
-// Per-frame input routing while playing: modal panels first, then camera, hotkeys, selection and world commands.
 #include "common/Shared.hpp"
 
 #include <raylib.h>

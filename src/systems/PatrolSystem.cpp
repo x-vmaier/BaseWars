@@ -1,3 +1,7 @@
+/**
+ * @file PatrolSystem.cpp
+ * @brief Faction patrol groups: waypoints, attacks on sight, loot drops and retaliation against players.
+ */
 #include "systems/PatrolSystem.hpp"
 
 #include "systems/Systems.hpp"

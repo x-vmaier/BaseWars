@@ -1,6 +1,8 @@
+/**
+ * @file Bars.hpp
+ * @brief Health / progress bars and selection brackets.
+ */
 #pragma once
-// Health / progress bars and selection brackets. Every bar is high contrast and readable at any zoom: a dark opaque
-// backdrop, a bright saturated fill with a light top highlight, and a 1px light outline.
 #include <raylib.h>
 
 // bar colours: health runs green -> yellow -> red; progress kinds each have their own distinct colour

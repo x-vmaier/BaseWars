@@ -1,5 +1,8 @@
+/**
+ * @file Shared.hpp
+ * @brief Shared constants, world generation, placement rules, protocol and serialization helpers (server + client).
+ */
 #pragma once
-// Shared constants, world generation, placement rules, protocol and serialization helpers (server + client).
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX

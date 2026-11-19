@@ -1,5 +1,8 @@
+/**
+ * @file Components.hpp
+ * @brief Client-only ECS components (one entity per server entity in the last S_State).
+ */
 #pragma once
-// Client-only ECS components (one entity per server entity in the last S_State).
 #include "common/Shared.hpp"
 
 #include <cstdint>

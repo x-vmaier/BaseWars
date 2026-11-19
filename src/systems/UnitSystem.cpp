@@ -1,3 +1,7 @@
+/**
+ * @file UnitSystem.cpp
+ * @brief Per-tick unit behaviour dispatch and movement.
+ */
 #include "systems/UnitSystem.hpp"
 
 #include "systems/Systems.hpp"

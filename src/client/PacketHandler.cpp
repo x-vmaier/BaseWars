@@ -1,3 +1,7 @@
+/**
+ * @file PacketHandler.cpp
+ * @brief Decodes server messages (S_*) into the ClientWorld and the UI queues (chat, toasts, log).
+ */
 #include "client/PacketHandler.hpp"
 
 #include "client/App.hpp"

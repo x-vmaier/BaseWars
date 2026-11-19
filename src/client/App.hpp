@@ -1,6 +1,9 @@
+/**
+ * @file App.hpp
+ * @brief The client application: owns shared state and every subsystem, and runs the frame loop.
+ */
 #pragma once
-// The client application: owns the shared state (settings, camera, replicated world) and every subsystem, and runs
-// the frame loop. Subsystems hold an `App&` and reach each other through it.
+// Subsystems hold an `App&` and reach each other through it.
 //
 //   client/     Session (connection), PacketHandler (S_*), Commands (C_*), Input, Placement, TestHooks
 //   rendering/  WaterRenderer, WorldRenderer (terrain, features, buildings, units, ships, effects), PostFx,

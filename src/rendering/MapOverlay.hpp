@@ -1,5 +1,8 @@
+/**
+ * @file MapOverlay.hpp
+ * @brief Icons shared by the world map and the minimap: territory, towns, faction towns, convoys and support patrols.
+ */
 #pragma once
-// Icons shared by the world map and the minimap: territory, towns, faction towns, convoys and support patrols.
 #include <raylib.h>
 
 #include <string>

@@ -1,3 +1,7 @@
+/**
+ * @file SaveSystem.cpp
+ * @brief Binary savegame: a mandatory part followed by optional appended sections.
+ */
 #include "systems/SaveSystem.hpp"
 
 #include "systems/KindFactories.hpp"

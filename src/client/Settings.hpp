@@ -1,5 +1,9 @@
+/**
+ * @file Settings.hpp
+ * @brief Persistent client settings (settings.txt next to the executable): player name, last server, UI scale, window
+ * mode.
+ */
 #pragma once
-// Persistent client settings (settings.txt next to the executable): player name, last server, UI scale, window mode.
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>

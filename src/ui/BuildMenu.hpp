@@ -1,5 +1,8 @@
+/**
+ * @file BuildMenu.hpp
+ * @brief Slide-out build menu (left edge): building list with cost rows and hover tooltips, hotkeys 1..7.
+ */
 #pragma once
-// Slide-out build menu (left edge): building list with cost rows and hover tooltips, hotkeys 1..7.
 #include "common/Shared.hpp"
 #include "rendering/Assets.hpp"
 #include "ui/CostRow.hpp"

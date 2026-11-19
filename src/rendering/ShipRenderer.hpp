@@ -1,5 +1,8 @@
+/**
+ * @file ShipRenderer.hpp
+ * @brief Ships (three visibly different tiers), their load label, and the path lines the server shares with us.
+ */
 #pragma once
-// Ships (three visibly different tiers), their load label, and the path lines the server shares with us.
 #include "client/Components.hpp"
 #include "rendering/DrawItem.hpp"
 

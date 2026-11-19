@@ -1,3 +1,7 @@
+/**
+ * @file Minimap.cpp
+ * @brief Minimap (top right): tiles around the camera, refreshed a few times per second.
+ */
 #include "rendering/Minimap.hpp"
 
 #include "client/App.hpp"

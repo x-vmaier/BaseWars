@@ -1,3 +1,7 @@
+/**
+ * @file ClearingSystem.cpp
+ * @brief Clearing of surface features by pawns, buildings queued behind clearing, resource drops.
+ */
 #include "systems/ClearingSystem.hpp"
 
 #include "common/Progression.hpp"

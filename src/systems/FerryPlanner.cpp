@@ -1,3 +1,7 @@
+/**
+ * @file FerryPlanner.cpp
+ * @brief Ferry planner: decides whether one of the owner's idle ships beats walking, and starts the transport.
+ */
 #include "systems/FerryPlanner.hpp"
 
 #include "systems/Systems.hpp"

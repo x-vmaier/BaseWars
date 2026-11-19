@@ -1,3 +1,7 @@
+/**
+ * @file SteamClient.cpp
+ * @brief Local Steam user: login, display name, friend list.
+ */
 #include "networking/SteamClient.hpp"
 
 #include <steam/isteamnetworkingutils.h>

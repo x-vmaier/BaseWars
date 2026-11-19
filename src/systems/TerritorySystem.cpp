@@ -1,3 +1,7 @@
+/**
+ * @file TerritorySystem.cpp
+ * @brief Functional territory of buildings, town move and building relocation.
+ */
 #include "systems/TerritorySystem.hpp"
 
 #include "common/Progression.hpp"

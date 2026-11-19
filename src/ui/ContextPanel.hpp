@@ -1,7 +1,8 @@
+/**
+ * @file ContextPanel.hpp
+ * @brief Context panel of a building: stats lines, action buttons with cost rows, haul slider, next-level preview.
+ */
 #pragma once
-// Context panel of a building (right-click): owner / stats lines, action buttons (train, upgrade, attack, alliance,
-// donations, relocate) each with its cost row beside it, the auto-haul slider and the next-level preview.
-// (An own Town Hall opens the TownHallWindow instead.)
 #include "client/Components.hpp"
 #include "common/Shared.hpp"
 #include "rendering/Assets.hpp"

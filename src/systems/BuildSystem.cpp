@@ -1,3 +1,8 @@
+/**
+ * @file BuildSystem.cpp
+ * @brief Buildings per tick: self-raising construction (sites without a pawn job), production + worker respawn,
+ * defensive fire.
+ */
 #include "systems/BuildSystem.hpp"
 
 #include "common/Progression.hpp"

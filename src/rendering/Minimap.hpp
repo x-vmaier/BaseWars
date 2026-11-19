@@ -1,6 +1,8 @@
+/**
+ * @file Minimap.hpp
+ * @brief Minimap (top right): tiles around the camera, refreshed a few times per second.
+ */
 #pragma once
-// Minimap (top right): 100x100 tiles around the camera, refreshed a few times per second, with sparse
-// tree dots and the shared map overlay.
 #include "rendering/Assets.hpp"
 
 #include <vector>

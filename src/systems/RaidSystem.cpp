@@ -1,3 +1,7 @@
+/**
+ * @file RaidSystem.cpp
+ * @brief Faction raiding parties against hostile players.
+ */
 #include "systems/RaidSystem.hpp"
 
 #include "systems/Systems.hpp"

@@ -1,6 +1,8 @@
+/**
+ * @file PostFx.hpp
+ * @brief Scene render target, bloom and the post shader (grading, day/night, vignette, lights).
+ */
 #pragma once
-// Scene render target, bloom (bright pass + separable blur at half resolution) and the post shader (tone mapping,
-// grading, day/night, cold / warmth, damage vignette, screen shake, point lights).
 #include <raylib.h>
 
 class App;

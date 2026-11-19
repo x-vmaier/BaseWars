@@ -1,5 +1,8 @@
+/**
+ * @file Chat.hpp
+ * @brief Chat (global / clan / friends): recent lines fade out; Enter opens the input bar.
+ */
 #pragma once
-// Chat (global / clan / friends): recent lines fade out; Enter opens the input bar.
 #include "client/ClientState.hpp"
 
 #include <string>

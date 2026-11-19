@@ -1,5 +1,7 @@
-// Raylib client: Tiny Swords art, Tiled-driven UI panels, biome terrain with autotiled cliffs, shader effects,
-// building placement, context panels, alliances and RTS controls.
+/**
+ * @file App.cpp
+ * @brief The client application: owns shared state and every subsystem, and runs the frame loop.
+ */
 #include "client/App.hpp"
 
 #include "rendering/Sprites.hpp"

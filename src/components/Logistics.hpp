@@ -1,5 +1,8 @@
+/**
+ * @file Logistics.hpp
+ * @brief Pawns carrying resources between players / storage buildings.
+ */
 #pragma once
-// Pawns carrying resources between players / storage buildings.
 #include "common/Shared.hpp"
 
 #include <cstdint>

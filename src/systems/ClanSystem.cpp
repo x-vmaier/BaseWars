@@ -1,3 +1,7 @@
+/**
+ * @file ClanSystem.cpp
+ * @brief Alliances, clans, and players who lost their town (homeless clan members / normal respawn).
+ */
 #include "systems/ClanSystem.hpp"
 
 #include "systems/Systems.hpp"

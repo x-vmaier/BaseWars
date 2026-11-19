@@ -1,3 +1,7 @@
+/**
+ * @file Sprites.cpp
+ * @brief Sprite drawing with the optional outline (hover) and dissolve (destroyed) shaders.
+ */
 #include "rendering/Sprites.hpp"
 
 #include <algorithm>

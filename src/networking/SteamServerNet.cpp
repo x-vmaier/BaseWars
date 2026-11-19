@@ -1,3 +1,7 @@
+/**
+ * @file SteamServerNet.cpp
+ * @brief Server transport: Steam GameServer + Steam Networking Sockets.
+ */
 #include "networking/SteamServerNet.hpp"
 
 #include <steam/isteamnetworkingutils.h>

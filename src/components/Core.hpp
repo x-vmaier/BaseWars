@@ -1,6 +1,8 @@
+/**
+ * @file Core.hpp
+ * @brief Core components shared by every server entity: identity, ownership, health, kind, building / unit state.
+ */
 #pragma once
-// Core components shared by every server entity: identity, ownership, health, kind/level, building and unit state, last
-// attacker.
 #include "common/Shared.hpp"
 
 #include <climits>

@@ -1,3 +1,7 @@
+/**
+ * @file Hud.cpp
+ * @brief HUD: resource ribbon, banners, message log, help line, drag selection and the cursor.
+ */
 #include "ui/Hud.hpp"
 
 #include "client/App.hpp"

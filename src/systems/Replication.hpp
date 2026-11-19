@@ -1,5 +1,8 @@
+/**
+ * @file Replication.hpp
+ * @brief Outgoing world state: S_State, S_Fog, S_Roster, S_Map, S_Queue, S_BaseInfo, S_ShipInfo, S_Paths.
+ */
 #pragma once
-// Outgoing world state: S_State, S_Fog, S_Roster, S_Map, S_Queue, S_BaseInfo, S_ShipInfo, S_Paths.
 #include "server/World.hpp"
 
 struct Systems;

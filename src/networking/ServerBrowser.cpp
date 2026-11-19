@@ -1,3 +1,7 @@
+/**
+ * @file ServerBrowser.cpp
+ * @brief Internet / Friends server lists through Steam matchmaking.
+ */
 #include "networking/ServerBrowser.hpp"
 
 #include <cstring>

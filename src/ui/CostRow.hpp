@@ -1,7 +1,9 @@
+/**
+ * @file CostRow.hpp
+ * @brief Cost row widget: every resource requirement drawn as [resource icon][numeric value], with a fixed icon size,
+ * padding and margin.
+ */
 #pragma once
-// Cost row widget: every resource requirement drawn as [resource icon][numeric value], with a fixed icon size, padding
-// and margin. Several costs flow left to right and wrap onto further lines inside a maximum width. Values the player
-// cannot pay are drawn in the "missing" colour. Buttons carry only a label; the cost row sits beside or below them.
 #include "common/Shared.hpp"
 
 #include <raylib.h>

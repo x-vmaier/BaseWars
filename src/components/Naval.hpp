@@ -1,6 +1,8 @@
+/**
+ * @file Naval.hpp
+ * @brief Naval components: Ship, Aboard, Boarding and Voyage.
+ */
 #pragma once
-// Naval transport: Ship (passenger list, on every K_Ship), Aboard (on a unit while it is on a ship:
-// hidden/untargetable), Boarding (unit walking to embark), Voyage (a ship executing a planned transport).
 #include "common/Shared.hpp"
 
 #include <cstdint>

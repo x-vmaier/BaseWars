@@ -1,5 +1,8 @@
+/**
+ * @file Components.hpp
+ * @brief All server ECS components (data only).
+ */
 #pragma once
-// All server ECS components (data only).
 #include "components/Base.hpp"
 #include "components/Core.hpp"
 #include "components/Faction.hpp"

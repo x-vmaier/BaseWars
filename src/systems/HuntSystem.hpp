@@ -1,5 +1,8 @@
+/**
+ * @file HuntSystem.hpp
+ * @brief Wildlife: sheep spawning / repopulation and free pawns hunting them.
+ */
 #pragma once
-// Wildlife: sheep spawning / repopulation and free pawns hunting them.
 #include "server/World.hpp"
 
 struct Systems;

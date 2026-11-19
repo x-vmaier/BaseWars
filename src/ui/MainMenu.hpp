@@ -1,5 +1,8 @@
+/**
+ * @file MainMenu.hpp
+ * @brief Main menu and server browser: Internet / Friends / Direct tabs, name box, server list, connecting overlay.
+ */
 #pragma once
-// Main menu and server browser: Internet / Friends / Direct tabs, name box, server list, connecting overlay.
 #include "networking/NetTypes.hpp"
 #include "rendering/Assets.hpp"
 

@@ -1,3 +1,7 @@
+/**
+ * @file DefenseSystem.cpp
+ * @brief Clan alerts, defense quota dispatch and support patrols.
+ */
 #include "systems/DefenseSystem.hpp"
 
 #include "systems/Systems.hpp"

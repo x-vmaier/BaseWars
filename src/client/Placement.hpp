@@ -1,6 +1,8 @@
+/**
+ * @file Placement.hpp
+ * @brief Building placement: modes, checks, costs and the feature-clearing step before building.
+ */
 #pragma once
-// Building placement: the kind being placed and the special placement modes (homeless Town Hall, move town,
-// relocate building), placement checks, costs and the feature-clearing step before building.
 #include "common/Shared.hpp"
 
 #include <raylib.h>

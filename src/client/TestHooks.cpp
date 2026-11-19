@@ -1,3 +1,7 @@
+/**
+ * @file TestHooks.cpp
+ * @brief Screenshot and scripted test hooks driven by environment variables (only active with BW_SHOT).
+ */
 #include "client/TestHooks.hpp"
 
 #include "client/App.hpp"

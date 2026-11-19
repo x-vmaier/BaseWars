@@ -1,3 +1,7 @@
+/**
+ * @file PauseMenu.cpp
+ * @brief Pause menu (Esc): UI scale slider, window mode, save settings, resume, leave, quit.
+ */
 #include "ui/PauseMenu.hpp"
 
 #include "client/App.hpp"

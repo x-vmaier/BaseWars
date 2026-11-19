@@ -1,10 +1,8 @@
+/**
+ * @file UiScale.hpp
+ * @brief UI scale.
+ */
 #pragma once
-// UI scale. The whole UI layer (HUD, panels, menus) is drawn under rlScalef(scale) and works in "logical" pixels:
-// screen size and mouse position divided by the scale. World code (camera, picking, dragging, render targets) uses the
-// real values from raylib (::GetScreenWidth() / ::GetMousePosition()). At scale 1.0 both are identical.
-//
-// (The old monolithic client shadowed GetScreenWidth/GetScreenHeight/GetMousePosition inside `struct App`; these
-// helpers make that explicit.)
 #include <raylib.h>
 
 namespace ui
