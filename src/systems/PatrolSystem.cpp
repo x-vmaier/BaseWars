@@ -8,7 +8,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 #include <string>
+#include <unordered_set>
 
 void PatrolSystem::patrolLoot(Kind k, float mul, int killer, Pos p) {
     static const float base[3][R_Count] = {{10, 12, 0, 6}, {8, 14, 0, 5}, {6, 22, 4, 8}};     // warrior, archer, lancer
@@ -26,6 +28,12 @@ void PatrolSystem::patrolLoot(Kind k, float mul, int killer, Pos p) {
 }
 PatGroup* PatrolSystem::groupOf(uint32_t id) { auto it = pgroups.find(id); return it == pgroups.end() ? nullptr : &it->second; }
 void PatrolSystem::spawnPatrol(uint32_t gid, PatGroup& g) {
+    if (g.roam) {                                                         // a map-wide group sets out from the living town nearest to explored land
+        IV at;
+        Town* tn = exploredTile(at) ? townNear(tileCenter(at)) : nullptr;
+        if (!tn) return;
+        g.town = tn->id;
+    }
     Town* t = world.townById(g.town);
     if (!t || !t->alive) return;
     int n = 2 + int(world.rng() % 3);
@@ -80,7 +88,69 @@ Pos PatrolSystem::groupPos(const PatGroup& g) {
     for (auto id : g.m) { auto e = world.find(id); if (e != entt::null) return reg.get<Pos>(e); }
     return {0, 0};
 }
+bool PatrolSystem::exploredTile(IV& out) {
+    std::vector<int> ps;
+    for (int i = 1; i <= MAX_PLAYERS; i++) if (world.pl[i].used && !world.pl[i].expl.empty()) ps.push_back(i);
+    if (ps.empty()) return false;
+    const auto& ex = world.pl[ps[world.rng() % ps.size()]].expl;
+    for (int n = 0; n < 12; n++) {
+        auto it = ex.begin();
+        std::advance(it, long(world.rng() % ex.size()));
+        int x = keyCx(it->first) * CH + int(world.rng() % CH), y = keyCy(it->first) * CH + int(world.rng() % CH);
+        if (!world.bitAt(ex, x, y)) continue;
+        if (!world.walkable(x, y, false, 0) || world.biome(x, y) == B_Highlands) continue;
+        out = {x, y};
+        return true;
+    }
+    return false;
+}
+Town* PatrolSystem::townNear(Pos p) {
+    Town* best = nullptr;
+    float bd = 1e18f;
+    for (auto& t : world.towns) {
+        if (!t.alive) continue;
+        float d = std::hypot(float(t.cx) - p.x, float(t.cy) - p.y);
+        if (d < bd) { bd = d; best = &t; }
+    }
+    return best;
+}
+bool PatrolSystem::pickSiege(PatGroup& g, Pos from, int owner) {
+    if (!isFactionOwner(owner)) return false;
+    entt::entity best = entt::null;
+    float bd = float(cfg().patrolSiegeRange);
+    reg.view<Info, Building, Owner>().each([&](entt::entity b, const Info& i, const Building& bb, const Owner& o) {
+        if (i.kind != K_TownHall || bb.progress < 1.f || !world.hostile(owner, o.id) || world.dying.count(reg.get<Uid>(b).id)) return;
+        if (isPlayer(o.id) && !world.pl[o.id].online) return;                         // players are only besieged while they can defend
+        Pos c = footCenter(i.kind, bb.tx, bb.ty);
+        float d = std::hypot(c.x - from.x, c.y - from.y);
+        if (d < bd) { bd = d; best = b; }
+    });
+    if (best == entt::null) return false;
+    Pos c = world.posOf(best);
+    g.wp = {c.x, c.y + 3.f};
+    g.hasWp = true;
+    g.siege = true;
+    g.fails = 0;
+    g.wpUntil = world.clock + 420.0;
+    int to = reg.get<Owner>(best).id;
+    if (isPlayer(to)) world.say(to, std::string("A ") + FACTION_NAME[owner - FACTION_BASE] + " patrol is marching on your town!");
+    static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;
+    if (logIt) std::printf("[world] patrol of %s marches on the town hall of %s at %.0f,%.0f\n", FACTION_NAME[owner - FACTION_BASE], world.ownerName(to).c_str(), c.x, c.y);
+    return true;
+}
 bool PatrolSystem::pickWaypoint(PatGroup& g) {
+    g.siege = false;
+    auto le = world.find(g.leader);
+    if (le != entt::null && world.rng() % 100 < uint32_t(cfg().patrolSiegePercent) && pickSiege(g, reg.get<Pos>(le), reg.get<Owner>(le).id)) return true;
+    if (g.roam) {                                                         // map-wide group: wander through land the players know
+        IV t;
+        if (!exploredTile(t)) return false;
+        g.wp = {float(t.x) + .5f, float(t.y) + .5f};
+        g.hasWp = true;
+        g.fails = 0;
+        g.wpUntil = world.clock + 240.0;
+        return true;
+    }
     Town* t = world.townById(g.town);
     if (!t) return false;
     for (int n = 0; n < 10; n++) {
@@ -121,12 +191,13 @@ void PatrolSystem::runPatrol(entt::entity e, Unit& u, Patrol& pt, float dt) {
         return;
     }
     if (uid == g->leader) {
-        if (g->hasWp && (std::hypot(p.x - g->wp.x, p.y - g->wp.y) < 3.f || world.clock > g->wpUntil)) { g->hasWp = false; g->wait = world.clock + 6.0 + double(world.rng() % 12); u.path.clear(); }
+        if (g->hasWp && (std::hypot(p.x - g->wp.x, p.y - g->wp.y) < (g->siege ? 5.f : 3.f) || world.clock > g->wpUntil)) { g->hasWp = false; g->siege = false; g->wait = world.clock + 6.0 + double(world.rng() % 12); u.path.clear(); }
         if (!g->hasWp) { if (world.clock >= g->wait) pickWaypoint(*g); return; }
         if (u.path.empty() && world.clock >= g->repath) {
             g->repath = world.clock + 2.0;
-            if (world.order(e, g->wp, 0, 9000)) g->fails = 0;
-            else if (++g->fails > 2) { g->hasWp = false; g->wait = world.clock + 2.0; g->fails = 0; }
+            bool far = g->roam || g->siege;                              // long marches: repeated partial paths carry the group across the map
+            if (world.order(e, g->wp, 0, far ? 20000 : 9000)) { g->fails = 0; if (g->siege) reg.emplace_or_replace<AMove>(e, AMove{g->wp}); }
+            else if (++g->fails > (far ? 5 : 2)) { g->hasWp = false; g->siege = false; g->wait = world.clock + 2.0; g->fails = 0; }
         }
         return;
     }
@@ -143,7 +214,7 @@ void PatrolSystem::runPatrol(entt::entity e, Unit& u, Patrol& pt, float dt) {
 void PatrolSystem::patrolSecond() {
     for (auto& t : world.towns) {                                      // make sure each living town owns its patrol groups
         int span = cfg().patrolsPerTownMax - cfg().patrolsPerTownMin, want = cfg().patrolsPerTownMin + (span > 0 ? int(hash2(t.id, 0, world.seed + 444) % uint32_t(span + 1)) : 0), have = 0;
-        for (auto& [id, g] : pgroups) if (g.town == t.id) have++;
+        for (auto& [id, g] : pgroups) if (g.town == t.id && !g.roam) have++;
         if (t.alive && have < want) {
             static const bool fast = std::getenv("BW_PATROLNOW") != nullptr;      // test hook: patrols appear immediately
             PatGroup g;
@@ -153,6 +224,7 @@ void PatrolSystem::patrolSecond() {
             pgroups[nextGroup++] = g;
         }
     }
+    manageRoamers();
     static const bool fastAll = std::getenv("BW_PATROLNOW") != nullptr;
     for (auto& [gid, g] : pgroups) {
         std::vector<uint32_t> alive;
@@ -162,7 +234,7 @@ void PatrolSystem::patrolSecond() {
         if (g.m.empty()) {
             g.ret = 0;
             if (!g.pending) { g.pending = true; g.respawnAt = world.clock + (fastAll ? 8.0 : cfg().patrolRespawnMin + double(world.rng() % uint32_t(std::max(1.0, cfg().patrolRespawnRandom)))); }
-            else if (world.clock >= g.respawnAt && t && t->alive) spawnPatrol(gid, g);
+            else if (world.clock >= g.respawnAt && (g.roam || (t && t->alive))) spawnPatrol(gid, g);
             continue;
         }
         if (world.find(g.leader) == entt::null) g.leader = g.m.front();
@@ -218,5 +290,28 @@ void PatrolSystem::patrolSecond() {
             g.tgt = 0;
             if (std::hypot(lp.x - g.retPos.x, lp.y - g.retPos.y) < 5.f) g.retPos = anyPos;   // nothing here: hunt the nearest entity of that player
         }
+    }
+}
+
+// map-wide wandering groups: cfg().patrolMapGroups per 100 chunks of land explored by any player (biome-agnostic)
+void PatrolSystem::manageRoamers() {
+    if (world.clock - roamCount > 30.0) {
+        roamCount = world.clock;
+        std::unordered_set<int64_t> chunks;
+        for (int i = 1; i <= MAX_PLAYERS; i++) if (world.pl[i].used) for (auto& kv : world.pl[i].expl) chunks.insert(kv.first);
+        roamWant = cfg().patrolMapGroups > 0 && !chunks.empty() ? std::max(1, int(std::lround(double(cfg().patrolMapGroups) * double(chunks.size()) / 100.0))) : 0;
+        roamWant = std::min(roamWant, 40);
+    }
+    int have = 0;
+    for (auto& [id, g] : pgroups) if (g.roam) have++;
+    if (have < roamWant && !world.towns.empty()) {
+        static const bool fast = std::getenv("BW_PATROLNOW") != nullptr;
+        PatGroup g;
+        g.roam = true;
+        g.pending = true;
+        g.respawnAt = world.clock + (fast ? 1.0 : 20.0 + double(world.rng() % 40));
+        pgroups[nextGroup++] = g;
+    } else if (have > roamWant) {                                       // fewer wanted (e.g. players left): retire an idle, empty group
+        for (auto it = pgroups.begin(); it != pgroups.end(); ++it) if (it->second.roam && it->second.m.empty()) { pgroups.erase(it); break; }
     }
 }

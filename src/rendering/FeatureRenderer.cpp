@@ -3,6 +3,7 @@
 #include "client/App.hpp"
 #include "rendering/Bars.hpp"
 #include "rendering/Sprites.hpp"
+#include "rendering/Text.hpp"
 #include "rendering/TerrainRenderer.hpp"
 #include "ui/UiScale.hpp"
 
@@ -58,10 +59,17 @@ void FeatureRenderer::queue(const TerrainView& v, int x0, int y0, int x1, int y1
             if (W.occ.count(chunkKey(x, y))) continue;               // only the building's own tiles hide features (neighbours must stay clickable/visible)
             uint32_t h = hash2(x, y, W.seed + 31);
             float cx = (float(x) + .5f) * TILE + float(int(h & 15) - 8), by = (float(y) + 1.f) * TILE - 6 - float((h >> 4) & 7);
-            float jp = -1.f;                                          // clearing in progress: shake + progress bar
-            if (auto jit = W.cjobs.find(chunkKey(x, y)); jit != W.cjobs.end()) { jp = jit->second.pct; cx += std::sin(float(t) * 46.f + float(h % 7)) * 3.f; }
+            float jp = -1.f;                                          // clear job: progress bar, shake only while a pawn works on it
+            uint8_t js = 0;
+            if (auto jit = W.cjobs.find(chunkKey(x, y)); jit != W.cjobs.end()) { jp = jit->second.pct; js = jit->second.state; if (js == 2) cx += std::sin(float(t) * 46.f + float(h % 7)) * 3.f; }
             bool nearMine = f == F_Gold && goldNearMine(x, y);
+            bool hover = app.input.hasFeat && app.input.hoverFeat.x == x && app.input.hoverFeat.y == y;
+            if (hover) queueTooltip(f, x, y, cx, by, items);
             items.push_back({by, [=]() {
+                if (hover) {                                          // hover ring at the foot of the obstacle
+                    DrawEllipse(int(cx), int(by - 4), 30, 13, rgb(255, 240, 160, 60));
+                    DrawEllipseLines(int(cx), int(by - 4), 30, 13, rgb(255, 240, 160, 230));
+                }
                 switch (f) {
                 case F_Pine: { Anim a = mkAnim(std::string("Terrain/Resources/Wood/Trees/Tree") + (h & 1 ? "1" : "2") + ".png", 192, 256, 6, 96, 238); drawAnim(a, frameFor(a, t, float(h % 8)), cx, by, false, 1.f); break; }
                 case F_Oak: { Anim a = mkAnim(std::string("Terrain/Resources/Wood/Trees/Tree") + (h & 1 ? "3" : "4") + ".png", 192, 192, 6, 96, 168); drawAnim(a, frameFor(a, t, float(h % 8)), cx, by, false, 1.f); break; }
@@ -71,7 +79,34 @@ void FeatureRenderer::queue(const TerrainView& v, int x0, int y0, int x1, int y1
                 default: break;
                 }
                 if (f == F_Gold) goldGlints(cx, by, h, t, nearMine);       // sparkling deposits (stronger near our mines)
-                if (jp >= 0.f) clearBar(cx, by, jp);
+                if (jp >= 0.f) clearBar(cx, by, jp, js == 2);
             }});
         }
+}
+
+// name, cost, work time and yield of the hovered obstacle (+ the state of its clear job)
+void FeatureRenderer::queueTooltip(uint8_t f, int x, int y, float cx, float by, DrawList& items) {
+    const ClientWorld& W = app.world;
+    std::vector<std::string> lines{featName(f)};
+    std::string state;
+    if (auto it = W.cjobs.find(chunkKey(x, y)); it != W.cjobs.end())
+        state = it->second.state == 2 ? TextFormat("Being cleared: %d%%", int(it->second.pct * 100.f)) : (it->second.state == 1 ? "A pawn is on the way" : "Waiting for a free pawn");
+    else {
+        lines.push_back(TextFormat("Clear: %d wood, ~%.1f s of pawn work", clearCostWood(f), double(clearBaseSeconds(f))));
+        lines.push_back(TextFormat("Yields +%d %s", dropAmount(f), RES_NAME[dropRes(f)]));
+        lines.push_back(featureBlocks(f) ? "Blocks building" : "Does not block building");
+        lines.push_back("Right-click: selected pawns (or the nearest free pawn) clear it");
+    }
+    if (!state.empty()) lines.push_back(state);
+    float zoom = std::max(.2f, app.cam.zoom);
+    int sz = std::clamp(int(16.f / zoom), 10, 64), lh = sz + sz / 3;
+    items.push_back({1e9f - 1.f, [=]() {
+        int w = 0;
+        for (auto& l : lines) w = std::max(w, MeasureText(l.c_str(), sz));
+        int h = lh * int(lines.size()) + sz / 2, x0 = int(cx) - w / 2 - sz / 2, y0 = int(by) - 100 - h - int(40.f / zoom);
+        DrawRectangle(x0, y0, w + sz, h, rgb(18, 16, 24, 205));
+        DrawRectangleLines(x0, y0, w + sz, h, rgb(255, 235, 170, 200));
+        for (size_t i = 0; i < lines.size(); i++)
+            textShadow(lines[i], x0 + sz / 2, y0 + sz / 4 + lh * int(i), sz, i == 0 ? rgb(255, 230, 140) : rgb(235, 235, 240));
+    }});
 }

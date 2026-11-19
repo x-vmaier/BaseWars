@@ -66,9 +66,12 @@ void Placement::click(Vector2 w, bool shift) {
     Kind k = Kind(buildKind);
     IV t = placeTile(k, w);
     int err = placeCheck(k, t);
+    float need[R_Count];
+    for (int r = 0; r < R_Count; r++) need[r] = placeCost(k)[r];
+    if (effMode() == Normal) need[R_Wood] += float(app.world.clearWoodCost(app.world.blockedUnder(k, t)));   // pawns clear the site first
     if (err) app.msg(std::string("Cannot build here: ") + PLACE_TEXT[err] + ".");
-    else if (!app.world.affordable(placeCost(k))) app.msg("Not enough resources" + std::string(app.world.roster.empty() ? "." : " (allies may cover the rest)."));
-    bool clearing = !err && clearClick(k, t);                       // only features block: start clearing exactly those tiles
+    else if (!app.world.affordable(need)) app.msg("Not enough resources" + std::string(app.world.roster.empty() ? "." : " (allies may cover the rest)."));
+    bool clearing = !err && effMode() != Normal && clearClick(k, t);   // special placements: clear exactly the blocking tiles first
     if (!err && !clearing) place(k, t);
     if (effMode() != 0) { if (!err && !clearing) buildKind = -1; }  // special placements: stay in the mode until a valid site was chosen
     else if (!shift && !clearing) buildKind = -1;
@@ -84,5 +87,6 @@ bool Placement::clearClick(Kind k, IV t) {
 std::string Placement::ghostLabel(Kind k, IV t) const {
     auto v = app.world.blockedUnder(k, t);
     if (v.empty()) return "";
+    if (effMode() == Normal) return "Pawns clear " + std::to_string(v.size()) + " obstacle" + (v.size() > 1 ? "s" : "") + " first (+" + std::to_string(app.world.clearWoodCost(v)) + " wood)";
     return "Click to clear " + std::to_string(v.size()) + " tile" + (v.size() > 1 ? "s" : "") + " first (" + std::to_string(app.world.clearWoodCost(v)) + " wood)";
 }

@@ -21,12 +21,15 @@ struct ServerConfig {
     int townRegionChance = 85;         // % of 8x8-chunk regions that contain an NPC town
     int townMinDistance = 45;          // minimum tiles between an NPC town and any player Town Hall
     int hostileFactionPercent = 25;    // % of factions that start hostile to a newcomer
+    int factionWarPercent = 30;        // % of faction pairs at war with each other (their patrols attack each other's towns)
     // ---- raids
     double raidFirstDelay = 180.0, raidFirstRandom = 120.0;     // seconds until a hostile faction's first raid on a player
     double raidInterval = 360.0, raidIntervalRandom = 420.0;    // seconds between later raids
     // ---- patrols
     int patrolsPerTownMin = 1, patrolsPerTownMax = 2;           // patrol groups each NPC town maintains
-    int patrolMapGroups = 0;                                    // extra wandering groups per 100 chunks of explored land (map-wide)
+    int patrolMapGroups = 2;                                    // extra wandering groups per 100 chunks of explored land (map-wide)
+    int patrolSiegePercent = 30;                                // % of new patrol waypoints that march on a hostile town in range
+    int patrolSiegeRange = 140;                                 // tiles: how far a patrol looks for a hostile town to attack
     double patrolRespawnMin = 90.0, patrolRespawnRandom = 90.0;
     // ---- sheep
     float sheepDensityPlains = 1.f, sheepDensityFlowers = 1.f;  // multiplier on initial and repopulated sheep (0 = none)

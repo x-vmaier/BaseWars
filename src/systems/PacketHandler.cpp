@@ -23,6 +23,7 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t>& data) {
         int n = r.get<uint8_t>();
         for (int i = 0; i < n; i++) {
             auto e = world.find(r.get<uint32_t>());
+            if (e != entt::null && reg.all_of<ClearTask>(e) && reg.get<Owner>(e).id == id) s.clearing.releasePawn(e, true);   // the player takes a clearing pawn over
             if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e) || reg.all_of<Aboard>(e)) continue;   // units aboard a ship cannot be commanded
             Kind k = reg.get<Info>(e).kind;
             if (combatOnly && (k == K_Ship || k == K_Monk)) continue;
@@ -45,7 +46,7 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t>& data) {
         PlaceWorld w{world, id};
         int err = checkPlace(w, k, tx, ty);
         if (err) { world.say(id, std::string("Cannot build here: ") + PLACE_TEXT[err] + "."); return; }
-        if (!s.clearing.worldBuildOk(id, k, tx, ty)) return;                    // [world] surface features must be cleared first
+        if (auto blocked = s.clearing.blockedTiles(k, tx, ty); !blocked.empty()) { s.clearing.queueBuild(id, k, tx, ty, blocked); return; }   // pawns clear the site first
         if (!world.afford(id, KINFO[k].cost)) { world.say(id, "Not enough resources."); return; }
         world.spend(id, KINFO[k].cost);
         auto e = world.makeBuilding(k, uint8_t(id), tx, ty, false);

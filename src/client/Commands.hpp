@@ -28,7 +28,7 @@ public:
     void chat(int ch, const std::string& text);
     void clanLeader(int id);
     void build(Kind k, IV t);
-    void clear(const std::vector<IV>& tiles);
+    void clear(const std::vector<IV>& tiles, const std::vector<uint32_t>& pawns = {});   // pawns: who should go (empty = nearest free pawn)
     void board(uint32_t ship, const std::vector<uint32_t>& units);
     void disembark(uint32_t ship);
     void quota(int q);

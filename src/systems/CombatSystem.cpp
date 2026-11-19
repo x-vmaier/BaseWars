@@ -37,10 +37,8 @@ void CombatSystem::damage(entt::entity e, float amt, int attacker, uint32_t by) 
     int o = reg.get<Owner>(e).id;
     s.defense.baseOnDamage(e, o, attacker);                                    // clan alerts / defense dispatch
     if (by) reg.emplace_or_replace<Hit>(e, Hit{by, world.clock});
-    if (isFactionOwner(o) && isPlayer(attacker)) {
-        s.faction.addRep(attacker, o - FACTION_BASE, -amt * .06f);
-        s.faction.alertTown(e, by);
-    }
+    if (isFactionOwner(o) && isPlayer(attacker)) s.faction.addRep(attacker, o - FACTION_BASE, -amt * .06f);
+    if (isFactionOwner(o) && attacker > 0 && attacker != o) s.faction.alertTown(e, by);   // towns defend against players and warring factions
     if (attacker > 0 && attacker != o && world.hostile(attacker, o)) lootStorage(e, amt, attacker);
     if (isPlayer(o) && attacker != o && world.pl[o].online && world.clock - world.pl[o].lastWarn > 8) { world.pl[o].lastWarn = world.clock; world.say(o, "Your forces are under attack!"); }
     uint32_t uid = reg.get<Uid>(e).id;

@@ -34,7 +34,7 @@ entt::entity HuntSystem::nearestOwnStorage(int ow, Pos p, bool needRoom) {
     return best;
 }
 void HuntSystem::huntPause(entt::entity e) { reg.get_or_emplace<Hunt>(e).pause = world.clock + 25; }   // hook: the player gave this pawn an order
-bool HuntSystem::isFreePawn(entt::entity e) const { return !reg.all_of<Worker>(e) && !reg.all_of<Convoy>(e) && !reg.all_of<Haul>(e) && !reg.all_of<Raider>(e); }
+bool HuntSystem::isFreePawn(entt::entity e) const { return !reg.all_of<Worker>(e) && !reg.all_of<ClearTask>(e) && !reg.all_of<Convoy>(e) && !reg.all_of<Haul>(e) && !reg.all_of<Raider>(e); }
 uint8_t HuntSystem::worldAux(entt::entity e) const {                       // hook for sendState: show the meat a hunter carries
     const Hunt* h = reg.try_get<Hunt>(e);
     return h && h->meat > 0 ? uint8_t(R_Meat + 1) : uint8_t(0);

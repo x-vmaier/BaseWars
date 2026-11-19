@@ -24,9 +24,9 @@ void brackets(Rectangle r, Color c) {
     q(0, 64, r.x - 2, r.y + r.height - 64 * s + 2);
     q(64, 64, r.x + r.width - 64 * s + 2, r.y + r.height - 64 * s + 2);
 }
-void clearBar(float cx, float by, float pct) {
+void clearBar(float cx, float by, float pct, bool working) {
     float w = 54.f, x = cx - w / 2, y = by - 74.f;
     DrawRectangle(int(x) - 2, int(y) - 2, int(w) + 4, 11, rgb(20, 14, 10, 200));
-    DrawRectangle(int(x), int(y), int(w * std::clamp(pct, 0.f, 1.f)), 7, rgb(250, 190, 60));
+    DrawRectangle(int(x), int(y), int(w * std::clamp(pct, 0.f, 1.f)), 7, working ? rgb(250, 190, 60) : rgb(150, 150, 160));
     DrawRectangleLines(int(x) - 2, int(y) - 2, int(w) + 4, 11, rgb(255, 235, 170, 200));
 }

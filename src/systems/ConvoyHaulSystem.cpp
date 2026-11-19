@@ -31,6 +31,7 @@ void ConvoyHaulSystem::runConvoy(entt::entity e, Unit& u, Convoy& cv, float dt) 
         for (int r = 0; r < R_Count; r++) { world.pl[cv.to].res[r] += cv.cargo[r]; tot += cv.cargo[r]; }
         world.say(cv.to, "A convoy from " + world.ownerName(cv.from) + " arrived with " + std::to_string(int(tot)) + " resources.");
         world.say(cv.from, "Your convoy reached " + world.ownerName(cv.to) + ".");
+        world.fx(E_Dust, p.x, p.y);
         world.destroyNow(e);
         return;
     }
@@ -65,25 +66,63 @@ void ConvoyHaulSystem::updateSpotting() {                                       
     }
 }
 
+// Hauling parties (T7 fix). Root cause of the endless haul / "burning convoy" loop, traced deterministically:
+//   1. spawnHauls() only looked at the storage fill (stock/cap >= haulPct) and never at the Town Hall. The hall's stock is the
+//      owner's whole pool (totalRes), so once that pool reached the hall cap, storeCargo(th) stored nothing.
+//   2. runHaul() then called giveUp(), which teleported the full cargo back into the storage: the storage was above haulPct
+//      again, so the next spawnHauls() pass (1 s later) sent a new party immediately - forever. A party that got stuck or
+//      could not reach the storage was likewise destroyed and re-spawned at once (no cooldown).
+//   3. Every party removed on arrival/give-up vanished from S_State, which the client drew as a "destroyed entity" ghost
+//      dissolving into ash at the hall/storage - the loop looked like convoys repeatedly burning down.
+//   4. giveUp() into an inactive (cap 0) or full storage silently destroyed the cargo.
+// Fix: a party only leaves when the hall has room for it, loads at most that room, every ended haul puts the storage on a
+// cooldown (long after a failure), undeliverable cargo goes back to the owner, and the client no longer ghosts arriving
+// convoys (see PacketHandler::onState). Fire damage is only credited to an arsonist that is still hostile (FireSystem).
+float ConvoyHaulSystem::hallRoom(int owner) {
+    auto th = world.townHallOf(owner);
+    return th == entt::null ? 0.f : std::max(0.f, world.capOf(th) - world.stockOf(th));
+}
+void ConvoyHaulSystem::endHaul(entt::entity e, Haul& h, bool ok) {
+    int ow = reg.get<Owner>(e).id;
+    auto st = world.find(h.storage);
+    if (st != entt::null) world.storeCargo(st, h.cargo);                     // what the hall could not take goes back where it came from
+    if (auto th = world.townHallOf(ow); th != entt::null) world.storeCargo(th, h.cargo);
+    float left = 0;
+    for (float c : h.cargo) left += c;
+    if (left > .5f && isPlayer(ow) && world.pl[ow].used) for (int r = 0; r < R_Count; r++) world.pl[ow].res[r] += h.cargo[r];   // never destroy cargo
+    for (float& c : h.cargo) c = 0;
+    haulCool[h.storage] = world.clock + (ok ? 4.0 : 90.0);
+    Pos p = reg.get<Pos>(e);
+    world.fx(E_Dust, p.x, p.y);
+    world.destroyNow(e);
+}
 void ConvoyHaulSystem::spawnHauls() {
     std::unordered_set<uint32_t> busy;
     reg.view<Haul>().each([&](const Haul& h) { busy.insert(h.storage); });
+    std::erase_if(haulCool, [&](auto& kv) { return kv.second < world.clock; });
     std::vector<entt::entity> blds;
-    reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info& i, const Building& b, const Owner& o) { if ((i.kind == K_Outpost || i.kind == K_Storage) && b.progress >= 1.f && isPlayer(o.id) && !world.inactive(e)) blds.push_back(e); });
+    reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info& i, const Building& b, const Owner& o) { if ((i.kind == K_Outpost || i.kind == K_Storage) && b.progress >= 1.f && isPlayer(o.id) && !world.inactive(e) && !reg.all_of<Moving>(e)) blds.push_back(e); });
     for (auto e : blds) {
         uint32_t uid = reg.get<Uid>(e).id;
-        if (busy.count(uid)) continue;
+        if (busy.count(uid) || haulCool.count(uid)) continue;               // one party per storage, and a pause after each trip
         auto& b = reg.get<Building>(e);
         int ow = reg.get<Owner>(e).id;
         float stock = world.stockOf(e), cap = world.capOf(e);
-        if (stock < 20.f || stock / cap * 100.f < float(b.haulPct)) continue;
+        if (cap <= 0.f || stock < 20.f || stock / cap * 100.f < float(b.haulPct)) continue;
         auto th = world.townHallOf(ow);
+        if (th == entt::null) continue;
+        if (hallRoom(ow) < std::min(stock, 50.f)) {                          // the hall cannot take the load: do not send anyone
+            if (world.clock > fullNote[ow]) { fullNote[ow] = world.clock + 300.0; world.say(ow, "Your Town Hall storage is full: hauling parties wait until there is room again."); }
+            haulCool[uid] = world.clock + 20.0;
+            continue;
+        }
         Pos at;
-        if (th == entt::null || !world.spawnSpot(th, false, at)) continue;
+        if (!world.spawnSpot(th, false, at)) continue;
         auto u = world.makeUnit(K_Pawn, uint8_t(ow), at.x, at.y);
         Haul h;
         h.storage = uid;
         reg.emplace<Haul>(u, h);
+        busy.insert(uid);
         world.say(ow, std::string("A hauling party leaves the Town Hall for your ") + KINFO[reg.get<Info>(e).kind].name + ".");
     }
 }
@@ -93,13 +132,9 @@ void ConvoyHaulSystem::runHaul(entt::entity e, Unit& u, Haul& h, float dt) {
     int ow = reg.get<Owner>(e).id;
     auto st = world.find(h.storage);
     auto th = world.townHallOf(ow);
-    auto giveUp = [&]() {                                           // return whatever we carry to the storage house if we can
-        if (st != entt::null) world.storeCargo(st, h.cargo);
-        world.destroyNow(e);
-    };
-    if (th == entt::null) { giveUp(); return; }
+    if (th == entt::null) { endHaul(e, h, false); return; }
     entt::entity target = h.phase == 0 ? st : th;
-    if (target == entt::null) { world.destroyNow(e); return; }
+    if (target == entt::null) { endHaul(e, h, false); return; }
     float d = world.rectDist(p, target);
     if (d <= 1.6f) {
         u.path.clear();
@@ -109,12 +144,14 @@ void ConvoyHaulSystem::runHaul(entt::entity e, Unit& u, Haul& h, float dt) {
             auto& sb = reg.get<Building>(st);
             float tot = 0;
             for (float v : sb.stock) tot += v;
-            float f = tot > 0 ? std::min(1.f, HAULER_CARRY / tot) : 0.f;
+            float load = std::min({HAULER_CARRY, hallRoom(ow), tot});        // never carry more than the hall can take
+            if (load < 1.f) { endHaul(e, h, false); return; }
+            float f = load / tot;
             for (int r = 0; r < R_Count; r++) { h.cargo[r] = sb.stock[r] * f; sb.stock[r] -= h.cargo[r]; }
             h.phase = 1;
         } else {
             world.storeCargo(th, h.cargo);
-            giveUp();
+            endHaul(e, h, true);
         }
         return;
     }
@@ -127,7 +164,7 @@ void ConvoyHaulSystem::runHaul(entt::entity e, Unit& u, Haul& h, float dt) {
             if (ferry == 1) return;
         }
         if (d < h.bestDist - 2.f) { h.bestDist = d; h.stuck = 0; }
-        else if (++h.stuck >= 8) { giveUp(); return; }
+        else if (++h.stuck >= 8) { endHaul(e, h, false); return; }
         if (!world.order(e, world.posOf(target), reg.get<Uid>(target).id, 40000)) h.stuck += 2;
     }
 }

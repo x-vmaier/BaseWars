@@ -232,11 +232,16 @@ inline uint8_t featureAt(int x, int y, int b, uint32_t seed) {
     default: return F_None;
     }
 }
-inline bool featureBlocks(uint8_t f) { return f == F_Pine || f == F_Oak || f == F_Rock || f == F_Gold; }   // bushes are decoration only
-inline float clearSeconds(uint8_t f) { return (f == F_Gold ? 5.f : (f == F_Rock ? 3.5f : 2.5f)) * (cfg().instantClear ? 0.f : cfg().clearTimeScale); }
-inline int clearCostWood(uint8_t f) { return f == F_Gold ? 8 : (f == F_Rock ? 5 : 3); }              // paid up front by the player
+inline bool featureBlocks(uint8_t f) { return f == F_Pine || f == F_Oak || f == F_Rock || f == F_Gold; }   // bushes do not block building (but can be cleared)
+inline const char* featName(uint8_t f) {
+    switch (f) { case F_Pine: return "Pine tree"; case F_Oak: return "Oak tree"; case F_Bush: return "Bush"; case F_Rock: return "Rock"; case F_Gold: return "Gold vein"; default: return ""; }
+}
+// seconds of pawn work, scaled by size / hardness (the pawn has to walk there first; the timer only runs while it works)
+inline float clearBaseSeconds(uint8_t f) { switch (f) { case F_Bush: return 1.5f; case F_Pine: return 3.f; case F_Oak: return 4.f; case F_Rock: return 5.f; case F_Gold: return 7.f; default: return 0.f; } }
+inline float clearSeconds(uint8_t f) { return clearBaseSeconds(f) * (cfg().instantClear ? 0.f : cfg().clearTimeScale); }
+inline int clearCostWood(uint8_t f) { switch (f) { case F_Bush: return 1; case F_Pine: return 3; case F_Oak: return 4; case F_Rock: return 5; case F_Gold: return 8; default: return 0; } }   // paid up front
 inline Res dropRes(uint8_t f) { return f == F_Gold ? R_Gold : (f == F_Rock ? R_Stone : R_Wood); }      // what the cleared feature yields
-inline int dropAmount(uint8_t f) { return f == F_Gold ? 14 : (f == F_Rock ? 8 : 10); }
+inline int dropAmount(uint8_t f) { switch (f) { case F_Bush: return 4; case F_Pine: return 10; case F_Oak: return 14; case F_Rock: return 8; case F_Gold: return 14; default: return 0; } }
 inline constexpr int MAX_CLEAR_TILES = 24;                                                              // per C_Clear request
 // Gold deposits near a Mine raise its output: +GOLD_BONUS_EACH per deposit within GOLD_RADIUS tiles of its centre, capped.
 inline constexpr float GOLD_RADIUS = 4.5f, GOLD_BONUS_EACH = .2f, GOLD_BONUS_CAP = 1.f;

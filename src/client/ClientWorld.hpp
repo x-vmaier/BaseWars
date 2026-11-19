@@ -31,6 +31,7 @@ struct ClientWorld {
     std::unordered_set<int64_t> occ;                          // tiles covered by building footprints
     std::unordered_set<int64_t> clearedT;                     // tiles whose feature was removed (synced from the server)
     std::unordered_map<int64_t, CJob> cjobs;                  // running clear jobs
+    std::vector<PendingSite> pendingSites;                    // own buildings queued behind clearing (S_ClearJobs)
 
     // entities
     entt::registry reg;
@@ -56,6 +57,7 @@ struct ClientWorld {
     bool exploredAt(int x, int y) const;
     uint8_t featHere(int x, int y) const;                     // surface feature (ignores clearing)
     bool featBlocking(int x, int y) const;                    // uncleared blocking feature outside building footprints
+    uint8_t featVisible(int x, int y) const;                  // explored, uncleared feature outside footprints (any kind, bushes too)
     std::vector<IV> blockedUnder(Kind k, IV t) const;
     int clearWoodCost(const std::vector<IV>& v) const;
     int goldNear(Pos c) const;                                // gold deposits around a mine site
@@ -75,6 +77,7 @@ struct ClientWorld {
     // ---- entities
     void rebuildOcc();
     bool visibleSource(float x, float y) const;               // inside the vision of an allied entity
+    bool nearStorage(float x, float y) const;                 // within reach of a Town Hall / Outpost / Storage (convoys end there)
     Pos myTH(Vector2 camTarget) const;                        // own Town Hall, or the camera position
     bool affordable(const float* cost) const;
     void clear();                                             // reset on join / leave (keeps the side tables)

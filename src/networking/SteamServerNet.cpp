@@ -2,6 +2,9 @@
 
 #include <steam/isteamnetworkingutils.h>
 #include <steam/steam_api.h>
+
+#include <cstdio>
+#include <cstdlib>
 #include <steam/steam_gameserver.h>
 
 #include <cstdio>
@@ -17,6 +20,7 @@ ISteamNetworkingSockets* sockets() { return SteamGameServerNetworkingSockets(); 
 void onStatus(SteamNetConnectionStatusChangedCallback_t* info) {
     auto* s = sockets();
     HSteamNetConnection h = info->m_hConn;
+    if (std::getenv("BW_NETLOG")) std::fprintf(stderr, "[net] state %d -> %d (%s)\n", int(info->m_eOldState), int(info->m_info.m_eState), info->m_info.m_szEndDebug);
     switch (info->m_info.m_eState) {
     case k_ESteamNetworkingConnectionState_Connecting:
         if (info->m_info.m_hListenSocket != k_HSteamListenSocket_Invalid) {
@@ -59,15 +63,16 @@ bool SteamServerNet::start(uint16_t port, const std::string& serverName, bool lo
         SteamNetworkingUtils()->InitRelayNetworkAccess();
     }
     g_queue = &queue;
-    SteamNetworkingConfigValue_t opt;
-    opt.SetPtr(k_ESteamNetworkingConfig_Callback_ConnectionStatusChanged, reinterpret_cast<void*>(&onStatus));
+    SteamNetworkingConfigValue_t opt[2];
+    opt[0].SetPtr(k_ESteamNetworkingConfig_Callback_ConnectionStatusChanged, reinterpret_cast<void*>(&onStatus));
+    opt[1].SetInt32(k_ESteamNetworkingConfig_IP_AllowWithoutAuth, 1);       // direct IP connections need no Steam ticket (LAN / localhost testing)
     g_group = sockets()->CreatePollGroup();
     group = g_group;
     SteamNetworkingIPAddr addr;
     addr.Clear();
     addr.m_port = port;
-    listenIp = sockets()->CreateListenSocketIP(addr, 1, &opt);
-    if (!localOnly) listenP2P = sockets()->CreateListenSocketP2P(0, 1, &opt);
+    listenIp = sockets()->CreateListenSocketIP(addr, 2, opt);
+    if (!localOnly) listenP2P = sockets()->CreateListenSocketP2P(0, 1, &opt[0]);
     advertised = !localOnly && listenP2P != k_HSteamListenSocket_Invalid;
     running = listenIp != k_HSteamListenSocket_Invalid;
     return running;

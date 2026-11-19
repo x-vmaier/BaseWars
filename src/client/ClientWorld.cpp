@@ -22,6 +22,11 @@ bool ClientWorld::featBlocking(int x, int y) const {
     int64_t k = chunkKey(x, y);
     return !clearedT.count(k) && !occ.count(k) && featureBlocks(featHere(x, y));
 }
+uint8_t ClientWorld::featVisible(int x, int y) const {
+    int64_t k = chunkKey(x, y);
+    if (!exploredAt(x, y) || clearedT.count(k) || occ.count(k)) return F_None;
+    return featHere(x, y);
+}
 std::vector<IV> ClientWorld::blockedUnder(Kind k, IV t) const {
     std::vector<IV> v;
     for (int y = t.y; y < t.y + KINFO[k].fh; y++) for (int x = t.x; x < t.x + KINFO[k].fw; x++) if (featBlocking(x, y)) v.push_back({x, y});
@@ -102,6 +107,15 @@ bool ClientWorld::visibleSource(float x, float y) const {
     });
     return v;
 }
+bool ClientWorld::nearStorage(float x, float y) const {
+    bool v = false;
+    reg.view<Info, Goal>().each([&](const Info& i, const Goal& g) {
+        if (v || !isStorage(i.kind)) return;
+        float hw = float(KINFO[i.kind].fw) * .5f + 2.5f, hh = float(KINFO[i.kind].fh) * .5f + 2.5f;
+        if (std::abs(g.x - x) <= hw && std::abs(g.y - y) <= hh) v = true;
+    });
+    return v;
+}
 Pos ClientWorld::myTH(Vector2 camTarget) const {
     Pos out{camTarget.x / TILE, camTarget.y / TILE};
     reg.view<Goal, Info>().each([&](const Goal& g, const Info& i) { if (i.kind == K_TownHall && i.owner == me) out = {g.x, g.y}; });
@@ -119,6 +133,7 @@ void ClientWorld::clear() {
     facTowns.clear();
     fxs.clear();
     ghosts.clear();
+    pendingSites.clear();
     markers.clear();
     ripples.clear();
     me = 0;

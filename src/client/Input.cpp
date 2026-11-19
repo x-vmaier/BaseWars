@@ -28,6 +28,7 @@ void Input::update(float dt) {
     if (hotkeys()) return;
 
     hovered = ui || dragging ? 0 : pick(rm);
+    hasFeat = !hovered && !ui && !dragging && !app.placement.active() && mode == M_None && pickFeature(rm, hoverFeat);
     bool lp = IsMouseButtonPressed(MOUSE_BUTTON_LEFT), lr = IsMouseButtonReleased(MOUSE_BUTTON_LEFT), rp = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
     bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
     if (app.shipPanel.input(m, lp, rp)) return;
@@ -117,6 +118,15 @@ void Input::worldRightClick(Vector2 rm, Vector2 m, Vector2 w) {
         else app.context.open(id, m);
         return;
     }
+    if (!id && hasFeat) {                                       // obstacle: selected pawns (or the nearest free pawn) clear it
+        std::vector<uint32_t> pawns;
+        for (auto s : selUnits()) { auto e = W.ents.find(s); if (e != W.ents.end() && W.reg.get<Info>(e->second).kind == K_Pawn) pawns.push_back(s); }
+        if (sel.empty() || !pawns.empty()) {
+            app.cmd.clear({hoverFeat}, pawns);
+            W.markers.push_back({(float(hoverFeat.x) + .5f) * TILE, (float(hoverFeat.y) + .5f) * TILE, GetTime()});
+            return;
+        }
+    }
     if (!selUnits().empty()) {
         if (id && W.hostileTargetId(id)) app.cmd.attack(id); else app.cmd.move(w);
     }
@@ -141,6 +151,17 @@ uint32_t Input::pick(Vector2 mouse, bool includeBuildings) {
         if (CheckCollisionPointRec(w, r)) best = n.id;
     });
     return best;
+}
+
+bool Input::pickFeature(Vector2 mouse, IV& out) {
+    Vector2 w = GetScreenToWorld2D(mouse, app.cam);
+    int tx = int(std::floor(w.x / TILE)), ty = int(std::floor(w.y / TILE));
+    for (int d = 0; d <= 2; d++) {                              // a tile's sprite reaches up into the tiles above it
+        uint8_t f = app.world.featVisible(tx, ty + d);
+        int tall = f == F_Pine ? 3 : (f == F_Oak ? 2 : 1);
+        if (f != F_None && d < tall) { out = {tx, ty + d}; return true; }
+    }
+    return false;
 }
 
 void Input::doSelect(Vector2 a, Vector2 b, bool add) {

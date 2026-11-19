@@ -9,8 +9,9 @@ class App;
 class BuildingRenderer {
 public:
     explicit BuildingRenderer(App& app) : app(app) {}
-    void queue(const RPos& p, const Info& i, uint32_t id, bool selected, bool hover, DrawList& items, double t);
+    void queue(const RPos& p, const Info& i, uint32_t id, bool selected, bool hover, bool remembered, DrawList& items, double t);
     void queuePlacementGhost(DrawList& items);
+    void queuePendingSites(DrawList& items);    // own buildings waiting for pawns to clear their site
 
 private:
     void drawPlaceExtras();             // clan-radius hints while placing a homeless Town Hall

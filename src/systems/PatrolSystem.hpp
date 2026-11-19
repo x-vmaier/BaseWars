@@ -9,6 +9,7 @@ struct PatGroup {
     uint32_t leader = 0, tgt = 0;
     Pos wp{0, 0}, retPos{0, 0};
     bool hasWp = false, pending = true;
+    bool roam = false, siege = false;                                                                     // roam: map-wide group; siege: marching on a hostile town
     int fails = 0, ret = 0;                                                                               // ret: player id being hunted (0 = peaceful patrol)
     double wait = 0, repath = 0, wpUntil = 0, respawnAt = 0, retUntil = 0;
 };
@@ -30,6 +31,12 @@ private:
     void spawnPatrol(uint32_t gid, PatGroup& g);
     Pos groupPos(const PatGroup& g);
     bool pickWaypoint(PatGroup& g);
+    bool pickSiege(PatGroup& g, Pos from, int owner);                  // a hostile town (warring faction or hostile player) in range
+    bool exploredTile(IV& out);                                        // random walkable tile in land some player has explored
+    Town* townNear(Pos p);                                             // nearest living NPC town
+    void manageRoamers();                                              // keeps cfg().patrolMapGroups wandering groups per 100 explored chunks
+    int roamWant = 0;
+    double roamCount = -100;
     std::unordered_map<uint32_t, PatGroup> pgroups;
     uint32_t nextGroup = 1;
 };

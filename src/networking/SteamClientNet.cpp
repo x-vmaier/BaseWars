@@ -3,6 +3,9 @@
 #include <steam/isteamnetworkingutils.h>
 #include <steam/steam_api.h>
 
+#include <cstdio>
+#include <cstdlib>
+
 namespace net {
 
 namespace {
@@ -10,6 +13,7 @@ std::deque<NetEvent>* g_queue = nullptr;
 
 void onStatus(SteamNetConnectionStatusChangedCallback_t* info) {
     auto* s = SteamNetworkingSockets();
+    if (std::getenv("BW_NETLOG")) std::fprintf(stderr, "[net] state %d -> %d (%s)\n", int(info->m_eOldState), int(info->m_info.m_eState), info->m_info.m_szEndDebug);
     switch (info->m_info.m_eState) {
     case k_ESteamNetworkingConnectionState_Connected:
         if (g_queue) g_queue->push_back({NetEvent::Connect, 0, {}});
@@ -37,8 +41,9 @@ bool SteamClientNet::connectIP(const std::string& ip, uint16_t port) {
     if (!addr.ParseString(ip.c_str())) return false;       // also accepts "host:port"; the explicit port below is the fallback
     if (addr.m_port == 0) addr.m_port = port;
     g_queue = &queue;
-    auto opt = statusOption();
-    conn = SteamNetworkingSockets()->ConnectByIPAddress(addr, 1, &opt);
+    SteamNetworkingConfigValue_t opt[2] = {statusOption(), {}};
+    opt[1].SetInt32(k_ESteamNetworkingConfig_IP_AllowWithoutAuth, 1);
+    conn = SteamNetworkingSockets()->ConnectByIPAddress(addr, 2, opt);
     return conn != 0;
 }
 

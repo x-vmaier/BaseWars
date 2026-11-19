@@ -12,7 +12,7 @@
 #include <cmath>
 #include <string>
 
-void BuildingRenderer::queue(const RPos& p, const Info& i, uint32_t id, bool selected, bool hover, DrawList& items, double t) {
+void BuildingRenderer::queue(const RPos& p, const Info& i, uint32_t id, bool selected, bool hover, bool remembered, DrawList& items, double t) {
     const ClientWorld& W = app.world;
     const KindInfo& ki = KINFO[i.kind];
     int tx = int(std::lround(p.x - float(ki.fw) * .5f)), ty = int(std::lround(p.y - float(ki.fh) * .5f));
@@ -24,10 +24,8 @@ void BuildingRenderer::queue(const RPos& p, const Info& i, uint32_t id, bool sel
     float sortY = bottom;
 
     items.push_back({sortY - 6.f, [=, this]() {
-        DrawEllipse(int(cx), int(bottom - 8), float(ki.fw) * 28.f, float(ki.fh) * 14.f, rgb(0, 0, 0, 55));
-        DrawEllipseLines(int(cx), int(bottom - 8), float(ki.fw) * 28.f, float(ki.fh) * 14.f, teamColor(i.owner));
         bool moving = (i.state & BLD_MOVING) != 0;
-        Color tint = moving ? rgb(255, 255, 255, 62) : (prog < 1.f ? rgb(255, 255, 255, 190) : WHITE);
+        Color tint = remembered ? rgb(150, 155, 175, 170) : (moving ? rgb(255, 255, 255, 62) : (prog < 1.f ? rgb(255, 255, 255, 190) : WHITE));
         auto A = [&](Color c) { if (moving) c.a = 62; return c; };
         int md = hover ? 1 : 0;
         if (i.kind == K_Harbour) {                                    // wooden pier over adjacent ocean tiles
@@ -68,6 +66,10 @@ void BuildingRenderer::queue(const RPos& p, const Info& i, uint32_t id, bool sel
         Rectangle dst{cx - dw / 2, bottom - 6 - s.artBottom * s.scale + (s.artH * s.scale - dh), dw, dh};
         drawSprite(bt, src, dst, tint, md, oc);
     }});
+    if (remembered) {                                                 // last known state of an NPC town building outside vision
+        if (hover || selected) items.push_back({sortY + 5.f, [=]() { textShadow("Last seen", int(cx) - MeasureText("Last seen", 14) / 2, int(bottom) + 6, 14, rgb(200, 205, 220)); }});
+        return;
+    }
     if (prog < 1.f)
         items.push_back({sortY + 1.f, [=]() {
             Anim h = mkAnim(std::string("Units/") + COLOR_NAME[col] + " Units/Pawn/Pawn_Interact Hammer.png", 192, 192, 6, 96, 135);
@@ -154,4 +156,23 @@ void BuildingRenderer::queuePlacementGhost(DrawList& items) {
         if (k == K_Campfire) DrawCircleLinesV({cx, bottom - 30}, WARMTH_RADIUS * TILE, rgb(255, 170, 70, 160));
         if (k == K_Mine) mineGhost(tt, cx, bottom);
     }});
+}
+
+void BuildingRenderer::queuePendingSites(DrawList& items) {
+    for (const PendingSite& ps : app.world.pendingSites) {
+        const KindInfo& ki = KINFO[ps.kind];
+        float cx = (float(ps.tx) + float(ki.fw) * .5f) * TILE, bottom = float(ps.ty + ki.fh) * TILE;
+        PendingSite site = ps;
+        items.push_back({bottom - 7.f, [=, this]() {
+            DrawRectangleLinesEx({float(site.tx) * TILE, float(site.ty) * TILE, float(ki.fw) * TILE, float(ki.fh) * TILE}, 3, rgb(255, 210, 120, 170));
+            BSpr s = buildingSprite(site.kind, 1);
+            if (s.file[0]) {
+                Texture2D bt = tex(std::string("Buildings/") + COLOR_NAME[colorIdx(app.world.me)] + " Buildings/" + s.file + ".png");
+                float dw = s.artW * s.scale, dh = s.artH * s.scale;
+                DrawTexturePro(bt, {0, 0, s.artW, s.artH}, {cx - dw / 2, bottom - 6 - s.artBottom * s.scale, dw, dh}, {0, 0}, 0, rgb(255, 255, 255, 80));
+            }
+            const char* lbl = "Waiting for the site to be cleared";
+            textShadow(lbl, int(cx) - MeasureText(lbl, 16) / 2, int(bottom) + 8, 16, rgb(255, 220, 150));
+        }});
+    }
 }

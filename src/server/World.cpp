@@ -57,10 +57,14 @@ bool World::allied(int a, int b) const { return a == b || shares(a, b); }
 float World::repOf(int player, int owner) const { return isPlayer(player) && isFactionOwner(owner) ? pl[player].rep[owner - FACTION_BASE] : 0.f; }
 bool World::hostile(int a, int b) const {
     if (a < 1 || b < 1 || a == b) return false;
-    if (isFactionOwner(a) && isFactionOwner(b)) return false;
+    if (isFactionOwner(a) && isFactionOwner(b)) return factionsAtWar(a - FACTION_BASE, b - FACTION_BASE);
     if (isFactionOwner(a)) return repOf(b, a) <= float(HOSTILE_REP);
     if (isFactionOwner(b)) return repOf(a, b) <= float(HOSTILE_REP);
     return !allied(a, b);
+}
+bool World::factionsAtWar(int fa, int fb) const {
+    if (fa == fb || fa < 0 || fb < 0 || fa >= FACTION_COUNT || fb >= FACTION_COUNT) return false;
+    return hash2(std::min(fa, fb), std::max(fa, fb), seed + 515) % 100 < uint32_t(cfg().factionWarPercent);
 }
 int World::ulv(int owner, Kind k) const { return isPlayer(owner) ? std::max<int>(1, pl[owner].ulevel[k]) : 1; }
 float World::totalRes(int id) const { float t = 0; for (float v : pl[id].res) t += v; return t; }

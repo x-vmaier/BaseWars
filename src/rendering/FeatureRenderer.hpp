@@ -5,6 +5,7 @@
 #include <raylib.h>
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 class App;
@@ -19,6 +20,7 @@ public:
 private:
     bool goldNearMine(int x, int y) const;
     static void goldGlints(float cx, float by, uint32_t h, double t, bool strong);
+    void queueTooltip(uint8_t f, int x, int y, float cx, float by, DrawList& items);
     App& app;
     std::vector<Vector2> mineCtr;       // centres (tiles) of own mines and the mine being placed
 };

@@ -121,6 +121,7 @@ public:
     bool allied(int a, int b) const;
     float repOf(int player, int owner) const;
     bool hostile(int a, int b) const;
+    bool factionsAtWar(int fa, int fb) const;                         // per world seed and faction_war_percent
     int ulv(int owner, Kind k) const;
     std::string ownerName(int o) const;
     int colorOf(int id) const { return (id - 1) % TEAM_COLORS; }

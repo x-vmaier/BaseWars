@@ -59,6 +59,7 @@ void SaveSystem::saveGame() {
             Pos p = reg.get<Pos>(e);
             w.put<uint8_t>(0).put<float>(p.x).put<float>(p.y);
             const Worker* wk = reg.try_get<Worker>(e);
+            if (const ClearTask* ct = reg.try_get<ClearTask>(e); !wk && ct && ct->hadWorker) wk = &ct->worker;   // a clearing pawn keeps its job across saves
             const Convoy* cv = reg.try_get<Convoy>(e);
             const Haul* hl = reg.try_get<Haul>(e);
             w.put<uint8_t>(uint8_t((wk ? 1 : 0) | (cv ? 2 : 0) | (hl ? 4 : 0)));

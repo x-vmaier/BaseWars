@@ -89,6 +89,7 @@ void PacketHandler::onState(Reader& r) {
             old = inf;
             reg.get<Goal>(e) = Goal{x, y};
             reg.get<Seen>(e).stamp = w.stamp;
+            reg.remove<Remembered>(e);                            // seen again: live state replaces the memory
         }
     }
     std::vector<entt::entity> dead;
@@ -99,7 +100,15 @@ void PacketHandler::onState(Reader& r) {
         uint32_t id = reg.get<NetId>(e).id;
         const auto& in = reg.get<Info>(e);
         const auto& rp = reg.get<RPos>(e);
-        if (w.visibleSource(rp.x, rp.y)) w.ghosts.push_back({in.kind, in.owner, 1, rp.x, rp.y, reg.get<Face>(e).left, GetTime()});
+        bool remembered = reg.all_of<Remembered>(e);
+        if (remembered && (w.stamp + id) % 5 != 0) continue;        // memories are re-checked against vision every 5th state
+        bool vis = w.visibleSource(rp.x, rp.y);
+        if (isBuilding(in.kind) && isFactionOwner(in.owner) && !vis) {     // NPC town building left our vision: keep its last known state
+            if (!remembered) { reg.emplace<Remembered>(e); app.input.forget(id); }
+            continue;
+        }
+        bool arrived = !isBuilding(in.kind) && (in.state & UNIT_CONVOY_FLAG) && w.nearStorage(rp.x, rp.y);   // convoys / haulers delivered: no ash ghost
+        if (vis && !remembered && !arrived) w.ghosts.push_back({in.kind, in.owner, 1, rp.x, rp.y, reg.get<Face>(e).left, GetTime()});
         w.ents.erase(id);
         app.input.forget(id);
         if (app.context.target == id) app.context.close();
@@ -245,11 +254,19 @@ void PacketHandler::worldPacket(const uint8_t* d, size_t n) {
         std::unordered_map<int64_t, CJob> v;
         for (int i = 0; i < cnt; i++) {
             int x = r.get<int32_t>(), y = r.get<int32_t>();
-            int pct = r.get<uint8_t>();
+            int pct = r.get<uint8_t>(), st = r.get<uint8_t>();
             if (!r.ok) return;
-            v[chunkKey(x, y)] = CJob{float(pct) / 100.f};
+            v[chunkKey(x, y)] = CJob{float(pct) / 100.f, uint8_t(st)};
         }
         w.cjobs = std::move(v);
+        int np = r.get<uint16_t>();
+        std::vector<PendingSite> ps;
+        for (int i = 0; i < np; i++) {
+            int k = r.get<uint8_t>(), tx = r.get<int32_t>(), ty = r.get<int32_t>();
+            if (!r.ok || k >= K_Count) break;
+            ps.push_back({Kind(k), tx, ty});
+        }
+        w.pendingSites = std::move(ps);
         break;
     }
     case S_Drop: {

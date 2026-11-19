@@ -12,12 +12,13 @@
 
 void FireSystem::ignite(entt::entity b, int byOwner) {
     Kind k = reg.get<Info>(b).kind;
-    if (!isBuilding(k) || k == K_Campfire) return;
+    if (!isBuilding(k) || k == K_Campfire || !world.complete(b)) return;
+    int o = reg.get<Owner>(b).id;
+    if (!world.hostile(byOwner, o)) return;                                    // guard: only an enemy can set a building on fire
     auto& f = reg.get_or_emplace<BFlags>(b);
     bool fresh = f.burn <= 0;
-    f.burn = BURN_TIME;
+    f.burn = BURN_TIME;                                                         // each fire arrow refreshes (never stacks) the timer
     f.burnBy = uint8_t(byOwner);
-    int o = reg.get<Owner>(b).id;
     if (fresh && isPlayer(o)) { Pos p = world.posOf(b); world.say(o, std::string("Your ") + KINFO[k].name + " is on fire! Idle units will try to extinguish it."); (void)p; }
 }
 // archers shoot fire arrows from troop level 3 (player level); returns after emitting the projectile effect
@@ -27,7 +28,7 @@ void FireSystem::archerShot(int ow, Pos from, Pos to, entt::entity tg) {
     else world.fx(E_Arrow, from.x, from.y - .4f, to.x, to.y);
 }
 bool FireSystem::canExtinguish(entt::entity e) {
-    if (reg.any_of<Attack, AMove, Convoy, Haul, Raider, Support, Extinguish>(e)) return false;
+    if (reg.any_of<Attack, AMove, Convoy, Haul, Raider, Support, Extinguish, ClearTask>(e)) return false;
     Kind k = reg.get<Info>(e).kind;
     if (!(k == K_Pawn || isArmy(k) || k == K_Monk)) return false;
     if (auto* w = reg.try_get<Worker>(e)) { if (w->phase != 0) return false; }
@@ -44,7 +45,11 @@ void FireSystem::burnSecond() {
         if (!reg.valid(e)) continue;
         auto& f = reg.get<BFlags>(e);
         f.burn = std::max(0.f, f.burn - 1.f);
-        s.combat.damage(e, reg.get<Health>(e).maxhp * BURN_FRAC_PER_SEC, f.burnBy);
+        int ow = reg.get<Owner>(e).id;
+        int by = world.hostile(f.burnBy, ow) ? int(f.burnBy) : 0;               // arson credit (loot, kill) only while the arsonist is still an enemy
+        if (!by) f.burnBy = 0;
+        if (world.dying.count(reg.get<Uid>(e).id)) continue;
+        s.combat.damage(e, reg.get<Health>(e).maxhp * BURN_FRAC_PER_SEC, by);
     }
     s.combat.processKills();
     reg.view<Owner, Unit, Info, Pos>().each([&](entt::entity e, const Owner& o, const Unit&, const Info&, const Pos&) { if (isPlayer(o.id) && canExtinguish(e)) cand.push_back(e); });

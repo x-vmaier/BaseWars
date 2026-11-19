@@ -38,6 +38,7 @@ bool ServerConfig::load(const std::string& path) {
         for (int i = 1; i < 7; i++) if (k == std::string("feature_density_") + biomeKey[i]) featureDensity[i] = float(d);
         F("clear_time_scale", clearTimeScale);
         I("town_region_chance", townRegionChance); I("town_min_distance", townMinDistance); I("hostile_faction_percent", hostileFactionPercent);
+        I("faction_war_percent", factionWarPercent); I("patrol_siege_percent", patrolSiegePercent); I("patrol_siege_range", patrolSiegeRange);
         D("raid_first_delay", raidFirstDelay); D("raid_first_random", raidFirstRandom);
         D("raid_interval", raidInterval); D("raid_interval_random", raidIntervalRandom);
         I("patrols_per_town_min", patrolsPerTownMin); I("patrols_per_town_max", patrolsPerTownMax); I("patrol_map_groups", patrolMapGroups);
@@ -49,6 +50,9 @@ bool ServerConfig::load(const std::string& path) {
     biomeScale = std::max(.1f, biomeScale);
     townRegionChance = std::clamp(townRegionChance, 0, 100);
     hostileFactionPercent = std::clamp(hostileFactionPercent, 0, 100);
+    factionWarPercent = std::clamp(factionWarPercent, 0, 100);
+    patrolSiegePercent = std::clamp(patrolSiegePercent, 0, 100);
+    patrolMapGroups = std::max(0, patrolMapGroups);
     patrolsPerTownMin = std::max(0, patrolsPerTownMin);
     patrolsPerTownMax = std::max(patrolsPerTownMin, patrolsPerTownMax);
     std::printf("Loaded server config %s\n", path.c_str());
