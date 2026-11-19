@@ -1,6 +1,6 @@
 // Authoritative server: infinite biome world, persistence, economy with physical supply lines, combat, naval units, alliances.
-#include "net.hpp"
-#include "shared.hpp"
+#include "common/Shared.hpp"
+#include "networking/SteamServerNet.hpp"
 
 #include <entt/entt.hpp>
 
@@ -24,6 +24,7 @@
 namespace {
 
 volatile std::sig_atomic_t g_quit = 0;
+bool g_localOnly = false;                       // --local: no Steam backend login/advertising (direct IP only)
 using Bits = std::array<uint8_t, 32>;
 constexpr uint32_t SAVE_MAGIC = 0x36535742u;  // "BWS6" (world + ships + base sections appended)
 
@@ -71,7 +72,7 @@ uint64_t nowSec() { return uint64_t(std::chrono::duration_cast<std::chrono::seco
 int64_t tkey(int x, int y) { return chunkKey(x, y); }
 
 struct Server {
-    ServerNet net;
+    net::SteamServerNet net;
     std::unordered_map<uint64_t, int> connPlayer;               // connection -> player id
     double lastPublish = -100;
     entt::registry reg;
@@ -108,8 +109,8 @@ struct Server {
             }
             std::printf("Old savegame kept as %s.bad; starting a fresh world.\n", savePath.c_str());
         }
-        if (!net.start(port, MAX_PLAYERS + 4, serverName)) { std::puts("Failed to bind port"); std::exit(1); }
-        std::printf("Server listening on UDP port %d (seed %u, %s, steam %s)\n", port, seed, loaded ? "savegame loaded" : "fresh world", net.steamActive() ? "on" : "off");
+        if (!net.start(port, serverName, g_localOnly)) { std::puts("Failed to bind port"); std::exit(1); }
+        std::printf("Server listening on port %d (Steam Networking Sockets) (seed %u, %s, steam %s)\n", port, seed, loaded ? "savegame loaded" : "fresh world", net.relayActive() ? "on" : "off");
     }
     ~Server() { save(); }
 
@@ -2007,12 +2008,11 @@ int main(int argc, char** argv) {
     uint32_t seed = argc > 2 ? uint32_t(std::strtoul(argv[2], nullptr, 10)) : std::random_device{}();
     std::string save = argc > 3 ? argv[3] : "savegame.bin";
     std::string serverName = argc > 4 ? argv[4] : "Base Wars Server";
-    if (enet_initialize() != 0) { std::puts("enet_initialize failed"); return 1; }
+    for (int i = 1; i < argc; i++) if (std::string(argv[i]) == "--local") g_localOnly = true;
     std::signal(SIGINT, [](int) { g_quit = 1; });
     std::signal(SIGTERM, [](int) { g_quit = 1; });
     {
         Server s(uint16_t(port), seed, save, serverName);
         s.run();
     }
-    enet_deinitialize();
 }

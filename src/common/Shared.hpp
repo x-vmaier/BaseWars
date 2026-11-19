@@ -6,8 +6,6 @@
 #define NOGDI   // keep windows.h from clashing with raylib (Rectangle, DrawText...)
 #define NOUSER  // (CloseWindow, ShowCursor...)
 #endif
-#include <enet/enet.h>
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -356,6 +354,3 @@ struct Reader {
     }
 };
 
-inline void sendPacket(ENetPeer* peer, const Writer& w) {
-    enet_peer_send(peer, 0, enet_packet_create(w.b.data(), w.b.size(), ENET_PACKET_FLAG_RELIABLE));
-}

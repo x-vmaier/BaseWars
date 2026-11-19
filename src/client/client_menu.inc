@@ -10,9 +10,9 @@ std::string menuStatus, directAddr;
 bool wantQuit = false;
 std::vector<ServerEntry> menuList;
 ServerEntry connectingTo;
-steamlayer::Client steam;
-steamlayer::Browser browser;
-ClientNet cnet;
+net::SteamClient steam;
+net::ServerBrowser browser;
+net::SteamClientNet cnet;
 TMap mMenu;
 
 Rectangle menuRect() { Vector2 s = mMenu.size(); return {(float(SW()) - s.x) / 2, (float(SH()) - s.y) / 2 + 16, s.x, s.y}; }

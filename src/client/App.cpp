@@ -1,9 +1,11 @@
 // Raylib client: Tiny Swords art, Tiled-driven UI panels, biome terrain with autotiled cliffs, shader effects,
 // building placement, context panels, alliances and RTS controls.
-#include "assets.hpp"
-#include "net.hpp"
-#include "settings.hpp"
-#include "shared.hpp"
+#include "client/Settings.hpp"
+#include "common/Shared.hpp"
+#include "networking/ServerBrowser.hpp"
+#include "networking/SteamClient.hpp"
+#include "networking/SteamClientNet.hpp"
+#include "rendering/Assets.hpp"
 
 #include <entt/entt.hpp>
 #include <raylib.h>
@@ -2360,7 +2362,6 @@ int main(int argc, char** argv) {
     loadConfig(app.ip, app.port, app.myName);
     app.settings.load(dir);
     if (app.myName.empty()) app.myName = app.settings.name;
-    if (enet_initialize() != 0) { TraceLog(LOG_ERROR, "enet_initialize failed"); return 1; }
     app.steam.init();
     if (app.myName.empty() && app.steam.ok) app.myName = app.steam.name;
     app.loadProfile();
@@ -2376,5 +2377,4 @@ int main(int argc, char** argv) {
     if (autoJoin.empty() && std::getenv("BW_SHOT") && !std::getenv("BW_MENU")) autoJoin = app.ip + ":" + std::to_string(app.port);
     app.run(autoJoin);
     CloseWindow();
-    enet_deinitialize();
 }
