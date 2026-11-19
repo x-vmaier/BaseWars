@@ -1,3 +1,7 @@
+/**
+ * @file UnitRenderer.cpp
+ * @brief Unit draw queue and the per-kind drawer table (ships, monks, sheep).
+ */
 #include "rendering/UnitRenderer.hpp"
 
 #include "client/App.hpp"
@@ -7,61 +11,126 @@
 #include "rendering/Text.hpp"
 #include "rendering/UnitAnims.hpp"
 
+#include <array>
 #include <cmath>
 #include <string>
+
+UnitView UnitRenderer::makeView(const RPos &p, const Info &i, const Face &fc, uint32_t id, bool selected, bool hover,
+                                double t, int biome) const
+{
+    const ClientWorld &W = app.world;
+
+    UnitView v{};
+    v.i = i;
+    v.left = fc.left;
+    v.selected = selected;
+    v.hover = hover;
+    v.px = p.x * TILE;
+    v.py = p.y * TILE;
+    v.moving = (i.state & 7) == US_Move;
+    v.convoy = (i.state & UNIT_CONVOY_FLAG) != 0;
+    v.carry = v.convoy && !i.aux ? 2 : i.aux;
+    v.biome = biome;
+    v.id = id;
+    v.t = t;
+
+    if (drawerOf(i.kind).fixedOutline)
+        v.outline = rgb(255, 235, 140);
+    else if (i.owner == W.me || W.alliedWith(i.owner))
+        v.outline = rgb(255, 255, 255);
+    else
+        v.outline = W.hostileTo(i.owner) ? rgb(255, 90, 90) : rgb(255, 225, 130);
+    return v;
+}
 
 void UnitRenderer::queue(const RPos &p, Info &i, Face &fc, uint32_t id, bool selected, bool hover, DrawList &items,
                          double t, int biome)
 {
-    const ClientWorld &W = app.world;
-    float px = p.x * TILE, py = p.y * TILE;
-    bool moving = (i.state & 7) == US_Move, convoy = (i.state & UNIT_CONVOY_FLAG) != 0;
-    int carry = convoy && !i.aux ? 2 : i.aux;
-    Color oc = i.owner == W.me || W.alliedWith(i.owner)
-                   ? rgb(255, 255, 255)
-                   : (W.hostileTo(i.owner) ? rgb(255, 90, 90) : rgb(255, 225, 130));
-    if (i.kind == K_Sheep)
-        oc = rgb(255, 235, 140);
-    items.push_back({py, [=, this]()
+    UnitView v = makeView(p, i, fc, id, selected, hover, t, biome);
+    const UnitDrawer &d = drawerOf(i.kind);
+
+    items.push_back({v.py, [=, this] { d.body ? (this->*d.body)(v) : drawUnit(v); }});
+    if (d.extras)
+        (this->*d.extras)(v, items);
+}
+
+void UnitRenderer::drawUnit(const UnitView &v) const
+{
+    const Info &i = v.i;
+    const UnitDrawer &d = drawerOf(i.kind);
+    Anim a = unitAnim(i.kind, i.owner, i.state & 7, v.carry, i.aim, v.moving, v.biome, v.t);
+
+    DrawEllipse(int(v.px), int(v.py + 2), 16, 6, rgb(0, 0, 0, 60));
+    if (v.selected)
+        DrawEllipseLines(int(v.px), int(v.py + 2), 24, 10, rgb(255, 235, 90));
+    drawAnim(a, frameFor(a, v.t, float(v.id % 7)), v.px, v.py + 6, v.left, 1.f, WHITE, v.hover ? 1 : 0, v.outline);
+
+    drawLabels(v);
+    if ((i.state & 7) == US_Extinguish)
+        extinguishSplash(v.px, v.py, v.left, v.t, v.id);
+    if (d.overlay)
+        (this->*d.overlay)(v);
+
+    float fr = i.hp / std::max(1.f, i.maxhp);
+    if ((fr < .995f || v.selected || v.hover) && d.healthBar)
+        drawBar({v.px, v.py - 56}, 48, fr, healthColor(fr));
+}
+
+void UnitRenderer::drawLabels(const UnitView &v) const
+{
+    if (v.convoy)
+        textShadow("Convoy", int(v.px) - 22, int(v.py) - 70, 14, rgb(120, 230, 255));
+    if ((v.i.state & UNIT_SUPPORT_FLAG) && !v.convoy)
+        textShadow("Patrol", int(v.px) - 20, int(v.py) - 70, 14,
+                   app.world.alliedWith(v.i.owner) ? rgb(255, 190, 80) : rgb(255, 110, 100));
+}
+
+void UnitRenderer::drawShip(const UnitView &v) const
+{
+    ShipRenderer &ships = app.worldRenderer.ships;
+    ships.drawShip(v.px, v.py, v.i.owner, v.left, v.hover, v.t, v.id, v.i.aux, v.i.prog);
+    ships.drawLabel(v.px, v.py, v.i, v.selected, v.hover);
+    if (v.selected)
+        DrawEllipseLines(int(v.px), int(v.py + 4), 56, 18, rgb(255, 235, 90));
+}
+
+void UnitRenderer::queueShipWake(const UnitView &v, DrawList &items) const
+{
+    if (!v.moving)
+        return;
+
+    items.push_back({v.py - 1, [=]
     {
-        if (i.kind == K_Ship)
-        {
-            ShipRenderer &ships = app.worldRenderer.ships;
-            ships.drawShip(px, py, i.owner, fc.left, hover, t, id, i.aux, i.prog);
-            ships.drawLabel(px, py, i, selected, hover);
-            if (selected)
-                DrawEllipseLines(int(px), int(py + 4), 56, 18, rgb(255, 235, 90));
-            return;
-        }
-        Anim a = unitAnim(i.kind, i.owner, i.state & 7, carry, i.aim, moving, biome, t);
-        DrawEllipse(int(px), int(py + 2), 16, 6, rgb(0, 0, 0, 60));
-        if (selected)
-            DrawEllipseLines(int(px), int(py + 2), 24, 10, rgb(255, 235, 90));
-        drawAnim(a, frameFor(a, t, float(id % 7)), px, py + 6, fc.left, 1.f, WHITE, hover ? 1 : 0, oc);
-        if (convoy)
-            textShadow("Convoy", int(px) - 22, int(py) - 70, 14, rgb(120, 230, 255));
-        if ((i.state & UNIT_SUPPORT_FLAG) && !convoy)
-            textShadow("Patrol", int(px) - 20, int(py) - 70, 14,
-                       app.world.alliedWith(i.owner) ? rgb(255, 190, 80) : rgb(255, 110, 100));
-        if ((i.state & 7) == US_Extinguish)
-            extinguishSplash(px, py, fc.left, t, id);
-        if (i.kind == K_Monk && (i.state & 7) == US_Heal)
-        {
-            Anim h = mkAnim(std::string("Units/") + COLOR_NAME[colorIdx(i.owner)] + " Units/Monk/Heal_Effect.png", 192,
-                            192, 10, 96, 135);
-            drawAnim(h, frameFor(h, t), px, py + 6, false, 1.f);
-        }
-        float fr = i.hp / std::max(1.f, i.maxhp);
-        if ((fr < .995f || selected || hover) && i.kind != K_Sheep)
-            drawBar({px, py - 56}, 48, fr, healthColor(fr));
+        Anim s = mkAnim("Particle FX/Water Splash.png", 192, 192, 8, 96, 150);
+        drawAnim(s, frameFor(s, v.t, float(v.id % 3)), v.px - (v.left ? -30.f : 30.f), v.py + 6, false, .45f,
+                 rgb(255, 255, 255, 140));
     }});
-    if (i.kind == K_Ship && moving)
-        items.push_back({py - 1, [=]()
-        {
-            Anim s = mkAnim("Particle FX/Water Splash.png", 192, 192, 8, 96, 150);
-            drawAnim(s, frameFor(s, t, float(id % 3)), px - (fc.left ? -30.f : 30.f), py + 6, false, .45f,
-                     rgb(255, 255, 255, 140));
-        }});
+}
+
+void UnitRenderer::drawHealAura(const UnitView &v) const
+{
+    if ((v.i.state & 7) != US_Heal)
+        return;
+
+    Anim h = mkAnim(std::string("Units/") + COLOR_NAME[colorIdx(v.i.owner)] + " Units/Monk/Heal_Effect.png", 192, 192,
+                    10, 96, 135);
+    drawAnim(h, frameFor(h, v.t), v.px, v.py + 6, false, 1.f);
+}
+
+const UnitDrawer &UnitRenderer::drawerOf(Kind k)
+{
+    static const std::array<UnitDrawer, K_Count> table = []
+    {
+        std::array<UnitDrawer, K_Count> t{};
+
+        t[K_Ship].body = &UnitRenderer::drawShip;
+        t[K_Ship].extras = &UnitRenderer::queueShipWake;
+        t[K_Monk].overlay = &UnitRenderer::drawHealAura;
+        t[K_Sheep].healthBar = false;
+        t[K_Sheep].fixedOutline = true;
+        return t;
+    }();
+    return table[k];
 }
 
 void UnitRenderer::extinguishSplash(float px, float py, bool left, double t, uint32_t id)

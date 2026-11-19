@@ -4,6 +4,7 @@
 // and translucent clouds drifting over discovered land.
 #include "client/ClientState.hpp"
 #include "client/Components.hpp"
+#include "rendering/BuildingView.hpp"
 #include "rendering/DrawItem.hpp"
 
 class App;
@@ -17,11 +18,9 @@ class EffectsRenderer
     void queueGhosts(DrawList &items, double t);
     void queueFx(DrawList &items, double t);
     void queueDrops(DrawList &items, double t);
-    void queueBuildingStatus(const Info &i, uint32_t id, float cx, float bottom, int fw, int fh, float sortY,
-                             DrawList &items, double t);
+    void queueBuildingStatus(const BuildingView &v, DrawList &items);
     void drawLandClouds(const TerrainView &v, float t);
 
   private:
-    void queueBaseFx(const Fx &f, DrawList &items, double t); // fire arrows, extinguishing
     App &app;
 };
