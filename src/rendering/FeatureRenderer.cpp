@@ -17,14 +17,16 @@ void FeatureRenderer::frame()
     mineCtr.clear();
     W.reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
     {
-        if (i.kind == K_Mine && i.owner == W.me)
+        if (hasTag(i.kind, KT_GoldBoosted) && i.owner == W.me)
             mineCtr.push_back({g.x, g.y});
     });
 
-    if (app.placement.buildKind == int(K_Mine) && !app.overUI(ui::mouse()))
+    int placing = app.placement.buildKind;
+    if (placing >= 0 && placing < K_Count && hasTag(Kind(placing), KT_GoldBoosted) && !app.overUI(ui::mouse()))
     {
-        IV t = Placement::placeTile(K_Mine, GetScreenToWorld2D(::GetMousePosition(), app.cam));
-        Pos c = footCenter(K_Mine, t.x, t.y);
+        Kind k = Kind(placing);
+        IV t = Placement::placeTile(k, GetScreenToWorld2D(::GetMousePosition(), app.cam));
+        Pos c = footCenter(k, t.x, t.y);
         mineCtr.push_back({c.x, c.y});
     }
 }

@@ -302,7 +302,7 @@ void Input::worldRightClick(Vector2 rm, Vector2 m, Vector2 w)
         for (auto s : selUnits())
         {
             auto e = W.ents.find(s);
-            if (e != W.ents.end() && W.reg.get<Info>(e->second).kind == K_Pawn)
+            if (e != W.ents.end() && hasTag(W.reg.get<Info>(e->second).kind, KT_Worker))
                 pawns.push_back(s);
         }
 
@@ -441,7 +441,7 @@ int Input::armyCountSel()
         if (it != W.ents.end())
         {
             Kind k = W.reg.get<Info>(it->second).kind;
-            if (!isBuilding(k) && k != K_Ship && k != K_Monk)
+            if (!isBuilding(k) && !hasTag(k, KT_NonCombat))
                 n++;
         }
     }

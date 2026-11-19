@@ -157,7 +157,7 @@ void ConvoyHaulSystem::spawnHauls()
     std::vector<entt::entity> blds;
     reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info &i, const Building &b, const Owner &o)
     {
-        if ((i.kind == K_Outpost || i.kind == K_Storage) && b.progress >= 1.f && isPlayer(o.id) && !world.inactive(e) &&
+        if (hasTag(i.kind, KT_Depot) && b.progress >= 1.f && isPlayer(o.id) && !world.inactive(e) &&
             !reg.all_of<Moving>(e))
             blds.push_back(e);
     });

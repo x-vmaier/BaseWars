@@ -70,10 +70,10 @@ void BuildingRenderer::drawGhost(Kind k, IV tt, int err, bool ok) const
     drawGhostSprite(k, tt, cx, bottom);
     ghostLabel(k, tt, err, cx, bottom);
 
-    if (k == K_Campfire)
+    if (hasTag(k, KT_Warm))
         DrawCircleLinesV({cx, bottom - 30}, WARMTH_RADIUS * TILE, rgb(255, 170, 70, 160));
 
-    if (k == K_Mine)
+    if (hasTag(k, KT_GoldBoosted))
         mineGhost(tt, cx, bottom);
 }
 
@@ -84,7 +84,7 @@ void BuildingRenderer::drawTerritory() const
 
     W.reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
     {
-        if (i.owner != W.me || (i.kind != K_TownHall && i.kind != K_Outpost))
+        if (i.owner != W.me || !hasTag(i.kind, KT_Anchor))
             return;
 
         float r = float(anchorRadius(i.kind));

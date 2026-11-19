@@ -14,6 +14,7 @@ class UnitSystem
     void move(const std::vector<entt::entity> &units, float dt);
 
   private:
+    void healTick(entt::entity e, Unit &u, Kind k, int ow, Pos p, const std::vector<entt::entity> &units, float dt);
     World &world;
     entt::registry &reg;
     Systems &s;

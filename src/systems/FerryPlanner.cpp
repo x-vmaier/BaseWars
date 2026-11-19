@@ -140,7 +140,7 @@ TransportPlan FerryPlanner::planTransport(int owner, const std::vector<entt::ent
     reg.view<Ship, Owner, Info, Pos, Unit>().each(
         [&](entt::entity e, const Ship &, const Owner &o, const Info &in, const Pos &p, const Unit &u)
     {
-        if (o.id != owner || in.kind != K_Ship || reg.all_of<Voyage>(e) || !u.path.empty() ||
+        if (o.id != owner || !hasTag(in.kind, KT_Naval) || reg.all_of<Voyage>(e) || !u.path.empty() ||
             world.clock - reg.get<Ship>(e).idleSince < FERRY_IDLE || world.dying.count(reg.get<Uid>(e).id))
             return;
         int tf;

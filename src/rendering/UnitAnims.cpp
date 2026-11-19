@@ -1,103 +1,181 @@
+/**
+ * @file UnitAnims.cpp
+ * @brief Per-kind unit animation and building sprite tables (add a unit's or building's art here).
+ */
 #include "rendering/UnitAnims.hpp"
 
 #include "rendering/Palette.hpp"
 
+#include <array>
 #include <cmath>
 #include <string>
 
+namespace
+{
+// Everything an animation function may look at.
+struct AnimCtx
+{
+    std::string base; // "Units/<Colour> Units/"
+    int state, aux, aim, biome;
+    bool moving;
+    double t;
+};
+
+Anim clip(const AnimCtx &c, const std::string &file, int w, int n, float ax, float ay)
+{
+    return mkAnim(c.base + file, w, w, n, ax, ay);
+}
+
+Anim pawnAnim(const AnimCtx &c)
+{
+    if (c.state == US_Build)
+        return clip(c, "Pawn/Pawn_Interact Hammer.png", 192, 8, 96, 135);
+    if (c.state == US_Work)
+        return clip(c, c.biome == B_Forest ? "Pawn/Pawn_Interact Axe.png" : "Pawn/Pawn_Interact Pickaxe.png", 192, 9,
+                    96, 135);
+    if (c.state == US_Attack)
+        return clip(c, "Pawn/Pawn_Interact Knife.png", 192, 10, 96, 135);
+
+    static const char *carry[] = {"", " Wood", " Gold", " Gold", " Meat"};
+    std::string sfx = c.aux >= 1 && c.aux <= 4 ? carry[c.aux] : "";
+    return clip(c, (c.moving ? "Pawn/Pawn_Run" : "Pawn/Pawn_Idle") + sfx + ".png", 192, c.moving ? 10 : 7, 96, 135);
+}
+
+Anim warriorAnim(const AnimCtx &c)
+{
+    if (c.state == US_Attack)
+        return clip(c, int(c.t * 2.5) % 2 ? "Warrior/Warrior_Attack2.png" : "Warrior/Warrior_Attack1.png", 192, 10, 96,
+                    135);
+    return clip(c, c.moving ? "Warrior/Warrior_Run.png" : "Warrior/Warrior_Idle.png", 192, c.moving ? 10 : 7, 96, 135);
+}
+
+Anim archerAnim(const AnimCtx &c)
+{
+    if (c.state == US_Attack)
+        return clip(c, "Archer/Archer_Shoot.png", 192, 10, 96, 135);
+    return clip(c, c.moving ? "Archer/Archer_Run.png" : "Archer/Archer_Idle.png", 192, c.moving ? 10 : 7, 96, 135);
+}
+
+// The lancer thrusts in one of five directions, chosen from the aim angle.
+Anim lancerAnim(const AnimCtx &c)
+{
+    if (c.state == US_Attack)
+    {
+        float ang = float(c.aim) / 255.f * 6.28319f - 3.14159f;
+        float dx = std::cos(ang), dy = std::sin(ang);
+        const char *d = std::abs(dy) < .38f ? "Right"
+                                            : (dy > 0 ? (std::abs(dx) < .38f ? "Down" : "DownRight")
+                                                      : (std::abs(dx) < .38f ? "Up" : "UpRight"));
+        return clip(c, std::string("Lancer/Lancer_") + d + "_Attack.png", 320, 8, 160, 198);
+    }
+    return clip(c, c.moving ? "Lancer/Lancer_Run.png" : "Lancer/Lancer_Idle.png", 320, c.moving ? 10 : 9, 160, 198);
+}
+
+Anim monkAnim(const AnimCtx &c)
+{
+    if (c.state == US_Heal)
+        return clip(c, "Monk/Heal.png", 192, 10, 96, 135);
+    return clip(c, c.moving ? "Monk/Run.png" : "Monk/Idle.png", 192, c.moving ? 9 : 7, 96, 135);
+}
+
+Anim sheepAnim(const AnimCtx &c)
+{
+    return mkAnim(std::string("Terrain/Resources/Meat/Sheep/") + (c.moving ? "Sheep_Move.png" : "Sheep_Idle.png"), 128,
+                  128, 7, 64, 84);
+}
+
+using AnimFn = Anim (*)(const AnimCtx &);
+
+// Units without an entry idle like a warrior.
+const std::array<AnimFn, K_Count> &animTable()
+{
+    static const std::array<AnimFn, K_Count> t = []
+    {
+        std::array<AnimFn, K_Count> a{};
+        a[K_Pawn] = pawnAnim;
+        a[K_Warrior] = warriorAnim;
+        a[K_Archer] = archerAnim;
+        a[K_Lancer] = lancerAnim;
+        a[K_Monk] = monkAnim;
+        a[K_Sheep] = sheepAnim;
+        return a;
+    }();
+    return t;
+}
+
+// Firefighting: soldiers stamp at the flames while running, everybody else (pawns) scrubs with the hammer.
+Anim warriorFire(const AnimCtx &c)
+{
+    return clip(c, "Warrior/Warrior_Run.png", 192, 14, 96, 135);
+}
+Anim archerFire(const AnimCtx &c)
+{
+    return clip(c, "Archer/Archer_Run.png", 192, 14, 96, 135);
+}
+Anim lancerFire(const AnimCtx &c)
+{
+    return clip(c, "Lancer/Lancer_Run.png", 320, 14, 160, 198);
+}
+Anim monkFire(const AnimCtx &c)
+{
+    return clip(c, "Monk/Run.png", 192, 12, 96, 135);
+}
+Anim pawnFire(const AnimCtx &c)
+{
+    return clip(c, "Pawn/Pawn_Interact Hammer.png", 192, 8, 96, 135);
+}
+
+const std::array<AnimFn, K_Count> &fireTable()
+{
+    static const std::array<AnimFn, K_Count> t = []
+    {
+        std::array<AnimFn, K_Count> a{};
+        a[K_Warrior] = warriorFire;
+        a[K_Archer] = archerFire;
+        a[K_Lancer] = lancerFire;
+        a[K_Monk] = monkFire;
+        return a;
+    }();
+    return t;
+}
+
+std::string unitBase(int owner)
+{
+    return std::string("Units/") + COLOR_NAME[colorIdx(owner)] + " Units/";
+}
+} // namespace
+
 Anim extinguishAnim(Kind k, int owner)
 {
-    std::string base = std::string("Units/") + COLOR_NAME[colorIdx(owner)] + " Units/";
-    switch (k)
-    {
-    case K_Warrior:
-        return mkAnim(base + "Warrior/Warrior_Run.png", 192, 192, 14, 96, 135);
-    case K_Archer:
-        return mkAnim(base + "Archer/Archer_Run.png", 192, 192, 14, 96, 135);
-    case K_Lancer:
-        return mkAnim(base + "Lancer/Lancer_Run.png", 320, 320, 14, 160, 198);
-    case K_Monk:
-        return mkAnim(base + "Monk/Run.png", 192, 192, 12, 96, 135);
-    default:
-        return mkAnim(base + "Pawn/Pawn_Interact Hammer.png", 192, 192, 8, 96, 135);
-    }
+    AnimCtx c{unitBase(owner), US_Extinguish, 0, 0, 0, false, 0};
+    AnimFn fn = fireTable()[k];
+    return fn ? fn(c) : pawnFire(c);
 }
 
 Anim unitAnim(Kind k, int owner, int state, int aux, int aim, bool moving, int biome, double t)
 {
-    std::string base = std::string("Units/") + COLOR_NAME[colorIdx(owner)] + " Units/";
-    float ang = float(aim) / 255.f * 6.28319f - 3.14159f;
     if (state == US_Extinguish)
         return extinguishAnim(k, owner);
-    switch (k)
-    {
-    case K_Pawn:
-    {
-        if (state == US_Build)
-            return mkAnim(base + "Pawn/Pawn_Interact Hammer.png", 192, 192, 8, 96, 135);
-        if (state == US_Work)
-            return mkAnim(base + (biome == B_Forest ? "Pawn/Pawn_Interact Axe.png" : "Pawn/Pawn_Interact Pickaxe.png"),
-                          192, 192, 9, 96, 135);
-        if (state == US_Attack)
-            return mkAnim(base + "Pawn/Pawn_Interact Knife.png", 192, 192, 10, 96, 135);
-        static const char *carry[] = {"", " Wood", " Gold", " Gold", " Meat"};
-        std::string sfx = aux >= 1 && aux <= 4 ? carry[aux] : "";
-        return mkAnim(base + (moving ? "Pawn/Pawn_Run" : "Pawn/Pawn_Idle") + sfx + ".png", 192, 192, moving ? 10 : 7,
-                      96, 135);
-    }
-    case K_Warrior:
-        if (state == US_Attack)
-            return mkAnim(base + (int(t * 2.5) % 2 ? "Warrior/Warrior_Attack2.png" : "Warrior/Warrior_Attack1.png"),
-                          192, 192, 10, 96, 135);
-        return mkAnim(base + (moving ? "Warrior/Warrior_Run.png" : "Warrior/Warrior_Idle.png"), 192, 192,
-                      moving ? 10 : 7, 96, 135);
-    case K_Archer:
-        if (state == US_Attack)
-            return mkAnim(base + "Archer/Archer_Shoot.png", 192, 192, 10, 96, 135);
-        return mkAnim(base + (moving ? "Archer/Archer_Run.png" : "Archer/Archer_Idle.png"), 192, 192, moving ? 10 : 7,
-                      96, 135);
-    case K_Lancer:
-    {
-        if (state == US_Attack)
-        {
-            float dx = std::cos(ang), dy = std::sin(ang);
-            const char *d = std::abs(dy) < .38f ? "Right"
-                                                : (dy > 0 ? (std::abs(dx) < .38f ? "Down" : "DownRight")
-                                                          : (std::abs(dx) < .38f ? "Up" : "UpRight"));
-            return mkAnim(base + "Lancer/Lancer_" + d + "_Attack.png", 320, 320, 8, 160, 198);
-        }
-        return mkAnim(base + (moving ? "Lancer/Lancer_Run.png" : "Lancer/Lancer_Idle.png"), 320, 320, moving ? 10 : 9,
-                      160, 198);
-    }
-    case K_Monk:
-        if (state == US_Heal)
-            return mkAnim(base + "Monk/Heal.png", 192, 192, 10, 96, 135);
-        return mkAnim(base + (moving ? "Monk/Run.png" : "Monk/Idle.png"), 192, 192, moving ? 9 : 7, 96, 135);
-    case K_Sheep:
-        return mkAnim(std::string("Terrain/Resources/Meat/Sheep/") + (moving ? "Sheep_Move.png" : "Sheep_Idle.png"),
-                      128, 128, 7, 64, 84);
-    default:
-        return mkAnim(base + "Warrior/Warrior_Idle.png", 192, 192, 7, 96, 135);
-    }
+
+    AnimCtx c{unitBase(owner), state, aux, aim, biome, moving, t};
+    AnimFn fn = animTable()[k];
+    return fn ? fn(c) : clip(c, "Warrior/Warrior_Idle.png", 192, 7, 96, 135);
 }
 
 BSpr buildingSprite(Kind k, int)
 {
-    switch (k)
+    // file, scale, artBottom, artH, artW; no file = drawn procedurally (mine, campfire)
+    static const std::array<BSpr, K_Count> table = []
     {
-    case K_TownHall:
-        return {"Castle", .8f, 249, 256, 320};
-    case K_Outpost:
-        return {"Tower", .8f, 230, 256, 128};
-    case K_Storage:
-        return {"Barracks", .66f, 245, 256, 192};
-    case K_Archery:
-        return {"Archery", 1.f, 240, 256, 192};
-    case K_Harbour:
-        return {"House3", 1.f, 172, 192, 128};
-    case K_Lumber:
-        return {"House1", .9f, 173, 192, 128}; // always House1: House2 is a rotated variant and is never used
-    default:
-        return {"", 1, 0, 0, 0};
-    }
+        std::array<BSpr, K_Count> t{};
+        t.fill({"", 1, 0, 0, 0});
+        t[K_TownHall] = {"Castle", .8f, 249, 256, 320};
+        t[K_Outpost] = {"Tower", .8f, 230, 256, 128};
+        t[K_Storage] = {"Barracks", .66f, 245, 256, 192};
+        t[K_Archery] = {"Archery", 1.f, 240, 256, 192};
+        t[K_Harbour] = {"House3", 1.f, 172, 192, 128};
+        t[K_Lumber] = {"House1", .9f, 173, 192, 128}; // House2 is a rotated variant and is never used
+        return t;
+    }();
+    return table[k];
 }

@@ -204,7 +204,7 @@ void DefenseSystem::doSupport(int id, Pos dest, int n)
     bool ok = false;
     reg.view<Info, Building, Owner>().each([&](const Info &i, const Building &b, const Owner &o)
     {
-        if ((i.kind != K_TownHall && i.kind != K_Outpost) || o.id == id || !isPlayer(o.id) || !world.allied(id, o.id))
+        if (!hasTag(i.kind, KT_Anchor) || o.id == id || !isPlayer(o.id) || !world.allied(id, o.id))
             return;
         Pos c = footCenter(i.kind, b.tx, b.ty);
         if (std::max(std::abs(c.x - dest.x), std::abs(c.y - dest.y)) <= 12.f)
@@ -288,7 +288,7 @@ void DefenseSystem::supportSecond()
         }
         if (s.phase == 2)
         { // wander back home
-            if (dHome <= 6.f || s.fails > 4 || reg.get<Info>(e).kind == K_Ship)
+            if (dHome <= 6.f || s.fails > 4 || hasTag(reg.get<Info>(e).kind, KT_Naval))
             {
                 reg.remove<Support>(e);
                 continue;

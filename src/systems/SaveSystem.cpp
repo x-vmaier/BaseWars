@@ -1,5 +1,6 @@
 #include "systems/SaveSystem.hpp"
 
+#include "systems/KindFactories.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -275,8 +276,8 @@ bool SaveSystem::loadGame()
             Pos p{r.get<float>(), r.get<float>()};
             reg.emplace<Pos>(e, p);
             reg.emplace<Unit>(e);
-            if (k == K_Sheep)
-                reg.emplace<Wander>(e, Wander{1.f});
+            if (auto attach = kindFactory(k).attach)
+                attach(world, e, true);
             uint8_t fl = r.get<uint8_t>();
             if (town)
             {

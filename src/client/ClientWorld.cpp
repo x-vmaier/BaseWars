@@ -151,7 +151,7 @@ bool ClientWorld::hostileTargetId(uint32_t id) const
     if (it == ents.end())
         return false;
     const Info &i = reg.get<Info>(it->second);
-    return i.owner == 0 ? i.kind == K_Sheep : hostileTo(i.owner);
+    return i.owner == 0 ? hasTag(i.kind, KT_Animal) : hostileTo(i.owner);
 }
 
 bool ClientWorld::attackable(uint32_t id) const

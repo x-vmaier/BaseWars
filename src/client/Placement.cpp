@@ -17,7 +17,7 @@ struct PlaceWorld
     {
         a.reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
         {
-            if ((i.kind == K_TownHall || i.kind == K_Outpost) && !(i.state & BLD_DISABLED))
+            if (hasTag(i.kind, KT_Anchor) && !(i.state & BLD_DISABLED))
                 f(Pos{g.x, g.y}, i.kind, i.owner == a.me, i.owner != a.me && a.alliedWith(i.owner));
         });
     }
@@ -26,7 +26,7 @@ struct PlaceWorld
         bool hit = false;
         a.reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
         {
-            if (i.kind == K_Campfire && std::hypot(g.x - c.x, g.y - c.y) < r)
+            if (hasTag(i.kind, KT_Warm) && std::hypot(g.x - c.x, g.y - c.y) < r)
                 hit = true;
         });
         return hit;

@@ -1,6 +1,7 @@
 #include "server/World.hpp"
 
 #include "common/Progression.hpp"
+#include "systems/KindFactories.hpp"
 
 #include <algorithm>
 #include <climits>
@@ -338,8 +339,8 @@ entt::entity World::makeUnit(Kind k, uint8_t owner, float x, float y)
         auto &h = reg.get<Health>(e);
         h.hp = h.maxhp = KINFO[k].hp * unitHpMul(ulv(owner, k));
     }
-    if (k == K_Sheep)
-        reg.emplace<Wander>(e, Wander{float(rng() % 300) / 100.f});
+    if (auto attach = kindFactory(k).attach)
+        attach(*this, e, false);
     return e;
 }
 entt::entity World::makeBuilding(Kind k, uint8_t owner, int tx, int ty, bool done)
@@ -475,7 +476,7 @@ bool World::order(entt::entity e, Pos goal, uint32_t ignore, int maxNodes)
 {
     auto &u = reg.get<Unit>(e);
     Pos p = reg.get<Pos>(e);
-    bool water = reg.get<Info>(e).kind == K_Ship;
+    bool water = hasTag(reg.get<Info>(e).kind, KT_Naval);
     std::vector<Pos> path;
     if (!findPath({int(std::floor(p.x)), int(std::floor(p.y))}, {int(std::floor(goal.x)), int(std::floor(goal.y))},
                   water, ignore, path, maxNodes))

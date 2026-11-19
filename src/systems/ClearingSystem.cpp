@@ -95,7 +95,7 @@ bool ClearingSystem::inClearReach(int id, int x, int y)
     bool ok = false;
     reg.view<Info, Building, Owner>().each([&](const Info &i, const Building &b, const Owner &o)
     {
-        if (ok || (i.kind != K_TownHall && i.kind != K_Outpost) || !world.allied(id, o.id) || b.progress < 1.f)
+        if (ok || !hasTag(i.kind, KT_Anchor) || !world.allied(id, o.id) || b.progress < 1.f)
             return;
         Pos c = footCenter(i.kind, b.tx, b.ty);
         float reach = i.kind == K_TownHall ? 60.f : 34.f;
@@ -205,7 +205,7 @@ void ClearingSystem::onClear(int id, Reader &r)
 // pawns
 bool ClearingSystem::freePawn(entt::entity e, int owner, bool explicitPick)
 {
-    if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Info>(e).kind != K_Pawn ||
+    if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || !hasTag(reg.get<Info>(e).kind, KT_Worker) ||
         reg.get<Owner>(e).id != owner)
         return false;
     if (reg.any_of<Convoy, Haul, Raider, Aboard, Boarding, Extinguish, BuildTask>(e) ||
@@ -243,7 +243,7 @@ entt::entity ClearingSystem::pickPawn(const ClearJob &j, Pos at)
     reg.view<Info, Owner, Unit, Pos>().each(
         [&](entt::entity e, const Info &i, const Owner &o, const Unit &, const Pos &q)
     {
-        if (i.kind != K_Pawn || o.id != j.owner || !freePawn(e, j.owner, false))
+        if (!hasTag(i.kind, KT_Worker) || o.id != j.owner || !freePawn(e, j.owner, false))
             return;
         float d =
             std::hypot(q.x - at.x, q.y - at.y) + (reg.all_of<Worker>(e) ? 12.f : 0.f); // idle pawns before workers
@@ -610,7 +610,7 @@ int ClearingSystem::pendingOf(int id, Kind k) const
 // gold deposits boost mines
 float ClearingSystem::mineMul(entt::entity e, Kind k, Pos c)
 { // output multiplier from nearby gold deposits (cached per clear-version)
-    if (k != K_Mine)
+    if (!hasTag(k, KT_GoldBoosted))
         return 1.f;
     uint32_t uid = reg.get<Uid>(e).id;
     auto it = mineCache.find(uid);

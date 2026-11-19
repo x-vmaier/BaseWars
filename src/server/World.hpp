@@ -264,7 +264,7 @@ struct PlaceWorld
     {
         s.reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info &i, const Building &b, const Owner &o)
         {
-            if ((i.kind == K_TownHall || i.kind == K_Outpost) && !s.inactive(e))
+            if (hasTag(i.kind, KT_Anchor) && !s.inactive(e))
                 f(footCenter(i.kind, b.tx, b.ty), i.kind, o.id == me, s.allied(me, o.id) && o.id != me);
         });
     }
@@ -273,7 +273,7 @@ struct PlaceWorld
         bool hit = false;
         s.reg.view<Info, Building>().each([&](const Info &i, const Building &b)
         {
-            if (i.kind != K_Campfire)
+            if (!hasTag(i.kind, KT_Warm))
                 return;
             Pos q = footCenter(i.kind, b.tx, b.ty);
             if (std::hypot(q.x - c.x, q.y - c.y) < r)

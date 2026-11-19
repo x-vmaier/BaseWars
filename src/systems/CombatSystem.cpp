@@ -106,7 +106,7 @@ void CombatSystem::processKills()
             raid(c->cargo);
         if (const Haul *hl = reg.try_get<Haul>(e))
             raid(hl->cargo);
-        if (k == K_Sheep && isPlayer(killer) && !s.hunt.huntKill(e, killer))
+        if (hasTag(k, KT_Animal) && isPlayer(killer) && !s.hunt.huntKill(e, killer))
         {
             world.pl[killer].res[R_Meat] += 12;
             world.say(killer, "Hunted a sheep: +12 meat.");

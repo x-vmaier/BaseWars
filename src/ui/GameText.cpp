@@ -30,7 +30,7 @@ std::string unlockText(int level)
 void nextLevelInfo(const Info &in, std::vector<std::string> &out, std::vector<Kind> &units)
 {
     int L = in.aux, N = L + 1;
-    if (L >= MAX_LEVEL || in.kind == K_Campfire)
+    if (L >= MAX_LEVEL || hasTag(in.kind, KT_SingleLevel))
         return;
     out.push_back(TextFormat("Health +%d%%, takes %s of pawn work",
                              int(std::lround((levelHp(N) / levelHp(L) - 1.f) * 100.f)),
@@ -42,7 +42,7 @@ void nextLevelInfo(const Info &in, std::vector<std::string> &out, std::vector<Ki
             TextFormat("Defence %.0f -> %.0f dps", KINFO[in.kind].dps * levelMul(L), KINFO[in.kind].dps * levelMul(N)));
     if (isResourceBuilding(in.kind))
         out.push_back(TextFormat("Output x%.1f -> x%.1f", levelMul(L), levelMul(N)));
-    if (in.kind == K_Archery)
+    if (hasTag(in.kind, KT_Trainer))
     {
         std::string u = unlockText(N);
         if (!u.empty())
@@ -87,26 +87,7 @@ void townHallUnlocks(int level, std::vector<std::string> &out)
 
 TroopText troopText(Kind k)
 {
-    switch (k)
-    {
-    case K_Pawn:
-        return {"Worker", "Carries farmed resources to the nearest storage and hauls stock between outposts, storage "
-                          "houses and the Town Hall. Weak in a fight, and hauling parties can be raided."};
-    case K_Warrior:
-        return {"Frontline infantry", "Sturdy sword and shield fighter. Takes 20% less damage from every attack. The "
-                                      "backbone of any army against both units and buildings."};
-    case K_Archer:
-        return {"Ranged support", "Shoots arrows from a distance. Deals only 70% damage to buildings and dies quickly "
-                                  "in melee, so keep them behind your warriors."};
-    case K_Lancer:
-        return {"Fast spear cavalry", "The fastest troop. Deals 30% extra damage to units but only 60% to buildings. "
-                                      "Ideal for hunting convoys and raiders."};
-    case K_Monk:
-        return {"Healer", "Automatically heals the most wounded friendly unit nearby. Cannot attack, so escort them. "
-                          "Higher levels heal faster."};
-    default:
-        return {"", ""};
-    }
+    return {KINDS[k].role, KINDS[k].blurb};
 }
 void troopCost(Kind k, int toLevel, float *cost)
 {

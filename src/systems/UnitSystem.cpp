@@ -10,6 +10,47 @@
 #include <cstring>
 #include <string>
 
+// Heal the most wounded friendly unit in range.
+void UnitSystem::healTick(entt::entity e, Unit &u, Kind k, int ow, Pos p, const std::vector<entt::entity> &units,
+                          float dt)
+{
+    entt::entity best = entt::null;
+    float bn = 1e9f;
+
+    for (auto o : units)
+    {
+        if (o == e || !reg.valid(o) || reg.all_of<Aboard>(o) || !world.allied(ow, reg.get<Owner>(o).id))
+            continue;
+
+        auto &h = reg.get<Health>(o);
+        if (h.hp >= h.maxhp - .5f)
+            continue;
+
+        Pos q = reg.get<Pos>(o);
+        float d = std::hypot(p.x - q.x, p.y - q.y);
+        if (d <= KINFO[k].range && h.hp / h.maxhp < bn)
+        {
+            bn = h.hp / h.maxhp;
+            best = o;
+        }
+    }
+    if (best == entt::null)
+        return;
+
+    auto &h = reg.get<Health>(best);
+    h.hp = std::min(h.maxhp, h.hp + KINFO[k].dps * unitDmgMul(world.ulv(ow, k)) * dt);
+    u.state = US_Heal;
+    u.path.clear();
+
+    Pos q = reg.get<Pos>(best);
+    u.aim = uint8_t(int((std::atan2(q.y - p.y, q.x - p.x) + 3.14159f) / 6.28319f * 255.f));
+    if (u.cd <= 0)
+    {
+        u.cd = 1.f;
+        world.fx(E_Heal, q.x, q.y);
+    }
+}
+
 void UnitSystem::behave(const std::vector<entt::entity> &units, float dt)
 {
     for (auto e : units)
@@ -73,7 +114,7 @@ void UnitSystem::behave(const std::vector<entt::entity> &units, float dt)
             if (reg.valid(e) && KINFO[k].dps > 0)
                 s.combat.fight(e, u, k, ow, p, dt);
         }
-        else if (k == K_Pawn && isPlayer(ow) && s.hunt.huntTick(e, u, ow, p, dt))
+        else if (hasTag(k, KT_Worker) && isPlayer(ow) && s.hunt.huntTick(e, u, ow, p, dt))
         {
         } // [world] free pawns hunt sheep
         else if (world.isPatrol(e))
@@ -82,39 +123,9 @@ void UnitSystem::behave(const std::vector<entt::entity> &units, float dt)
             if (reg.valid(e) && KINFO[k].dps > 0)
                 s.combat.fight(e, u, k, ow, p, dt);
         } // [world] faction patrol
-        else if (k == K_Monk)
-        { // heal the most wounded friendly unit in range
-            entt::entity best = entt::null;
-            float bn = 1e9f;
-            for (auto o : units)
-            {
-                if (o == e || !reg.valid(o) || reg.all_of<Aboard>(o) || !world.allied(ow, reg.get<Owner>(o).id))
-                    continue;
-                auto &h = reg.get<Health>(o);
-                if (h.hp >= h.maxhp - .5f)
-                    continue;
-                Pos q = reg.get<Pos>(o);
-                float d = std::hypot(p.x - q.x, p.y - q.y);
-                if (d <= KINFO[K_Monk].range && h.hp / h.maxhp < bn)
-                {
-                    bn = h.hp / h.maxhp;
-                    best = o;
-                }
-            }
-            if (best != entt::null)
-            {
-                auto &h = reg.get<Health>(best);
-                h.hp = std::min(h.maxhp, h.hp + KINFO[K_Monk].dps * unitDmgMul(world.ulv(ow, K_Monk)) * dt);
-                u.state = US_Heal;
-                u.path.clear();
-                Pos q = reg.get<Pos>(best);
-                u.aim = uint8_t(int((std::atan2(q.y - p.y, q.x - p.x) + 3.14159f) / 6.28319f * 255.f));
-                if (u.cd <= 0)
-                {
-                    u.cd = 1.f;
-                    world.fx(E_Heal, q.x, q.y);
-                }
-            }
+        else if (reg.all_of<Healer>(e))
+        {
+            healTick(e, u, k, ow, p, units, dt);
         }
         else if (KINFO[k].dps > 0 && ow > 0)
         {

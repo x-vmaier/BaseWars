@@ -54,9 +54,9 @@ void TerritorySystem::evalFunctional()
         auto e = mine[n];
         Kind k = reg.get<Info>(e).kind;
         int o = reg.get<Owner>(e).id;
-        if (k == K_TownHall || k == K_Campfire)
+        if (hasTag(k, KT_Freestanding))
             want[n] = 0;
-        else if (k != K_Outpost)
+        else if (!hasTag(k, KT_Anchor))
         {
             Pos c = center(e);
             want[n] = (reg.all_of<Moving>(e) || !(within(ths[o], c, float(anchorRadius(K_TownHall))) ||
@@ -124,7 +124,7 @@ void TerritorySystem::doRelocate(int id, uint32_t uid, int tx, int ty)
     if (be == entt::null || !reg.all_of<Building>(be) || reg.get<Owner>(be).id != id)
         return;
     Kind k = reg.get<Info>(be).kind;
-    if (k == K_TownHall || k == K_Campfire || !world.complete(be))
+    if (hasTag(k, KT_Freestanding) || !world.complete(be))
         return;
     if (!world.outOfTerritory(be) || reg.all_of<Moving>(be))
     {

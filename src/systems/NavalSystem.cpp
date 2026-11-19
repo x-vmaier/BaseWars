@@ -305,7 +305,7 @@ void NavalSystem::shipsTick(float dt)
     reg.view<Info, Unit, Pos, Owner>().each(
         [&](entt::entity e, const Info &in, const Unit &, const Pos &, const Owner &)
     {
-        if (in.kind == K_Ship)
+        if (hasTag(in.kind, KT_Naval))
             ships.push_back(e);
     });
     for (auto e : ships)
@@ -391,7 +391,7 @@ bool NavalSystem::shipPacket(int id, uint8_t type, Reader &r)
                 continue;
             }
             world.releaseUnit(e); // [base] ends patrols / firefighting
-            if (reg.get<Info>(e).kind == K_Pawn)
+            if (hasTag(reg.get<Info>(e).kind, KT_Worker))
                 s.hunt.huntPause(e); // [world] a commanded pawn stops hunting for a while
             reg.remove<Attack>(e);
             reg.remove<AMove>(e);

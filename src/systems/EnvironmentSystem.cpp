@@ -16,7 +16,7 @@ void EnvironmentSystem::coldAndWake(const std::vector<entt::entity> &units, cons
     std::vector<Pos> fires;
     std::vector<int> fireOwner;
     for (auto e : blds)
-        if (reg.get<Info>(e).kind == K_Campfire && world.complete(e))
+        if (hasTag(reg.get<Info>(e).kind, KT_Warm) && world.complete(e))
         {
             fires.push_back(world.posOf(e));
             fireOwner.push_back(reg.get<Owner>(e).id);

@@ -43,10 +43,10 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
                 reg.all_of<Aboard>(e))
                 continue; // units aboard a ship cannot be commanded
             Kind k = reg.get<Info>(e).kind;
-            if (combatOnly && (k == K_Ship || k == K_Monk))
+            if (combatOnly && hasTag(k, KT_NonCombat))
                 continue;
             world.releaseUnit(e); // a manual command ends patrols / firefighting
-            if (k == K_Pawn)
+            if (hasTag(k, KT_Worker))
                 s.hunt.huntPause(e); // [world] a commanded pawn stops hunting for a while
             reg.remove<Boarding>(e); // any new order cancels embarking
             if (k == K_Ship)
@@ -75,7 +75,7 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
             s.clan.homelessBuild(id, tx, ty);
             return;
         }
-        if (k != K_Campfire && world.townMoveActive(id))
+        if (!hasTag(k, KT_Freestanding) && world.townMoveActive(id))
         {
             world.say(id, "Wait until the town move is finished before building.");
             return;
@@ -198,7 +198,7 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
         if (!r.ok || be == entt::null || !reg.all_of<Building>(be) || reg.get<Owner>(be).id != id)
             return;
         Kind k = reg.get<Info>(be).kind;
-        if (k != K_Outpost && k != K_Storage)
+        if (!hasTag(k, KT_Depot))
             return;
         reg.get<Building>(be).haulPct = uint8_t(std::clamp(pct, 10, 100));
         break;

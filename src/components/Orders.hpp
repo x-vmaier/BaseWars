@@ -23,6 +23,11 @@ struct Worker
     uint32_t dest = 0;
 }; // 0 wait, 1 loading, 2 carry, 3 return
 
+// Heals the most wounded ally in range (a Monk); healing power is the kind's dps.
+struct Healer
+{
+};
+
 struct Wander
 {
     float timer;

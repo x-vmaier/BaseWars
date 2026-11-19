@@ -98,7 +98,7 @@ void BuildMenu::draw(float dt)
             float sc = 38.f / s.artH * 1.f;
             DrawTexturePro(bt, {0, 0, s.artW, s.artH}, {it.x + 4, it.y + 3, s.artW * sc, s.artH * sc}, {0, 0}, 0, dim);
         }
-        else if (k == K_Campfire)
+        else if (hasTag(k, KT_Warm))
         {
             Anim f = mkAnim("Particle FX/Fire_03.png", 64, 64, 12, 32, 62);
             drawAnim(f, frameFor(f, GetTime()), it.x + 24, it.y + 40, false, .8f);

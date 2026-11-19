@@ -1,6 +1,7 @@
 #include "systems/TrainingSystem.hpp"
 
 #include "common/Progression.hpp"
+#include "systems/KindFactories.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -13,25 +14,7 @@
 
 static float trainTime(Kind k)
 {
-    if (cfg().instantTrain)
-        return .05f;
-    switch (k)
-    {
-    case K_Pawn:
-        return 6.f;
-    case K_Warrior:
-        return 9.f;
-    case K_Archer:
-        return 10.f;
-    case K_Lancer:
-        return 12.f;
-    case K_Monk:
-        return 11.f;
-    case K_Ship:
-        return 18.f;
-    default:
-        return 8.f;
-    }
+    return cfg().instantTrain ? .05f : KINDS[k].trainSeconds;
 }
 
 int TrainingSystem::queuedUnits(int id)
@@ -44,25 +27,25 @@ int TrainingSystem::queuedUnits(int id)
     });
     return n;
 }
-// Creates the unit that a finished queue entry produces (ships etc. may change what is spawned here). Null if there is
-// no room.
+// Creates the unit that a finished queue entry produces (the kind's onTrained hook may adjust it). Null if there is no
+// room.
 entt::entity TrainingSystem::spawnTrained(entt::entity be, Kind k)
 {
     int id = reg.get<Owner>(be).id;
     Pos at;
-    if (!world.spawnSpot(be, k == K_Ship, at))
+    if (!world.spawnSpot(be, hasTag(k, KT_Naval), at))
         return entt::null;
+
     auto u = world.makeUnit(k, uint8_t(id), at.x, at.y);
-    if (k == K_Ship)
-    {
-        s.naval.initShip(u, reg.get<Info>(be).level);
-        world.fx(E_Splash, at.x, at.y);
-    } // [ships] empty boat, tier = harbour level
+    if (auto hook = kindFactory(k).onTrained)
+        hook(s, world, u, be, at);
     else
         world.fx(E_Dust, at.x, at.y);
-    // [world] trained pawns stay free: they hunt sheep on their own instead of being bound to a building
+
+    // trained pawns stay free: they hunt sheep on their own instead of being bound to a building
     return u;
 }
+
 void TrainingSystem::enqueueTrain(int id, entt::entity be, Kind k)
 { // C_Train: pay now, produce over time
     if (reg.get<Owner>(be).id != id || !world.complete(be) || !canTrain(reg.get<Info>(be).kind, k))
@@ -82,7 +65,7 @@ void TrainingSystem::enqueueTrain(int id, entt::entity be, Kind k)
         world.say(id, std::string(KINFO[k].name) + "s require Town Hall level " + std::to_string(unitThLevel(k)) + ".");
         return;
     }
-    if (reg.get<Info>(be).kind == K_Archery && reg.get<Info>(be).level < unitUnlockLevel(k))
+    if (reg.get<Info>(be).level < unitUnlockLevel(k))
     {
         world.say(id,
                   std::string(KINFO[k].name) + "s unlock at Archery level " + std::to_string(unitUnlockLevel(k)) + ".");

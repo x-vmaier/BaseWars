@@ -9,45 +9,22 @@
 #include <cstring>
 #include <string>
 
-inline constexpr int MAX_LEVEL = 10;
-
-// Town Hall gates (the one table)
-// Per building kind: Town Hall level needed to build it, whether its level is capped by the Town Hall level, and the
-// number allowed at each Town Hall level 1..MAX_LEVEL (0 = not yet).
-struct BuildGate
-{
-    int thUnlock;
-    bool capByTh;
-    int count[MAX_LEVEL];
-};
-
-inline constexpr BuildGate BUILD_GATE[K_Archery + 1] = {
-    /* Town Hall */ {1, false, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}},
-    /* Outpost   */ {3, true, {0, 0, 1, 1, 2, 2, 3, 3, 4, 4}},
-    /* Harbour   */ {4, true, {0, 0, 0, 1, 1, 1, 2, 2, 2, 3}},
-    /* Storage   */ {2, true, {0, 1, 1, 2, 2, 2, 3, 3, 3, 4}},
-    /* Mine      */ {1, true, {1, 2, 2, 3, 3, 4, 4, 5, 5, 6}},
-    /* Lumber    */ {1, true, {1, 2, 2, 3, 3, 4, 4, 5, 5, 6}},
-    /* Campfire  */ {1, true, {2, 3, 4, 5, 6, 7, 8, 9, 10, 12}},
-    /* Archery   */ {1, true, {1, 1, 1, 1, 2, 2, 2, 2, 3, 3}},
-};
-
 inline int thUnlock(Kind k)
 {
-    return k <= K_Archery ? BUILD_GATE[k].thUnlock : 1;
+    return KINDS[k].gate.thUnlock;
 }
 
 inline int maxCount(Kind k, int th)
 {
-    return k <= K_Archery && th >= 1 ? BUILD_GATE[k].count[std::min(th, MAX_LEVEL) - 1] : 0;
+    return th >= 1 ? KINDS[k].gate.count[std::min(th, MAX_LEVEL) - 1] : 0;
 }
 
 // Highest level a building may reach with the given Town Hall level (never above it, except the Town Hall itself).
 inline int maxLevelFor(Kind k, int th)
 {
-    if (k == K_Campfire)
+    if (hasTag(k, KT_SingleLevel))
         return 1;
-    if (k > K_Archery || !BUILD_GATE[k].capByTh)
+    if (!KINDS[k].gate.capByTh)
         return MAX_LEVEL;
     return std::clamp(th, 1, MAX_LEVEL);
 }
@@ -55,7 +32,7 @@ inline int maxLevelFor(Kind k, int th)
 // Troops: Town Hall level needed (the Archery level gate is unitUnlockLevel in Shared.hpp).
 inline int unitThLevel(Kind u)
 {
-    return u == K_Archer ? 2 : (u == K_Monk ? 3 : (u == K_Lancer || u == K_Ship ? 4 : 1));
+    return KINDS[u].thLevel;
 }
 
 enum GateErr

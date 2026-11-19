@@ -6,6 +6,7 @@
 #define NOGDI  // keep windows.h from clashing with raylib (Rectangle, DrawText...)
 #define NOUSER // (CloseWindow, ShowCursor...)
 #endif
+#include "common/KindDefs.hpp"
 #include "common/ServerConfig.hpp"
 
 #include <algorithm>
@@ -66,35 +67,6 @@ enum Biome : uint8_t
     B_Snow,
     B_Count
 };
-
-enum Res : uint8_t
-{
-    R_Wood,
-    R_Gold,
-    R_Stone,
-    R_Meat,
-    R_Count
-};
-
-enum Kind : uint8_t
-{
-    K_TownHall,
-    K_Outpost,
-    K_Harbour,
-    K_Storage,
-    K_Mine,
-    K_Lumber,
-    K_Campfire,
-    K_Archery, // buildings
-    K_Pawn,
-    K_Warrior,
-    K_Archer,
-    K_Lancer,
-    K_Monk,
-    K_Ship,
-    K_Sheep,
-    K_Count
-}; // units / NPCs
 
 enum Msg : uint8_t
 {
@@ -203,32 +175,6 @@ struct IV
     int x, y;
 };
 
-struct KindInfo
-{
-    const char *name;
-    bool building;
-    int fw, fh;          // footprint in tiles
-    float cost[R_Count]; // wood, gold, stone, meat
-    float hp, speed, dps, range, buildTime;
-    int vision; // reveal radius in tiles
-};
-
-inline constexpr KindInfo KINFO[K_Count] = {{"Town Hall", true, 4, 3, {250, 200, 150, 0}, 800, 0, 14, 6.5f, 40, 9},
-                                            {"Outpost", true, 2, 2, {80, 40, 60, 0}, 350, 0, 8, 7.f, 20, 8},
-                                            {"Harbour", true, 2, 2, {120, 60, 40, 0}, 300, 0, 0, 0, 25, 7},
-                                            {"Storage House", true, 2, 2, {100, 20, 60, 0}, 400, 0, 0, 0, 25, 5},
-                                            {"Mine", true, 2, 2, {60, 20, 0, 0}, 250, 0, 0, 0, 18, 4},
-                                            {"Lumber Camp", true, 2, 2, {40, 10, 0, 0}, 250, 0, 0, 0, 15, 4},
-                                            {"Campfire", true, 1, 1, {20, 0, 0, 0}, 60, 0, 0, 0, 5, 4},
-                                            {"Archery", true, 3, 2, {120, 60, 80, 0}, 450, 0, 0, 0, 30, 5},
-                                            {"Pawn", false, 1, 1, {0, 0, 0, 30}, 40, 2.6f, 3, 1.2f, 0, 5},
-                                            {"Warrior", false, 1, 1, {10, 20, 0, 40}, 120, 2.6f, 12, 1.4f, 0, 6},
-                                            {"Archer", false, 1, 1, {30, 20, 0, 35}, 60, 2.8f, 9, 6.f, 0, 7},
-                                            {"Lancer", false, 1, 1, {20, 40, 20, 50}, 100, 3.4f, 15, 2.4f, 0, 6},
-                                            {"Monk", false, 1, 1, {0, 50, 0, 30}, 50, 2.6f, 8, 4.f, 0, 6},
-                                            {"Ship", false, 1, 1, {80, 30, 0, 20}, 220, 4.2f, 0, 0, 0, 10},
-                                            {"Sheep", false, 1, 1, {0, 0, 0, 0}, 12, 0.9f, 0, 0, 0, 0}};
-
 inline constexpr float START_RES[R_Count] = {300, 200, 150, 200};
 // Building level cap, Town Hall gates, cost / time curves and storage capacity: common/Progression.hpp
 
@@ -257,46 +203,12 @@ inline float shipHpMul(int level)
     return 1.f + .6f * float(shipTier(level) - 1);
 }
 
-inline bool isBuilding(Kind k)
-{
-    return KINFO[k].building;
-}
-inline bool isResourceBuilding(Kind k)
-{
-    return k == K_Mine || k == K_Lumber || k == K_Harbour;
-}
-inline bool isStorage(Kind k)
-{
-    return k == K_TownHall || k == K_Outpost || k == K_Storage;
-}
-inline bool isArmy(Kind k)
-{
-    return k == K_Warrior || k == K_Archer || k == K_Lancer;
-}
 // Troop types with a per-type clan defense quota (C_SetQuotas / S_BaseInfo order).
 inline constexpr int QUOTA_TYPES = 4;
 inline constexpr Kind QUOTA_KINDS[QUOTA_TYPES] = {K_Warrior, K_Archer, K_Lancer, K_Monk};
 
-// Troops are trained in the Archery, pawns also in the Town Hall; the Harbour builds ships.
-inline bool canTrain(Kind building, Kind unit)
-{
-    if (building == K_TownHall)
-        return unit == K_Pawn;
-    if (building == K_Archery)
-        return unit == K_Pawn || unit == K_Warrior || unit == K_Archer || unit == K_Lancer || unit == K_Monk;
-    return building == K_Harbour && unit == K_Ship;
-}
-
-inline int unitUnlockLevel(Kind u)
-{
-    return u == K_Pawn || u == K_Warrior ? 1 : (u == K_Archer || u == K_Monk ? 2 : (u == K_Lancer ? 3 : 1));
-} // Archery level needed
 inline constexpr float HAULER_CARRY = 400.f;
 inline constexpr int MAX_UNIT_LEVEL = 5;
-inline bool isTroop(Kind k)
-{
-    return k == K_Pawn || k == K_Warrior || k == K_Archer || k == K_Lancer || k == K_Monk;
-}
 inline float unitHpMul(int lv)
 {
     return 1.f + .22f * float(lv - 1);

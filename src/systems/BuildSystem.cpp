@@ -63,7 +63,8 @@ void BuildSystem::tick(const std::vector<entt::entity> &blds, float dt)
         float eff = world.efficiency(e);
         if (isResourceBuilding(in.kind) && isPlayer(ow) && !world.siteBusy(e))
         { // upgrades / repairs pause production
-            Yield y = yieldOf(in.kind, world.biome(int(std::floor(c.x)), int(std::floor(c.y))), in.kind == K_Harbour);
+            Yield y =
+                yieldOf(in.kind, world.biome(int(std::floor(c.x)), int(std::floor(c.y))), hasTag(in.kind, KT_Coastal));
             float f = productionMul(in.level) * eff * s.clearing.mineMul(e, in.kind, c) *
                       (world.pl[ow].online ? 1.f : OFFLINE_PROD) * dt,
                   tot = 0; // [world] gold deposits boost mines

@@ -27,7 +27,7 @@ bool ConstructionSystem::needsPawn(entt::entity e) const
 // pawns
 bool ConstructionSystem::freePawn(entt::entity e, int owner) const
 {
-    if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Info>(e).kind != K_Pawn ||
+    if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || !hasTag(reg.get<Info>(e).kind, KT_Worker) ||
         reg.get<Owner>(e).id != owner)
         return false;
     if (reg.any_of<Convoy, Haul, Raider, Aboard, Boarding, Extinguish, ClearTask, BuildTask, Support>(e) ||
@@ -46,7 +46,7 @@ entt::entity ConstructionSystem::pickPawn(int owner, Pos at)
     reg.view<Info, Owner, Unit, Pos>().each(
         [&](entt::entity e, const Info &i, const Owner &o, const Unit &, const Pos &q)
     {
-        if (i.kind != K_Pawn || o.id != owner || !freePawn(e, owner))
+        if (!hasTag(i.kind, KT_Worker) || o.id != owner || !freePawn(e, owner))
             return;
         float d =
             std::hypot(q.x - at.x, q.y - at.y) + (reg.all_of<Worker>(e) ? 12.f : 0.f); // idle pawns before workers

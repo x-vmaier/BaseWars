@@ -62,33 +62,31 @@ void ContextPanel::rebuild()
     if (mine || W.alliedWith(in.owner))
     {
         int lvCap = maxLevelFor(in.kind, mine ? W.thLevel() : MAX_LEVEL);
-        line(lvCap < MAX_LEVEL && in.kind != K_Campfire
+        line(lvCap < MAX_LEVEL && !hasTag(in.kind, KT_SingleLevel)
                  ? TextFormat("Level %d / %d (max %d at Town Hall Lv%d)", in.aux, MAX_LEVEL, lvCap, W.thLevel())
-                 : TextFormat("Level %d / %d", in.aux, in.kind == K_Campfire ? 1 : MAX_LEVEL),
+                 : TextFormat("Level %d / %d", in.aux, hasTag(in.kind, KT_SingleLevel) ? 1 : MAX_LEVEL),
              ink);
         Pos c = {W.reg.get<Goal>(it->second).x, W.reg.get<Goal>(it->second).y};
         int b = W.biomeAt(int(std::floor(c.x)), int(std::floor(c.y)));
         line(std::string("Biome: ") + (b == INVALID_BIOME ? "?" : BIOME_NAME[b]), ink);
         if (isResourceBuilding(in.kind))
         {
-            Yield yv = yieldOf(in.kind, b, in.kind == K_Harbour);
+            Yield yv = yieldOf(in.kind, b, hasTag(in.kind, KT_Coastal));
             std::string pr;
-            int goldN = in.kind == K_Mine ? W.goldNear(c) : 0; // nearby gold deposits boost mines
+            int goldN = hasTag(in.kind, KT_GoldBoosted) ? W.goldNear(c) : 0; // nearby gold deposits boost mines
             float gb = 1.f + goldBonusOf(goldN);
             float eff = hpEfficiency(in.hp / std::max(1.f, in.maxhp));
             for (int r = 0; r < R_Count; r++)
                 if (yv.r[r] > 0)
                     pr += TextFormat("%s %.2f/s  ", RES_NAME[r], yv.r[r] * productionMul(in.aux) * gb * eff);
             line("Output: " + pr, ink);
-            if (in.kind == K_Mine)
+            if (hasTag(in.kind, KT_GoldBoosted))
                 line(goldN ? TextFormat("Gold deposits nearby: %d (+%d%% output)", goldN,
                                         int(std::lround((gb - 1.f) * 100.f)))
                            : "No gold deposits nearby (+20% each, max +100%)",
                      goldN ? rgb(150, 105, 0) : rgb(130, 90, 30));
             bool pref = preferredBiome(in.kind, b);
-            line(pref ? "Preferred biome: BONUS ACTIVE"
-                      : (in.kind == K_Lumber ? "Best in: Forest"
-                                             : (in.kind == K_Mine ? "Best in: Highlands, Desert" : "Coastal fishing")),
+            line(pref ? "Preferred biome: BONUS ACTIVE" : KINDS[in.kind].siteNote,
                  pref ? rgb(30, 110, 40) : rgb(130, 90, 30));
             line(TextFormat("Stock waiting: %d", in.stock), ink);
         }
@@ -104,15 +102,15 @@ void ContextPanel::rebuild()
                                 KINFO[in.kind].dps * levelMul(in.aux) * hpEfficiency(in.hp / std::max(1.f, in.maxhp)),
                                 anchorRadius(in.kind)),
                      ink);
-            if (mine && done && (in.kind == K_Outpost || in.kind == K_Storage))
+            if (mine && done && hasTag(in.kind, KT_Depot))
             {
                 slider = true;
                 if (!sliderDrag)
                     pct = in.aim;
             }
         }
-        else if (in.kind == K_Campfire)
-            line("Warms units in the snow", ink);
+        else if (KINDS[in.kind].siteNote[0])
+            line(KINDS[in.kind].siteNote, ink);
     }
     if (mine && done)
     {
@@ -129,11 +127,11 @@ void ContextPanel::rebuild()
                 addAct({TextFormat("%s: requires Town Hall Lv%d", KINFO[u].name, unitThLevel(Kind(u))), 1, target,
                         uint32_t(u), false, false});
             else
-                addAct({std::string(u == K_Ship ? "Build " : "Train ") + KINFO[u].name, 1, target, uint32_t(u),
-                        W.affordable(c), false},
-                       c);
+                addAct(
+                    {std::string(KINDS[u].verb) + " " + KINFO[u].name, 1, target, uint32_t(u), W.affordable(c), false},
+                    c);
         }
-        if (k != K_Campfire)
+        if (!hasTag(k, KT_SingleLevel))
         {
             float c[R_Count];
             upgradeCost(k, in.aux, c);
@@ -232,7 +230,7 @@ void ContextPanel::baseContext(const Info &in, bool mine, bool done)
                  (i == 0 ? TextFormat(" %d%%", q->second.pct) : "");
         lines.push_back({s, ink});
     }
-    if (dis && !mov && in.kind != K_TownHall && in.kind != K_Campfire)
+    if (dis && !mov && !hasTag(in.kind, KT_Freestanding))
     {
         bool can = W.affordable(KINFO[in.kind].cost) && !W.townMoving;
         addAct({"Relocate", 21, target, 0, can, false}, KINFO[in.kind].cost);
@@ -266,7 +264,7 @@ void ContextPanel::siteLines(const Info &in, bool friendly)
     else if (in.prog >= 100 && hpf < .995f && friendly)
         lines.push_back({TextFormat("Damaged: working at %d%% efficiency", int(std::lround(hpEfficiency(hpf) * 100.f))),
                          rgb(170, 90, 30)});
-    bool producer = isResourceBuilding(in.kind) || in.kind == K_Archery || in.kind == K_Harbour;
+    bool producer = hasTag(in.kind, KT_Producer) || hasTag(in.kind, KT_Trainer);
     if (friendly && producer && (in.prog < 100 || (in.state & BLD_WORK)))
         lines.push_back({"Production and training paused", red});
 }

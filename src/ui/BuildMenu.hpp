@@ -9,9 +9,9 @@ class App;
 class BuildMenu
 {
   public:
-    static constexpr int COUNT = 7;
-    static constexpr float LEFT = 48; // open menu x (right of the social tab button)
-    static constexpr Kind LIST[COUNT] = {K_Outpost, K_Harbour, K_Storage, K_Archery, K_Mine, K_Lumber, K_Campfire};
+    static constexpr int COUNT = buildMenuCount();
+    static constexpr float LEFT = 48;                                 // open menu x (right of the social tab button)
+    static constexpr std::array<Kind, COUNT> LIST = buildMenuKinds(); // KindDef::menuSlot order
     explicit BuildMenu(App &app) : app(app) {}
     void load();
 

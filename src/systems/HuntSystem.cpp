@@ -160,7 +160,7 @@ void HuntSystem::sheepSecond()
     std::unordered_map<int64_t, int> perChunk;
     reg.view<Info, Pos, Uid>().each([&](const Info &i, const Pos &p, const Uid &u)
     {
-        if (i.kind != K_Sheep)
+        if (!hasTag(i.kind, KT_Animal))
             return;
         sheepList.push_back({u.id, p});
         perChunk[chunkKey(chunkOf(int(std::floor(p.x))), chunkOf(int(std::floor(p.y))))]++;

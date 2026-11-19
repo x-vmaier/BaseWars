@@ -222,7 +222,7 @@ void TrainingPanel::draw()
     float dps = KINFO[k].dps * unitDmgMul(lv), dpsN = KINFO[k].dps * unitDmgMul(lv + 1);
     float spd = KINFO[k].speed * unitSpeedMul(lv);
     ui::statBar(x0, d.y + 48, w, hp / 300.f, rgb(220, 70, 60), "Health", TextFormat("%.0f", hp), nxt(hp, hpN));
-    if (k == K_Monk)
+    if (hasTag(k, KT_Healer))
         ui::statBar(x0, d.y + 66, w, dps / 30.f, rgb(90, 200, 110), "Healing", TextFormat("%.0f/s", dps), "");
     else
         ui::statBar(x0, d.y + 66, w, dps / 30.f, rgb(240, 160, 50), "Damage", TextFormat("%.0f/s", dps),

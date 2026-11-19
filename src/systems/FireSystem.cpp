@@ -13,7 +13,7 @@
 void FireSystem::ignite(entt::entity b, int byOwner)
 {
     Kind k = reg.get<Info>(b).kind;
-    if (!isBuilding(k) || k == K_Campfire || !world.complete(b))
+    if (!isBuilding(k) || hasTag(k, KT_Fireproof) || !world.complete(b))
         return;
     int o = reg.get<Owner>(b).id;
     if (!world.hostile(byOwner, o))
@@ -33,7 +33,7 @@ void FireSystem::ignite(entt::entity b, int byOwner)
 void FireSystem::archerShot(int ow, Pos from, Pos to, entt::entity tg)
 {
     bool fire = isPlayer(ow) && world.pl[ow].ulevel[K_Archer] >= 3 && isBuilding(reg.get<Info>(tg).kind) &&
-                reg.get<Info>(tg).kind != K_Campfire;
+                !hasTag(reg.get<Info>(tg).kind, KT_Fireproof);
     if (fire)
     {
         world.fx(E_FireArrow, from.x, from.y - .4f, to.x, to.y);
@@ -47,7 +47,7 @@ bool FireSystem::canExtinguish(entt::entity e)
     if (reg.any_of<Attack, AMove, Convoy, Haul, Raider, Support, Extinguish, ClearTask, BuildTask>(e))
         return false;
     Kind k = reg.get<Info>(e).kind;
-    if (!(k == K_Pawn || isArmy(k) || k == K_Monk))
+    if (!hasTag(k, KT_Firefighter))
         return false;
     if (auto *w = reg.try_get<Worker>(e))
     {

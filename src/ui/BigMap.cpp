@@ -221,8 +221,8 @@ std::vector<BigMap::Cand> BigMap::candidates()
     std::vector<Cand> v;
     W.reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
     {
-        if ((i.kind != K_TownHall && i.kind != K_Outpost) || i.owner == W.me || isFactionOwner(i.owner) ||
-            !W.alliedWith(i.owner) || i.prog < 100)
+        if (!hasTag(i.kind, KT_Anchor) || i.owner == W.me || isFactionOwner(i.owner) || !W.alliedWith(i.owner) ||
+            i.prog < 100)
             return;
         v.push_back({W.nameOf(i.owner) + (i.kind == K_TownHall ? " (town)" : " (outpost)"), g.x, g.y});
     });
