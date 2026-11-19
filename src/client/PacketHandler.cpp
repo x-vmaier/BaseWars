@@ -156,8 +156,10 @@ void PacketHandler::onState(Reader &r)
     }
     std::vector<entt::entity> dead;
     reg.view<Seen, NetId>().each([&](entt::entity e, const Seen &s, const NetId &)
-                                 {
-        if (s.stamp != w.stamp) dead.push_back(e); });
+    {
+        if (s.stamp != w.stamp)
+            dead.push_back(e);
+    });
     for (auto e : dead)
     {
         uint32_t id = reg.get<NetId>(e).id;
@@ -177,7 +179,8 @@ void PacketHandler::onState(Reader &r)
             }
             continue;
         }
-        bool arrived = !isBuilding(in.kind) && (in.state & UNIT_CONVOY_FLAG) && w.nearStorage(rp.x, rp.y); // convoys / haulers delivered: no ash ghost
+        bool arrived = !isBuilding(in.kind) && (in.state & UNIT_CONVOY_FLAG) &&
+                       w.nearStorage(rp.x, rp.y); // convoys / haulers delivered: no ash ghost
         if (vis && !remembered && !arrived)
             w.ghosts.push_back({in.kind, in.owner, 1, rp.x, rp.y, reg.get<Face>(e).left, GetTime()});
 

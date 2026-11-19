@@ -13,8 +13,14 @@ void BaseMenus::push(const Toast &t)
         toasts.erase(toasts.begin());
 }
 
-Rectangle BaseMenus::toastRect(int i) const { return {float(ui::screenW()) / 2 - 200, 52.f + 52.f * float(i), 400, 46}; }
-Rectangle BaseMenus::homelessBanner() const { return {float(ui::screenW()) / 2 - 230, float(ui::screenH()) - 128, 460, 56}; }
+Rectangle BaseMenus::toastRect(int i) const
+{
+    return {float(ui::screenW()) / 2 - 200, 52.f + 52.f * float(i), 400, 46};
+}
+Rectangle BaseMenus::homelessBanner() const
+{
+    return {float(ui::screenW()) / 2 - 230, float(ui::screenH()) - 128, 460, 56};
+}
 
 bool BaseMenus::over(Vector2 m) const
 {
@@ -49,14 +55,14 @@ void BaseMenus::draw()
 {
     const ClientWorld &W = app.world;
     double now = GetTime();
-    std::erase_if(toasts, [&](const Toast &t)
-                  { return now - t.t > 14.0; });
+    std::erase_if(toasts, [&](const Toast &t) { return now - t.t > 14.0; });
     Vector2 m = ui::mouse();
     for (size_t i = 0; i < toasts.size(); i++)
     {
         const Toast &t = toasts[i];
         Rectangle r = toastRect(int(i));
-        float a = std::clamp(float(14.0 - (now - t.t)) / 2.f, 0.f, 1.f), pulse = t.type == 0 ? float(std::sin(now * 8) * .5 + .5) : 0.f;
+        float a = std::clamp(float(14.0 - (now - t.t)) / 2.f, 0.f, 1.f),
+              pulse = t.type == 0 ? float(std::sin(now * 8) * .5 + .5) : 0.f;
         bool hov = CheckCollisionPointRec(m, r);
         Color base = t.type == 0 ? rgb(150, 36, 30, int(235 * a)) : rgb(60, 80, 140, int(235 * a));
         DrawRectangleRounded(r, .2f, 6, hov ? rgb(base.r + 30, base.g + 20, base.b + 20, base.a) : base);
@@ -75,17 +81,21 @@ void BaseMenus::draw()
         DrawRectangleRounded(b, .2f, 6, hov ? rgb(190, 100, 40, 240) : rgb(160, 80, 30, 235));
         DrawRectangleRoundedLinesEx(b, .2f, 6, 2, rgb(255, 220, 140));
         DrawText("You are homeless", int(b.x) + 14, int(b.y) + 8, 18, WHITE);
-        DrawText("Click here, then place a new Town Hall near your clan (free).", int(b.x) + 14, int(b.y) + 32, 13, rgb(255, 235, 200));
+        DrawText("Click here, then place a new Town Hall near your clan (free).", int(b.x) + 14, int(b.y) + 32, 13,
+                 rgb(255, 235, 200));
     }
     if (W.townMoving)
     {
         Rectangle nr = app.hud.nameRect();
-        textShadow(TextFormat("Moving town: %d%%", W.movePct), int(nr.x) + 8, int(nr.y + nr.height) + 6, 15, rgb(255, 220, 120));
+        textShadow(TextFormat("Moving town: %d%%", W.movePct), int(nr.x) + 8, int(nr.y + nr.height) + 6, 15,
+                   rgb(255, 220, 120));
     }
     int em = app.placement.effMode();
     if (em == Placement::HomelessHall || em == Placement::MoveTown || em == Placement::Relocate)
     {
-        std::string h = em == Placement::HomelessHall ? "Place your new Town Hall" : (em == Placement::MoveTown ? "Place the moved Town Hall" : "Place the relocated building");
+        std::string h = em == Placement::HomelessHall ? "Place your new Town Hall"
+                                                      : (em == Placement::MoveTown ? "Place the moved Town Hall"
+                                                                                   : "Place the relocated building");
         textShadow(h, ui::screenW() / 2 - MeasureText(h.c_str(), 20) / 2, 16, 20, rgb(255, 230, 120));
     }
 }

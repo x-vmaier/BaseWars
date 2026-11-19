@@ -28,10 +28,12 @@
 struct Systems
 {
     explicit Systems(World &w)
-        : spawn(w, *this), session(w, *this), packets(w, *this), repl(w, *this), build(w, *this), units(w, *this), env(w, *this),
-          training(w, *this), fire(w, *this), territory(w, *this), clearing(w, *this), convoy(w, *this), hunt(w, *this),
-          faction(w, *this), town(w, *this), patrol(w, *this), raid(w, *this), clan(w, *this), defense(w, *this), naval(w, *this),
-          ferry(w, *this), combat(w, *this), save(w, *this), construction(w, *this) {}
+        : spawn(w, *this), session(w, *this), packets(w, *this), repl(w, *this), build(w, *this), units(w, *this),
+          env(w, *this), training(w, *this), fire(w, *this), territory(w, *this), clearing(w, *this), convoy(w, *this),
+          hunt(w, *this), faction(w, *this), town(w, *this), patrol(w, *this), raid(w, *this), clan(w, *this),
+          defense(w, *this), naval(w, *this), ferry(w, *this), combat(w, *this), save(w, *this), construction(w, *this)
+    {
+    }
     Systems(const Systems &) = delete;
     Systems &operator=(const Systems &) = delete;
 

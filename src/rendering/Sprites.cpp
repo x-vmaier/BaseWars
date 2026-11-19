@@ -7,9 +7,11 @@
 
 namespace
 {
-    Shader shOutline{}, shDissolve{};
-    bool okOutline = false, okDissolve = false;
-    int locOut[5]{-1, -1, -1, -1, -1}, locDis[4]{-1, -1, -1, -1}; // outline: uvRect/texelSize/outlineColor/thickness/time; dissolve: uvRect/texSize/progress/seed
+Shader shOutline{}, shDissolve{};
+bool okOutline = false, okDissolve = false;
+int locOut[5]{-1, -1, -1, -1, -1},
+    locDis[4]{-1, -1, -1,
+              -1}; // outline: uvRect/texelSize/outlineColor/thickness/time; dissolve: uvRect/texSize/progress/seed
 } // namespace
 
 void loadSpriteShaders()
@@ -41,9 +43,12 @@ void drawSprite(Texture2D t, Rectangle src, Rectangle dst, Color tint, int mode,
         return;
     }
     Shader &sh = mode == 1 ? shOutline : shDissolve;
-    float u0 = std::min(src.x, src.x + src.width) / float(t.width), u1 = std::max(src.x, src.x + src.width) / float(t.width);
-    float v0 = std::min(src.y, src.y + src.height) / float(t.height), v1 = std::max(src.y, src.y + src.height) / float(t.height);
-    float uv[4] = {u0, v0, u1, v1}, ts[2] = {1.f / float(t.width), 1.f / float(t.height)}, tsz[2] = {float(t.width), float(t.height)};
+    float u0 = std::min(src.x, src.x + src.width) / float(t.width),
+          u1 = std::max(src.x, src.x + src.width) / float(t.width);
+    float v0 = std::min(src.y, src.y + src.height) / float(t.height),
+          v1 = std::max(src.y, src.y + src.height) / float(t.height);
+    float uv[4] = {u0, v0, u1, v1}, ts[2] = {1.f / float(t.width), 1.f / float(t.height)},
+          tsz[2] = {float(t.width), float(t.height)};
     float col[4] = {oc.r / 255.f, oc.g / 255.f, oc.b / 255.f, oc.a / 255.f}, th = 2.5f, tm = float(GetTime());
     if (mode == 1)
     {
@@ -64,7 +69,8 @@ void drawSprite(Texture2D t, Rectangle src, Rectangle dst, Color tint, int mode,
     DrawTexturePro(t, src, dst, {0, 0}, 0, tint);
     EndShaderMode();
 }
-void drawAnim(const Anim &a, int frame, float footWX, float footWY, bool flip, float scale, Color tint, int mode, Color oc, float prog, float sd)
+void drawAnim(const Anim &a, int frame, float footWX, float footWY, bool flip, float scale, Color tint, int mode,
+              Color oc, float prog, float sd)
 {
     Rectangle src = frameRect(a, frame);
     if (flip)
@@ -73,4 +79,7 @@ void drawAnim(const Anim &a, int frame, float footWX, float footWY, bool flip, f
     Rectangle dst{footWX - fx * scale, footWY - a.footY * scale, float(a.fw) * scale, float(a.fh) * scale};
     drawSprite(a.t, src, dst, tint, mode, oc, prog, sd);
 }
-int frameFor(const Anim &a, double t, float phase) { return int(std::fmod(t * double(a.fps) + double(phase), double(a.n))) % a.n; }
+int frameFor(const Anim &a, double t, float phase)
+{
+    return int(std::fmod(t * double(a.fps) + double(phase), double(a.n))) % a.n;
+}

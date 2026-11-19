@@ -11,20 +11,23 @@
 
 namespace
 {
-    bool containsNoCase(const std::string &hay, const std::string &needle)
-    {
-        if (needle.empty())
-            return true;
-        std::string h = hay, n = needle;
-        for (auto &c : h)
-            c = char(std::tolower(uint8_t(c)));
-        for (auto &c : n)
-            c = char(std::tolower(uint8_t(c)));
-        return h.find(n) != std::string::npos;
-    }
+bool containsNoCase(const std::string &hay, const std::string &needle)
+{
+    if (needle.empty())
+        return true;
+    std::string h = hay, n = needle;
+    for (auto &c : h)
+        c = char(std::tolower(uint8_t(c)));
+    for (auto &c : n)
+        c = char(std::tolower(uint8_t(c)));
+    return h.find(n) != std::string::npos;
+}
 } // namespace
 
-void SocialMenu::load() { mSocial = loadTMap("social_menu"); }
+void SocialMenu::load()
+{
+    mSocial = loadTMap("social_menu");
+}
 
 // rows per tab: players / friends / clans / my clan / factions
 std::vector<SocialMenu::SRow> SocialMenu::rows()
@@ -45,7 +48,11 @@ std::vector<SocialMenu::SRow> SocialMenu::rows()
     auto peerRow = [&](const Peer &p)
     {
         std::string cn = p.clan ? W.clanName(p.clan) : "";
-        SRow r{p.name + (cn.empty() ? "" : "  [" + cn + "]"), std::string(p.flags & 1 ? "online" : "offline") + (p.hasLoc ? TextFormat("  (%d, %d)", int(p.lx), int(p.ly)) : "  location unknown"), teamColor(p.id), {}};
+        SRow r{p.name + (cn.empty() ? "" : "  [" + cn + "]"),
+               std::string(p.flags & 1 ? "online" : "offline") +
+                   (p.hasLoc ? TextFormat("  (%d, %d)", int(p.lx), int(p.ly)) : "  location unknown"),
+               teamColor(p.id),
+               {}};
         r.btns.push_back({"Travel", 1, p.lx, p.ly, 0, p.hasLoc, false, 60});
         r.btns.push_back(friendBtn(p));
         return r;
@@ -84,7 +91,11 @@ std::vector<SocialMenu::SRow> SocialMenu::rows()
                 for (auto &c : W.clansList)
                     if (c.id == mc)
                         leader = c.leader;
-                SRow r{p.name + (p.id == leader ? "  (leader, clan hall)" : ""), std::string(p.flags & 1 ? "online" : "offline") + (p.hasLoc ? TextFormat("  (%d, %d)", int(p.lx), int(p.ly)) : ""), teamColor(p.id), {}};
+                SRow r{p.name + (p.id == leader ? "  (leader, clan hall)" : ""),
+                       std::string(p.flags & 1 ? "online" : "offline") +
+                           (p.hasLoc ? TextFormat("  (%d, %d)", int(p.lx), int(p.ly)) : ""),
+                       teamColor(p.id),
+                       {}};
                 r.btns.push_back({"Travel", 1, p.lx, p.ly, 0, p.hasLoc, false, 56});
                 if (p.id != W.me)
                 {
@@ -115,7 +126,8 @@ std::vector<SocialMenu::SRow> SocialMenu::rows()
                         best = &t;
                     }
                 }
-            r.btns.push_back({best ? "Nearest town" : "None found", 1, best ? best->x : 0.f, best ? best->y : 0.f, 0, best != nullptr, false, 104});
+            r.btns.push_back({best ? "Nearest town" : "None found", 1, best ? best->x : 0.f, best ? best->y : 0.f, 0,
+                              best != nullptr, false, 104});
             rows.push_back(r);
         }
         break;
@@ -329,21 +341,26 @@ void SocialMenu::draw()
     Rectangle sb = search();
     DrawRectangleRounded(sb, .3f, 6, rgb(255, 250, 235, 235));
     DrawRectangleRoundedLinesEx(sb, .3f, 6, 2, textFocus ? rgb(60, 120, 200) : rgb(120, 90, 60));
-    std::string shown = searchText.empty() && !textFocus ? (tab == 2 ? "Search clans or type a new clan name..." : "Search by name...") : searchText + (textFocus && int(GetTime() * 2) % 2 == 0 ? "|" : "");
-    DrawText(shown.c_str(), int(sb.x) + 8, int(sb.y) + 5, 15, searchText.empty() && !textFocus ? rgb(150, 130, 110) : ink);
+    std::string shown = searchText.empty() && !textFocus
+                            ? (tab == 2 ? "Search clans or type a new clan name..." : "Search by name...")
+                            : searchText + (textFocus && int(GetTime() * 2) % 2 == 0 ? "|" : "");
+    DrawText(shown.c_str(), int(sb.x) + 8, int(sb.y) + 5, 15,
+             searchText.empty() && !textFocus ? rgb(150, 130, 110) : ink);
     auto rs = rows();
     Rectangle ls = list();
     int vis = int(ls.height / SROW);
     std::string tip;
     scroll = std::clamp(scroll, 0, std::max(0, int(rs.size()) - vis));
     if (rs.empty())
-        DrawText(tab == 1 ? "No friends yet. Add players from the Players tab." : "Nothing to show.", int(ls.x) + 6, int(ls.y) + 8, 14, rgb(120, 90, 60));
+        DrawText(tab == 1 ? "No friends yet. Add players from the Players tab." : "Nothing to show.", int(ls.x) + 6,
+                 int(ls.y) + 8, 14, rgb(120, 90, 60));
     for (int i = 0; i < vis && i + scroll < int(rs.size()); i++)
     {
         Rectangle rr{ls.x, ls.y + float(i) * SROW, ls.width, SROW};
         auto &row = rs[size_t(i + scroll)];
         DrawRectangleRec(rr, i % 2 ? rgb(0, 0, 0, 14) : rgb(255, 255, 255, 36));
-        DrawText(row.text.c_str(), int(rr.x) + 6, int(rr.y) + 2, 15, row.col.r > 200 && row.col.g > 200 ? ink : row.col);
+        DrawText(row.text.c_str(), int(rr.x) + 6, int(rr.y) + 2, 15,
+                 row.col.r > 200 && row.col.g > 200 ? ink : row.col);
         DrawText(row.sub.c_str(), int(rr.x) + 6, int(rr.y) + 17, 10, rgb(110, 85, 60));
         for (size_t k = 0; k < row.btns.size(); k++)
         {
@@ -353,21 +370,27 @@ void SocialMenu::draw()
             ui::drawButton(b, bt.label, bt.enabled, bt.red, hov, false, 11);
             if (bt.icon < 0)
                 continue; // resource transfer: icon only, the amount is in the tooltip / sub line
-            ui::resourceIcon(bt.icon, {b.x + b.width / 2 - 8, b.y + b.height / 2 - 9, 16, 16}, bt.enabled ? WHITE : rgb(150, 150, 150));
+            ui::resourceIcon(bt.icon, {b.x + b.width / 2 - 8, b.y + b.height / 2 - 9, 16, 16},
+                             bt.enabled ? WHITE : rgb(150, 150, 150));
             if (hov)
                 tip = TextFormat("Send %d %s by convoy (can be raided)", int(bt.b), RES_NAME[bt.icon]);
         }
     }
     if (int(rs.size()) > vis)
-        DrawText(TextFormat("%d-%d of %d  (mouse wheel)", scroll + 1, std::min(int(rs.size()), scroll + vis), int(rs.size())), int(ls.x) + 6, int(ls.y + ls.height) + 2, 10, ink);
+        DrawText(TextFormat("%d-%d of %d  (mouse wheel)", scroll + 1, std::min(int(rs.size()), scroll + vis),
+                            int(rs.size())),
+                 int(ls.x) + 6, int(ls.y + ls.height) + 2, 10, ink);
     SBtn bb;
     if (bottomBtn(bb))
-        ui::drawButton(bottomBtnRect(), bb.label, bb.enabled, bb.red, CheckCollisionPointRec(m, bottomBtnRect()), false, 13);
+        ui::drawButton(bottomBtnRect(), bb.label, bb.enabled, bb.red, CheckCollisionPointRec(m, bottomBtnRect()), false,
+                       13);
     int mc = app.world.myClan();
     if (tab == 3 && mc)
-        DrawText("Resources travel by convoy and can be raided.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28), 11, ink);
+        DrawText("Resources travel by convoy and can be raided.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28),
+                 11, ink);
     if (tab == 2 && mc == 0)
-        DrawText("Type a name above, then press Create.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28), 11, ink);
+        DrawText("Type a name above, then press Create.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28), 11,
+                 ink);
     if (!tip.empty())
     {
         int w = MeasureText(tip.c_str(), 13);

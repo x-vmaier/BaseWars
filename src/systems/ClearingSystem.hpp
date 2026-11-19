@@ -2,35 +2,41 @@
 // Clearing of surface features (trees, bushes, rocks, gold veins) by pawns, buildings queued behind clearing, resource
 // drops, gold-deposit mine bonus.
 //
-// A clear job belongs to one tile. A pawn (one of the pawns the player selected, else the nearest free pawn) is assigned,
-// its previous work (Worker / move order) is stored in its ClearTask, it walks to the tile and the timer only runs while it
-// stands there working. On completion the feature turns into resource drops and the pawn resumes its prior work (or chains
-// to the next waiting job nearby). A building placed over features is a PendingBuild: placed once its tiles are cleared.
+// A clear job belongs to one tile. A pawn (one of the pawns the player selected, else the nearest free pawn) is
+// assigned, its previous work (Worker / move order) is stored in its ClearTask, it walks to the tile and the timer only
+// runs while it stands there working. On completion the feature turns into resource drops and the pawn resumes its
+// prior work (or chains to the next waiting job nearby). A building placed over features is a PendingBuild: placed once
+// its tiles are cleared.
 #include "server/World.hpp"
 
 struct Systems;
 
 class ClearingSystem
 {
-public:
+  public:
     ClearingSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
-    std::vector<IV> blockedTiles(Kind k, int tx, int ty);                            // feature tiles under a footprint that still have to be cleared
-    bool worldBuildOk(int id, Kind k, int tx, int ty);                               // relocation / town move hook: surface features must be cleared first
-    void queueBuild(int id, Kind k, int tx, int ty, const std::vector<IV> &blocked); // C_Build over features: clear, then place
+    std::vector<IV> blockedTiles(Kind k, int tx,
+                                 int ty); // feature tiles under a footprint that still have to be cleared
+    bool worldBuildOk(int id, Kind k, int tx,
+                      int ty); // relocation / town move hook: surface features must be cleared first
+    void queueBuild(int id, Kind k, int tx, int ty,
+                    const std::vector<IV> &blocked); // C_Build over features: clear, then place
     bool inClearReach(int id, int x, int y);
     void onClear(int id, Reader &r);
-    void sendDrop(Pos p, int res, int amt, int credited); // visible bouncing "+N" drop for everyone who can see the spot
+    void sendDrop(Pos p, int res, int amt,
+                  int credited); // visible bouncing "+N" drop for everyone who can see the spot
     void creditDrop(int player, Pos p, int res, int amt);
     void sendClearedList(int id, const std::vector<int64_t> &tiles, bool full);
     void sendClearedFull(int id);
     void clearTick(float dt);
     void pawnTick(entt::entity e, Unit &u, ClearTask &ct, Pos &p, float dt); // unit loop: a pawn on a clear job
-    void releasePawn(entt::entity e, bool manual);                           // ends a pawn's clear task and restores its previous work
-    float mineMul(entt::entity e, Kind k, Pos c);                            // output multiplier from nearby gold deposits (cached per clear-version)
-    int pendingOf(int id, Kind k) const;                                     // own buildings of a kind waiting for their site to be cleared
+    void releasePawn(entt::entity e, bool manual); // ends a pawn's clear task and restores its previous work
+    float mineMul(entt::entity e, Kind k,
+                  Pos c);                // output multiplier from nearby gold deposits (cached per clear-version)
+    int pendingOf(int id, Kind k) const; // own buildings of a kind waiting for their site to be cleared
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

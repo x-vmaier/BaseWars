@@ -55,7 +55,8 @@ void RaidSystem::spawnRaid(int player, int f)
             world.destroyNow(u);
     }
     if (sent)
-        world.say(player, std::string("A raiding party of the ") + FACTION_NAME[f] + " marches on your base from (" + std::to_string(best->cx) + ", " + std::to_string(best->cy) + ")!");
+        world.say(player, std::string("A raiding party of the ") + FACTION_NAME[f] + " marches on your base from (" +
+                              std::to_string(best->cx) + ", " + std::to_string(best->cy) + ")!");
 }
 void RaidSystem::runRaider(entt::entity e, Unit &u, Raider &rd, float dt)
 {
@@ -87,17 +88,22 @@ void RaidSystem::raidTick()
             {
                 world.pl[id].raidNext[f] = 0;
                 continue;
-            }                                                                   // peace: no raids
+            } // peace: no raids
             static const bool fastRaids = std::getenv("BW_RAIDNOW") != nullptr; // test hook
             if (world.pl[id].raidNext[f] <= 0)
             {
-                world.pl[id].raidNext[f] = world.clock + (fastRaids ? 6.0 : cfg().raidFirstDelay + double(world.rng() % uint32_t(std::max(1.0, cfg().raidFirstRandom))));
+                world.pl[id].raidNext[f] =
+                    world.clock +
+                    (fastRaids
+                         ? 6.0
+                         : cfg().raidFirstDelay + double(world.rng() % uint32_t(std::max(1.0, cfg().raidFirstRandom))));
                 continue;
             }
             if (world.clock >= world.pl[id].raidNext[f])
             {
                 spawnRaid(id, f);
-                world.pl[id].raidNext[f] = world.clock + cfg().raidInterval + double(world.rng() % uint32_t(std::max(1.0, cfg().raidIntervalRandom)));
+                world.pl[id].raidNext[f] = world.clock + cfg().raidInterval +
+                                           double(world.rng() % uint32_t(std::max(1.0, cfg().raidIntervalRandom)));
             }
         }
     }

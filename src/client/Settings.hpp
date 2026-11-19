@@ -44,7 +44,8 @@ struct Settings
         std::ofstream f(path(dir));
         if (!f)
             return false;
-        f << "name=" << name << "\nlast_server=" << lastServer << "\nui_scale=" << uiScale << "\nwindow_mode=" << windowMode << "\n";
+        f << "name=" << name << "\nlast_server=" << lastServer << "\nui_scale=" << uiScale
+          << "\nwindow_mode=" << windowMode << "\n";
         return true;
     }
 };

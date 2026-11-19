@@ -24,11 +24,17 @@ void ConvoyHaulSystem::runConvoy(entt::entity e, Unit &u, Convoy &cv, float dt)
     entt::entity th = entt::null;
     float bd = 1e9f;
     reg.view<Info, Building, Owner>().each([&](entt::entity b, const Info &i, const Building &bb, const Owner &o)
-                                           {
-        if (i.kind != K_TownHall || o.id != cv.to || bb.progress < 1.f) return;
+    {
+        if (i.kind != K_TownHall || o.id != cv.to || bb.progress < 1.f)
+            return;
         Pos c = footCenter(i.kind, bb.tx, bb.ty);
         float d = std::hypot(c.x - p.x, c.y - p.y);
-        if (d < bd) { bd = d; th = b; } });
+        if (d < bd)
+        {
+            bd = d;
+            th = b;
+        }
+    });
     if (th == entt::null || !isPlayer(cv.to) || !world.pl[cv.to].used || !world.sameClan(cv.from, cv.to))
     {
         refundConvoy(e, cv, "the recipient is no longer reachable");
@@ -42,7 +48,8 @@ void ConvoyHaulSystem::runConvoy(entt::entity e, Unit &u, Convoy &cv, float dt)
             world.pl[cv.to].res[r] += cv.cargo[r];
             tot += cv.cargo[r];
         }
-        world.say(cv.to, "A convoy from " + world.ownerName(cv.from) + " arrived with " + std::to_string(int(tot)) + " resources.");
+        world.say(cv.to, "A convoy from " + world.ownerName(cv.from) + " arrived with " + std::to_string(int(tot)) +
+                             " resources.");
         world.say(cv.from, "Your convoy reached " + world.ownerName(cv.to) + ".");
         world.fx(E_Dust, p.x, p.y);
         world.destroyNow(e);
@@ -70,13 +77,10 @@ void ConvoyHaulSystem::runConvoy(entt::entity e, Unit &u, Convoy &cv, float dt)
 void ConvoyHaulSystem::updateSpotting()
 { // convoys seen by a clan member are shown to the whole clan
     std::vector<entt::entity> cvs;
-    reg.view<Convoy>().each([&](entt::entity e, const Convoy &)
-                            { cvs.push_back(e); });
-    reg.view<Haul>().each([&](entt::entity e, const Haul &)
-                          { cvs.push_back(e); });
+    reg.view<Convoy>().each([&](entt::entity e, const Convoy &) { cvs.push_back(e); });
+    reg.view<Haul>().each([&](entt::entity e, const Haul &) { cvs.push_back(e); });
     for (auto &[c, m] : clanSpot)
-        std::erase_if(m, [&](auto &kv)
-                      { return kv.second.until < world.clock; });
+        std::erase_if(m, [&](auto &kv) { return kv.second.until < world.clock; });
     if (cvs.empty())
         return;
     std::vector<Source> srcs[MAX_PLAYERS + 1];
@@ -96,23 +100,29 @@ void ConvoyHaulSystem::updateSpotting()
             bool fresh = m.find(uid) == m.end();
             m[uid] = {world.clock + 6.0, uint8_t(pid)};
             if (fresh)
-                world.notifyClan(world.pl[pid].clan, "Enemy convoy of " + world.ownerName(owner) + " spotted by " + world.pl[pid].name + " at (" + std::to_string(int(p.x)) + ", " + std::to_string(int(p.y)) + ")!");
+                world.notifyClan(world.pl[pid].clan, "Enemy convoy of " + world.ownerName(owner) + " spotted by " +
+                                                         world.pl[pid].name + " at (" + std::to_string(int(p.x)) +
+                                                         ", " + std::to_string(int(p.y)) + ")!");
         }
     }
 }
 
 // Hauling parties (T7 fix). Root cause of the endless haul / "burning convoy" loop, traced deterministically:
-//   1. spawnHauls() only looked at the storage fill (stock/cap >= haulPct) and never at the Town Hall. The hall's stock is the
+//   1. spawnHauls() only looked at the storage fill (stock/cap >= haulPct) and never at the Town Hall. The hall's stock
+//   is the
 //      owner's whole pool (totalRes), so once that pool reached the hall cap, storeCargo(th) stored nothing.
-//   2. runHaul() then called giveUp(), which teleported the full cargo back into the storage: the storage was above haulPct
-//      again, so the next spawnHauls() pass (1 s later) sent a new party immediately - forever. A party that got stuck or
-//      could not reach the storage was likewise destroyed and re-spawned at once (no cooldown).
-//   3. Every party removed on arrival/give-up vanished from S_State, which the client drew as a "destroyed entity" ghost
+//   2. runHaul() then called giveUp(), which teleported the full cargo back into the storage: the storage was above
+//   haulPct
+//      again, so the next spawnHauls() pass (1 s later) sent a new party immediately - forever. A party that got stuck
+//      or could not reach the storage was likewise destroyed and re-spawned at once (no cooldown).
+//   3. Every party removed on arrival/give-up vanished from S_State, which the client drew as a "destroyed entity"
+//   ghost
 //      dissolving into ash at the hall/storage - the loop looked like convoys repeatedly burning down.
 //   4. giveUp() into an inactive (cap 0) or full storage silently destroyed the cargo.
-// Fix: a party only leaves when the hall has room for it, loads at most that room, every ended haul puts the storage on a
-// cooldown (long after a failure), undeliverable cargo goes back to the owner, and the client no longer ghosts arriving
-// convoys (see PacketHandler::onState). Fire damage is only credited to an arsonist that is still hostile (FireSystem).
+// Fix: a party only leaves when the hall has room for it, loads at most that room, every ended haul puts the storage on
+// a cooldown (long after a failure), undeliverable cargo goes back to the owner, and the client no longer ghosts
+// arriving convoys (see PacketHandler::onState). Fire damage is only credited to an arsonist that is still hostile
+// (FireSystem).
 float ConvoyHaulSystem::hallRoom(int owner)
 {
     auto th = world.townHallOf(owner);
@@ -142,13 +152,15 @@ void ConvoyHaulSystem::endHaul(entt::entity e, Haul &h, bool ok)
 void ConvoyHaulSystem::spawnHauls()
 {
     std::unordered_set<uint32_t> busy;
-    reg.view<Haul>().each([&](const Haul &h)
-                          { busy.insert(h.storage); });
-    std::erase_if(haulCool, [&](auto &kv)
-                  { return kv.second < world.clock; });
+    reg.view<Haul>().each([&](const Haul &h) { busy.insert(h.storage); });
+    std::erase_if(haulCool, [&](auto &kv) { return kv.second < world.clock; });
     std::vector<entt::entity> blds;
     reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info &i, const Building &b, const Owner &o)
-                                           { if ((i.kind == K_Outpost || i.kind == K_Storage) && b.progress >= 1.f && isPlayer(o.id) && !world.inactive(e) && !reg.all_of<Moving>(e)) blds.push_back(e); });
+    {
+        if ((i.kind == K_Outpost || i.kind == K_Storage) && b.progress >= 1.f && isPlayer(o.id) && !world.inactive(e) &&
+            !reg.all_of<Moving>(e))
+            blds.push_back(e);
+    });
     for (auto e : blds)
     {
         uint32_t uid = reg.get<Uid>(e).id;
@@ -180,7 +192,8 @@ void ConvoyHaulSystem::spawnHauls()
         h.storage = uid;
         reg.emplace<Haul>(u, h);
         busy.insert(uid);
-        world.say(ow, std::string("A hauling party leaves the Town Hall for your ") + KINFO[reg.get<Info>(e).kind].name + ".");
+        world.say(ow, std::string("A hauling party leaves the Town Hall for your ") +
+                          KINFO[reg.get<Info>(e).kind].name + ".");
     }
 }
 void ConvoyHaulSystem::runHaul(entt::entity e, Unit &u, Haul &h, float dt)
@@ -290,8 +303,7 @@ void ConvoyHaulSystem::runWorker(entt::entity e, Unit &u, Worker &w, float dt)
     }
     auto &hb = reg.get<Building>(home);
     int ow = reg.get<Owner>(e).id;
-    auto toward = [&](entt::entity b)
-    { return world.order(e, world.posOf(b), reg.get<Uid>(b).id); };
+    auto toward = [&](entt::entity b) { return world.order(e, world.posOf(b), reg.get<Uid>(b).id); };
     auto findStorage = [&]() { // nearest own storage that still has room
         entt::entity best = entt::null;
         float bd = 1e9f;

@@ -8,12 +8,12 @@ struct Reader;
 
 class PacketHandler
 {
-public:
+  public:
     explicit PacketHandler(App &app) : app(app) {}
     void handle(const uint8_t *d, size_t n);
     void addFx(uint8_t type, float x, float y, float x2 = 0, float y2 = 0); // effect event (+ ripple / screen shake)
 
-private:
+  private:
     void onWelcome(Reader &r);
     void onState(Reader &r);
     void onFog(Reader &r);

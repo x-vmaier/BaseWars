@@ -32,7 +32,8 @@ void FireSystem::ignite(entt::entity b, int byOwner)
 // archers shoot fire arrows from troop level 3 (player level); returns after emitting the projectile effect
 void FireSystem::archerShot(int ow, Pos from, Pos to, entt::entity tg)
 {
-    bool fire = isPlayer(ow) && world.pl[ow].ulevel[K_Archer] >= 3 && isBuilding(reg.get<Info>(tg).kind) && reg.get<Info>(tg).kind != K_Campfire;
+    bool fire = isPlayer(ow) && world.pl[ow].ulevel[K_Archer] >= 3 && isBuilding(reg.get<Info>(tg).kind) &&
+                reg.get<Info>(tg).kind != K_Campfire;
     if (fire)
     {
         world.fx(E_FireArrow, from.x, from.y - .4f, to.x, to.y);
@@ -59,12 +60,14 @@ void FireSystem::burnSecond()
 {
     std::vector<entt::entity> burning;
     reg.view<BFlags>().each([&](entt::entity e, BFlags &f)
-                            { if (f.burn > 0) burning.push_back(e); });
+    {
+        if (f.burn > 0)
+            burning.push_back(e);
+    });
     if (burning.empty())
         return;
     std::unordered_map<uint32_t, int> cnt;
-    reg.view<Extinguish>().each([&](const Extinguish &x)
-                                { cnt[x.target]++; });
+    reg.view<Extinguish>().each([&](const Extinguish &x) { cnt[x.target]++; });
     std::vector<entt::entity> cand;
     for (auto e : burning)
     { // damage over time
@@ -73,7 +76,8 @@ void FireSystem::burnSecond()
         auto &f = reg.get<BFlags>(e);
         f.burn = std::max(0.f, f.burn - 1.f);
         int ow = reg.get<Owner>(e).id;
-        int by = world.hostile(f.burnBy, ow) ? int(f.burnBy) : 0; // arson credit (loot, kill) only while the arsonist is still an enemy
+        int by = world.hostile(f.burnBy, ow) ? int(f.burnBy)
+                                             : 0; // arson credit (loot, kill) only while the arsonist is still an enemy
         if (!by)
             f.burnBy = 0;
         if (world.dying.count(reg.get<Uid>(e).id))
@@ -82,7 +86,10 @@ void FireSystem::burnSecond()
     }
     s.combat.processKills();
     reg.view<Owner, Unit, Info, Pos>().each([&](entt::entity e, const Owner &o, const Unit &, const Info &, const Pos &)
-                                            { if (isPlayer(o.id) && canExtinguish(e)) cand.push_back(e); });
+    {
+        if (isPlayer(o.id) && canExtinguish(e))
+            cand.push_back(e);
+    });
     for (auto b : burning)
     {
         if (!reg.valid(b) || reg.get<BFlags>(b).burn <= 0)
@@ -144,7 +151,8 @@ bool FireSystem::extinguishTick(entt::entity e, Unit &u, Pos &p, float dt)
             bf->burn = std::max(0.f, bf->burn - EXTINGUISH_PER_SEC);
             world.fx(E_Extinguish, bc.x + float(int(world.rng() % 100) - 50) / 50.f, bc.y + .2f);
             if (bf->burn <= 0)
-                world.say(reg.get<Owner>(tgt).id, std::string("The fire at your ") + KINFO[reg.get<Info>(tgt).kind].name + " is out.");
+                world.say(reg.get<Owner>(tgt).id,
+                          std::string("The fire at your ") + KINFO[reg.get<Info>(tgt).kind].name + " is out.");
         }
         return true;
     }

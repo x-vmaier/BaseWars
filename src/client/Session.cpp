@@ -32,7 +32,8 @@ void Session::loadProfile()
     {
         char buf[40];
         uint32_t a = rd(), b = rd(), c = rd(), d = rd();
-        std::snprintf(buf, sizeof buf, "%08x-%04x-4%03x-%04x-%04x%08x", a, b >> 16, b & 0xfff, 0x8000 | (c & 0x3fff), c >> 16, d);
+        std::snprintf(buf, sizeof buf, "%08x-%04x-4%03x-%04x-%04x%08x", a, b >> 16, b & 0xfff, 0x8000 | (c & 0x3fff),
+                      c >> 16, d);
         uuid = buf;
     }
 

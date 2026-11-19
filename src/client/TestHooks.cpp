@@ -11,7 +11,10 @@
 #include <string>
 
 TestHooks::TestHooks(App &app)
-    : app(app), shotPath(std::getenv("BW_SHOT")), shotAfter(std::getenv("BW_SHOT_FRAMES") ? std::atoi(std::getenv("BW_SHOT_FRAMES")) : 400) {}
+    : app(app), shotPath(std::getenv("BW_SHOT")),
+      shotAfter(std::getenv("BW_SHOT_FRAMES") ? std::atoi(std::getenv("BW_SHOT_FRAMES")) : 400)
+{
+}
 
 void TestHooks::update()
 {
@@ -30,7 +33,8 @@ void TestHooks::update()
                 app.chat.lines.push_back({1, "Friend", "clan chat line", GetTime()});
             }
             if (cm.rfind("clan:", 0) == 0)
-                app.cmd.clanCreate(cm.substr(5, cm.find(';') == std::string::npos ? std::string::npos : cm.find(';') - 5));
+                app.cmd.clanCreate(
+                    cm.substr(5, cm.find(';') == std::string::npos ? std::string::npos : cm.find(';') - 5));
         }
 
     if (shotFrames == 300 || shotFrames == 360)
@@ -86,25 +90,42 @@ void TestHooks::update()
 
     if (ui.find("train") != std::string::npos && !tp.isOpen)
         W.reg.view<NetId, Info>().each([&](const NetId &n, const Info &i)
-                                       { if (!tp.isOpen && i.owner == W.me && i.kind == K_Archery) { tp.isOpen = true; tp.target = n.id; if (const char* ts = std::getenv("BW_TSEL")) tp.sel = std::atoi(ts); } });
+        {
+            if (!tp.isOpen && i.owner == W.me && i.kind == K_Archery)
+            {
+                tp.isOpen = true;
+                tp.target = n.id;
+                if (const char *ts = std::getenv("BW_TSEL"))
+                    tp.sel = std::atoi(ts);
+            }
+        });
     if (ui.find("townhall") != std::string::npos)
         townHallHook();
 
     float sw = float(ui::screenW()), sh = float(ui::screenH());
     if (ui.find("ctxop") != std::string::npos && !cp.isOpen)
         W.reg.view<NetId, Info>().each([&](const NetId &n, const Info &i)
-                                       { if (!cp.isOpen && i.owner == W.me && i.kind == K_Outpost) cp.open(n.id, {sw * .5f, sh * .15f}); });
+        {
+            if (!cp.isOpen && i.owner == W.me && i.kind == K_Outpost)
+                cp.open(n.id, {sw * .5f, sh * .15f});
+        });
     if (ui.find("ctxfac") != std::string::npos && !cp.isOpen)
         W.reg.view<NetId, Info>().each([&](const NetId &n, const Info &i)
-                                       { if (!cp.isOpen && isFactionOwner(i.owner) && i.kind == K_TownHall) cp.open(n.id, {sw * .55f, sh * .2f}); });
+        {
+            if (!cp.isOpen && isFactionOwner(i.owner) && i.kind == K_TownHall)
+                cp.open(n.id, {sw * .55f, sh * .2f});
+        });
     else if (ui.find("ctx") != std::string::npos && ui.find("ctxfac") == std::string::npos && !cp.isOpen)
         W.reg.view<NetId, Info>().each([&](const NetId &n, const Info &i)
-                                       { if (i.owner == W.me && i.kind == K_TownHall) cp.open(n.id, {sw * .6f, sh * .25f}); });
+        {
+            if (i.owner == W.me && i.kind == K_TownHall)
+                cp.open(n.id, {sw * .6f, sh * .25f});
+        });
 }
 
-// BW_UI=townhall opens the own Town Hall window; BW_THTAB=0|1|2 picks the tab; BW_THHOVER=<control> moves the mouse onto
-// a control for hover states (train, upgrade, tab<i>, slider<r>, dispose<r>, arrow<t>l / arrow<t>r); BW_THCLICK=1 with
-// dispose<r> shows its confirm state.
+// BW_UI=townhall opens the own Town Hall window; BW_THTAB=0|1|2 picks the tab; BW_THHOVER=<control> moves the mouse
+// onto a control for hover states (train, upgrade, tab<i>, slider<r>, dispose<r>, arrow<t>l / arrow<t>r); BW_THCLICK=1
+// with dispose<r> shows its confirm state.
 void TestHooks::townHallHook()
 {
     ClientWorld &W = app.world;
@@ -112,7 +133,10 @@ void TestHooks::townHallHook()
     if (!th.isOpen)
     {
         W.reg.view<NetId, Info>().each([&](const NetId &n, const Info &i)
-                                       { if (!th.isOpen && i.owner == W.me && i.kind == K_TownHall) th.openFor(n.id); });
+        {
+            if (!th.isOpen && i.owner == W.me && i.kind == K_TownHall)
+                th.openFor(n.id);
+        });
         if (const char *t = std::getenv("BW_THTAB"))
             th.tab = std::clamp(std::atoi(t), 0, int(TownHallWindow::T_Count) - 1);
     }
@@ -153,7 +177,10 @@ void TestHooks::siteCommands()
     {
         uint32_t id = 0;
         W.reg.view<NetId, Info>().each([&](const NetId &n, const Info &i)
-                                       { if (!id && i.owner == W.me && i.kind == k) id = n.id; });
+        {
+            if (!id && i.owner == W.me && i.kind == k)
+                id = n.id;
+        });
         return id;
     };
 

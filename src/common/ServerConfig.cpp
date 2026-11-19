@@ -14,11 +14,11 @@ ServerConfig &ServerConfig::get()
 
 namespace
 {
-    std::string trim(const std::string &s)
-    {
-        size_t a = s.find_first_not_of(" \t\r\n"), b = s.find_last_not_of(" \t\r\n");
-        return a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
-    }
+std::string trim(const std::string &s)
+{
+    size_t a = s.find_first_not_of(" \t\r\n"), b = s.find_last_not_of(" \t\r\n");
+    return a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
+}
 } // namespace
 
 bool ServerConfig::load(const std::string &path)
@@ -45,13 +45,25 @@ bool ServerConfig::load(const std::string &path)
         bool b = v == "1" || v == "true" || v == "yes" || v == "on";
 
         auto F = [&](const char *n, float &dst)
-        { if (k == n) dst = float(d); };
+        {
+            if (k == n)
+                dst = float(d);
+        };
         auto D = [&](const char *n, double &dst)
-        { if (k == n) dst = d; };
+        {
+            if (k == n)
+                dst = d;
+        };
         auto I = [&](const char *n, int &dst)
-        { if (k == n) dst = int(d); };
+        {
+            if (k == n)
+                dst = int(d);
+        };
         auto B = [&](const char *n, bool &dst)
-        { if (k == n) dst = b; };
+        {
+            if (k == n)
+                dst = b;
+        };
 
         F("biome_scale", biomeScale);
         F("ocean_level", oceanLevel);

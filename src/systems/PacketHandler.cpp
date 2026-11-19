@@ -38,7 +38,9 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
                 s.clearing.releasePawn(e, true); // the player takes a clearing pawn over
             if (e != entt::null && reg.all_of<BuildTask>(e) && reg.get<Owner>(e).id == id)
                 s.construction.releasePawn(e, true); // ... or a pawn on a building site
-            if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e) || reg.all_of<Aboard>(e))
+            if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id ||
+                reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e) ||
+                reg.all_of<Aboard>(e))
                 continue; // units aboard a ship cannot be commanded
             Kind k = reg.get<Info>(e).kind;
             if (combatOnly && (k == K_Ship || k == K_Monk))
@@ -100,7 +102,8 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
         buildCost(k, cost);
         if (!world.afford(id, cost))
         {
-            world.say(id, cost[R_Meat] > p.res[R_Meat] ? "Not enough food: hunt sheep or build a Harbour." : "Not enough resources.");
+            world.say(id, cost[R_Meat] > p.res[R_Meat] ? "Not enough food: hunt sheep or build a Harbour."
+                                                       : "Not enough resources.");
             return;
         }
         world.spend(id, cost);
@@ -213,7 +216,10 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
         }
         int archery = 0;
         reg.view<Info, Building, Owner>().each([&](const Info &i, const Building &b, const Owner &o)
-                                               { if (i.kind == K_Archery && o.id == id && b.progress >= 1.f) archery = std::max<int>(archery, i.level); });
+        {
+            if (i.kind == K_Archery && o.id == id && b.progress >= 1.f)
+                archery = std::max<int>(archery, i.level);
+        });
         if (archery < troopUpgradeNeedsArchery(to))
         {
             world.say(id, "Upgrade your Archery to level " + std::to_string(troopUpgradeNeedsArchery(to)) + " first.");
@@ -232,7 +238,13 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
         p.ulevel[k] = uint8_t(to);
         float ratio = unitHpMul(to) / oldMul;
         reg.view<Info, Owner, Health>().each([&](const Info &i, const Owner &o, Health &h)
-                                             { if (i.kind == k && o.id == id) { h.maxhp *= ratio; h.hp *= ratio; } });
+        {
+            if (i.kind == k && o.id == id)
+            {
+                h.maxhp *= ratio;
+                h.hp *= ratio;
+            }
+        });
         world.say(id, std::string(KINFO[k].name) + "s upgraded to level " + std::to_string(to) + ".");
         break;
     }
@@ -260,7 +272,8 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
         {
             if (!world.pl[i].online)
                 continue;
-            bool to = ch == 0 || i == id || (ch == 1 && world.pl[i].clan == p.clan) || (ch == 2 && world.pl[id].allied[i]);
+            bool to =
+                ch == 0 || i == id || (ch == 1 && world.pl[i].clan == p.clan) || (ch == 2 && world.pl[id].allied[i]);
             if (to)
                 world.net.send(world.pl[i].conn, w);
         }
@@ -293,7 +306,10 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
             return;
         entt::entity src = entt::null;
         reg.view<Info, Building, Owner>().each([&](entt::entity b, const Info &i, const Building &bb, const Owner &o)
-                                               { if (src == entt::null && i.kind == K_TownHall && o.id == id && bb.progress >= 1.f) src = b; });
+        {
+            if (src == entt::null && i.kind == K_TownHall && o.id == id && bb.progress >= 1.f)
+                src = b;
+        });
         Pos at;
         if (src == entt::null || !world.spawnSpot(src, false, at))
         {
@@ -306,7 +322,8 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
         Convoy cv{uint8_t(id), uint8_t(to), {amt[0], amt[1], amt[2], amt[3]}};
         reg.emplace<Convoy>(u, cv);
         world.fx(E_Dust, at.x, at.y);
-        world.say(id, "A convoy with " + std::to_string(int(tot)) + " resources set out for " + world.pl[to].name + ". Other players can see and raid it!");
+        world.say(id, "A convoy with " + std::to_string(int(tot)) + " resources set out for " + world.pl[to].name +
+                          ". Other players can see and raid it!");
         world.say(to, "A convoy from " + p.name + " is on its way.");
         s.faction.donated(id);
         break;
@@ -315,7 +332,8 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
     {
         int f = r.get<uint8_t>(), res = r.get<uint8_t>();
         float amount = r.get<float>();
-        if (!r.ok || f < 0 || f >= FACTION_COUNT || res >= R_Count || !std::isfinite(amount) || amount <= 0 || amount > 500)
+        if (!r.ok || f < 0 || f >= FACTION_COUNT || res >= R_Count || !std::isfinite(amount) || amount <= 0 ||
+            amount > 500)
             return;
         s.faction.donate(id, f, res, amount); // cooldown, demand bonus, diminishing returns
         break;

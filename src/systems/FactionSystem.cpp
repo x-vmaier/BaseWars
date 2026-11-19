@@ -32,7 +32,10 @@ bool FactionSystem::donationReady(int id)
     world.say(id, "You can donate or send resources again in " + std::to_string(int(std::ceil(left))) + " s.");
     return false;
 }
-void FactionSystem::donated(int id) { world.pl[id].donateReady = world.clock + double(cfg().donationCooldown); }
+void FactionSystem::donated(int id)
+{
+    world.pl[id].donateReady = world.clock + double(cfg().donationCooldown);
+}
 float FactionSystem::giftMul(int id, int f, int res) const
 {
     float m = world.demand[f].res == res ? cfg().demandBonus : 1.f;
@@ -56,8 +59,9 @@ void FactionSystem::donate(int id, int f, int res, float amount)
     world.facDonated[f] += amount * worth[res];
     addRep(id, f, amount * worth[res] * .08f * mul);
     donated(id);
-    std::string msg = std::string("You gave ") + std::to_string(int(amount)) + " " + RES_NAME[res] + " to the " + FACTION_NAME[f] + (wanted ? " (just what they wanted!)" : "") +
-                      ". They now see you as " + repTier(int(std::lround(p.rep[f]))) + ".";
+    std::string msg = std::string("You gave ") + std::to_string(int(amount)) + " " + RES_NAME[res] + " to the " +
+                      FACTION_NAME[f] + (wanted ? " (just what they wanted!)" : "") + ". They now see you as " +
+                      repTier(int(std::lround(p.rep[f]))) + ".";
     if (mul < .75f * (wanted ? cfg().demandBonus : 1.f))
         msg += " They have plenty of " + std::string(RES_NAME[res]) + " from you lately: gifts count less.";
     world.say(id, msg);
@@ -84,18 +88,21 @@ void FactionSystem::demandSecond()
             d.res = uint8_t((d.res + 1 + world.rng() % (R_Count - 1)) % R_Count);
         d.filled = 0;
         float span = cfg().demandChangeMax - cfg().demandChangeMin;
-        d.until = world.clock + double(cfg().demandChangeMin + (span > 0 ? float(world.rng() % 1000) / 1000.f * span : 0.f));
+        d.until =
+            world.clock + double(cfg().demandChangeMin + (span > 0 ? float(world.rng() % 1000) / 1000.f * span : 0.f));
     }
     for (int id = 1; id <= MAX_PLAYERS; id++)
     {
         if (!world.pl[id].online)
             continue;
-        // S_Econ: f32 donation cooldown left, then per faction: u8 wanted resource, u16 seconds until it changes, u8 gift multiplier % per resource
+        // S_Econ: f32 donation cooldown left, then per faction: u8 wanted resource, u16 seconds until it changes, u8
+        // gift multiplier % per resource
         Writer w;
         w.put<uint8_t>(S_Econ).put<float>(float(std::max(0.0, world.pl[id].donateReady - world.clock)));
         for (int f = 0; f < FACTION_COUNT; f++)
         {
-            w.put<uint8_t>(world.demand[f].res).put<uint16_t>(uint16_t(std::clamp(world.demand[f].until - world.clock, 0.0, 65000.0)));
+            w.put<uint8_t>(world.demand[f].res)
+                .put<uint16_t>(uint16_t(std::clamp(world.demand[f].until - world.clock, 0.0, 65000.0)));
             for (int r = 0; r < R_Count; r++)
                 w.put<uint8_t>(uint8_t(std::clamp(giftMul(id, f, r) * 100.f, 0.f, 255.f)));
         }
@@ -117,7 +124,10 @@ void FactionSystem::alertTown(entt::entity victim, uint32_t by)
     Pos ap = world.posOf(atk);
     std::vector<entt::entity> us;
     reg.view<TownTag, Unit, Info>().each([&](entt::entity e, const TownTag &g, const Unit &, const Info &i)
-                                         { if (g.town == t->id && isArmy(i.kind)) us.push_back(e); });
+    {
+        if (g.town == t->id && isArmy(i.kind))
+            us.push_back(e);
+    });
     for (auto e : us)
     {
         if (!world.order(e, ap, bld ? by : 0))
@@ -154,9 +164,11 @@ void FactionSystem::callHelp()
     };
     std::vector<Req> reqs;
     reg.view<Hit, Owner>().each([&](entt::entity e, const Hit &h, const Owner &o)
-                                {
-        if (!isPlayer(o.id) || world.clock - h.t > 3.0 || reqs.size() >= 6) return;
-        reqs.push_back({o.id, h.by, world.posOf(e)}); });
+    {
+        if (!isPlayer(o.id) || world.clock - h.t > 3.0 || reqs.size() >= 6)
+            return;
+        reqs.push_back({o.id, h.by, world.posOf(e)});
+    });
     for (auto &rq : reqs)
     {
         auto atk = world.find(rq.by);
@@ -169,16 +181,19 @@ void FactionSystem::callHelp()
         Pos ap = world.posOf(atk);
         for (int f = 0; f < FACTION_COUNT; f++)
         {
-            if (world.pl[rq.victim].rep[f] < float(FRIENDLY_REP) || aow == FACTION_BASE + f || world.clock < world.pl[rq.victim].helpCool[f])
+            if (world.pl[rq.victim].rep[f] < float(FRIENDLY_REP) || aow == FACTION_BASE + f ||
+                world.clock < world.pl[rq.victim].helpCool[f])
                 continue;
             std::vector<std::pair<float, entt::entity>> cand;
-            reg.view<Owner, Unit, Info, Home>().each([&](entt::entity e, const Owner &o, const Unit &, const Info &i, const Home &)
-                                                     {
-                if (o.id != FACTION_BASE + f || !isArmy(i.kind) || reg.all_of<Attack>(e)) return;
+            reg.view<Owner, Unit, Info, Home>().each(
+                [&](entt::entity e, const Owner &o, const Unit &, const Info &i, const Home &)
+            {
+                if (o.id != FACTION_BASE + f || !isArmy(i.kind) || reg.all_of<Attack>(e))
+                    return;
                 Pos q = reg.get<Pos>(e);
-                cand.push_back({std::hypot(q.x - rq.at.x, q.y - rq.at.y), e}); });
-            std::sort(cand.begin(), cand.end(), [](auto &a, auto &b)
-                      { return a.first < b.first; });
+                cand.push_back({std::hypot(q.x - rq.at.x, q.y - rq.at.y), e});
+            });
+            std::sort(cand.begin(), cand.end(), [](auto &a, auto &b) { return a.first < b.first; });
             int want = std::min(8, 2 + int(world.pl[rq.victim].rep[f] / 15.f)), sent = 0;
             for (auto &[d, e] : cand)
             {
@@ -192,7 +207,8 @@ void FactionSystem::callHelp()
             }
             world.pl[rq.victim].helpCool[f] = world.clock + 15;
             if (sent)
-                world.say(rq.victim, std::string(FACTION_NAME[f]) + " sends " + std::to_string(sent) + " troops to your aid!");
+                world.say(rq.victim,
+                          std::string(FACTION_NAME[f]) + " sends " + std::to_string(sent) + " troops to your aid!");
         }
     }
 }

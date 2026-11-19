@@ -60,13 +60,13 @@ int ClientWorld::clearWoodCost(const std::vector<IV> &v) const
 
 namespace
 {
-    struct GoldAdapter
-    { // adapter for the shared goldNear()
-        const ClientWorld &w;
-        int biome(int x, int y) { return w.biomeAt(x, y); }
-        bool cleared(int x, int y) { return w.clearedT.count(chunkKey(x, y)) > 0; }
-        uint32_t seedValue() { return w.seed; }
-    };
+struct GoldAdapter
+{ // adapter for the shared goldNear()
+    const ClientWorld &w;
+    int biome(int x, int y) { return w.biomeAt(x, y); }
+    bool cleared(int x, int y) { return w.clearedT.count(chunkKey(x, y)) > 0; }
+    uint32_t seedValue() { return w.seed; }
+};
 } // namespace
 
 int ClientWorld::goldNear(Pos c) const
@@ -167,20 +167,28 @@ void ClientWorld::rebuildOcc()
 {
     occ.clear();
     reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
-                                {
-        if (!isBuilding(i.kind)) return;
-        int tx = int(std::lround(g.x - float(KINFO[i.kind].fw) * .5f)), ty = int(std::lround(g.y - float(KINFO[i.kind].fh) * .5f));
-        for (int y = ty; y < ty + KINFO[i.kind].fh; y++) for (int x = tx; x < tx + KINFO[i.kind].fw; x++) occ.insert(chunkKey(x, y)); });
+    {
+        if (!isBuilding(i.kind))
+            return;
+        int tx = int(std::lround(g.x - float(KINFO[i.kind].fw) * .5f)),
+            ty = int(std::lround(g.y - float(KINFO[i.kind].fh) * .5f));
+        for (int y = ty; y < ty + KINFO[i.kind].fh; y++)
+            for (int x = tx; x < tx + KINFO[i.kind].fw; x++)
+                occ.insert(chunkKey(x, y));
+    });
 }
 
 bool ClientWorld::visibleSource(float x, float y) const
 {
     bool v = false;
     reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
-                                {
-        if (v || !alliedWith(i.owner) || (isBuilding(i.kind) && i.prog < 100)) return;
+    {
+        if (v || !alliedWith(i.owner) || (isBuilding(i.kind) && i.prog < 100))
+            return;
         float r = float(KINFO[i.kind].vision) - 1.5f;
-        if (r > 0 && std::hypot(g.x - x, g.y - y) < r) v = true; });
+        if (r > 0 && std::hypot(g.x - x, g.y - y) < r)
+            v = true;
+    });
     return v;
 }
 
@@ -188,10 +196,13 @@ bool ClientWorld::nearStorage(float x, float y) const
 {
     bool v = false;
     reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
-                                {
-        if (v || !isStorage(i.kind)) return;
+    {
+        if (v || !isStorage(i.kind))
+            return;
         float hw = float(KINFO[i.kind].fw) * .5f + 2.5f, hh = float(KINFO[i.kind].fh) * .5f + 2.5f;
-        if (std::abs(g.x - x) <= hw && std::abs(g.y - y) <= hh) v = true; });
+        if (std::abs(g.x - x) <= hw && std::abs(g.y - y) <= hh)
+            v = true;
+    });
     return v;
 }
 
@@ -199,7 +210,10 @@ Pos ClientWorld::myTH(Vector2 camTarget) const
 {
     Pos out{camTarget.x / TILE, camTarget.y / TILE};
     reg.view<Goal, Info>().each([&](const Goal &g, const Info &i)
-                                { if (i.kind == K_TownHall && i.owner == me) out = {g.x, g.y}; });
+    {
+        if (i.kind == K_TownHall && i.owner == me)
+            out = {g.x, g.y};
+    });
     return out;
 }
 
@@ -215,7 +229,10 @@ int ClientWorld::thLevel() const
 {
     int lv = 0;
     reg.view<Info>().each([&](const Info &i)
-                          { if (i.kind == K_TownHall && i.owner == me && i.prog >= 100 && !(i.state & BLD_MOVING)) lv = std::max<int>(lv, i.aux); });
+    {
+        if (i.kind == K_TownHall && i.owner == me && i.prog >= 100 && !(i.state & BLD_MOVING))
+            lv = std::max<int>(lv, i.aux);
+    });
     return lv;
 }
 
@@ -223,7 +240,10 @@ int ClientWorld::countKind(Kind k) const
 {
     int n = 0;
     reg.view<Info>().each([&](const Info &i)
-                          { if (i.kind == k && i.owner == me && !(i.state & BLD_MOVING)) n++; });
+    {
+        if (i.kind == k && i.owner == me && !(i.state & BLD_MOVING))
+            n++;
+    });
     for (auto &ps : pendingSites)
         if (ps.kind == k)
             n++;
@@ -268,11 +288,14 @@ void ClientWorld::clear()
 void ClientWorld::interpolate(float dt)
 {
     reg.view<RPos, Goal, Face, Info>().each([&](RPos &p, const Goal &g, Face &f, const Info &in)
-                                            {
+    {
         float k = std::min(1.f, 12.f * dt);
         float dx = g.x - p.x;
         p.x += dx * k;
         p.y += (g.y - p.y) * k;
-        if ((in.state & 7) == US_Attack || (in.state & 7) == US_Heal) f.left = std::cos(float(in.aim) / 255.f * 6.28319f - 3.14159f) < 0;
-        else if (std::abs(dx) > .004f) f.left = dx < 0; });
+        if ((in.state & 7) == US_Attack || (in.state & 7) == US_Heal)
+            f.left = std::cos(float(in.aim) / 255.f * 6.28319f - 3.14159f) < 0;
+        else if (std::abs(dx) > .004f)
+            f.left = dx < 0;
+    });
 }

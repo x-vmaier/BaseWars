@@ -17,14 +17,14 @@ struct PatGroup
 
 class PatrolSystem
 {
-public:
+  public:
     PatrolSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void worldOnKill(entt::entity e, Kind k, int owner, int killer, Pos p); // processKills hook (victim still alive)
     void runPatrol(entt::entity e, Unit &u, Patrol &pt, float dt);
     void patrolSecond();
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;
@@ -36,7 +36,7 @@ private:
     bool pickSiege(PatGroup &g, Pos from, int owner); // a hostile town (warring faction or hostile player) in range
     bool exploredTile(IV &out);                       // random walkable tile in land some player has explored
     Town *townNear(Pos p);                            // nearest living NPC town
-    void manageRoamers();                             // keeps cfg().patrolMapGroups wandering groups per 100 explored chunks
+    void manageRoamers(); // keeps cfg().patrolMapGroups wandering groups per 100 explored chunks
     int roamWant = 0;
     double roamCount = -100;
     std::unordered_map<uint32_t, PatGroup> pgroups;

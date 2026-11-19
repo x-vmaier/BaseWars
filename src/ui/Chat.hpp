@@ -9,7 +9,7 @@ class App;
 
 class Chat
 {
-public:
+  public:
     explicit Chat(App &app) : app(app) {}
 
     bool isOpen = false;
@@ -24,7 +24,7 @@ public:
     void update(Vector2 m);
     void draw();
 
-private:
+  private:
     static const char *channelName(int ch);
     static Color channelColor(int ch);
     Rectangle bar() const;

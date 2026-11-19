@@ -27,7 +27,8 @@ void FerryPlanner::shoreTiles(Pos around, int maxR, size_t want, std::vector<IV>
                 int x = c.x + dx, y = c.y + dy;
                 if (!world.walkable(x, y, false, 0))
                     continue;
-                if (world.biome(x + 1, y) != B_Ocean && world.biome(x - 1, y) != B_Ocean && world.biome(x, y + 1) != B_Ocean && world.biome(x, y - 1) != B_Ocean)
+                if (world.biome(x + 1, y) != B_Ocean && world.biome(x - 1, y) != B_Ocean &&
+                    world.biome(x, y + 1) != B_Ocean && world.biome(x, y - 1) != B_Ocean)
                     continue;
                 bool apart = true;
                 for (auto &o : out)
@@ -76,8 +77,8 @@ static float pathLen(Pos start, const std::vector<Pos> &p)
     return l;
 }
 // Route length in tiles from `a` to `b`; INF when there is no complete route.
-// Results are cached for 45 s per (start tile, goal tile, medium, ignored building): the planner re-asks the same questions for every
-// boarding / landing candidate and for every group sent over the same stretch of coast.
+// Results are cached for 45 s per (start tile, goal tile, medium, ignored building): the planner re-asks the same
+// questions for every boarding / landing candidate and for every group sent over the same stretch of coast.
 float FerryPlanner::routeLen(Pos a, IV b, bool water, uint32_t ignore, int maxNodes, float tol)
 {
     std::vector<Pos> p;
@@ -100,7 +101,8 @@ float FerryPlanner::routeLen(Pos a, IV b, bool water, uint32_t ignore, int maxNo
     routeCache[key] = {len, world.clock + 45.0};
     return len;
 }
-TransportPlan FerryPlanner::planTransport(int owner, const std::vector<entt::entity> &group, Pos to, uint32_t destUid, float boatFactor)
+TransportPlan FerryPlanner::planTransport(int owner, const std::vector<entt::entity> &group, Pos to, uint32_t destUid,
+                                          float boatFactor)
 {
     TransportPlan plan;
     if (group.empty() || !isPlayer(owner))
@@ -135,14 +137,19 @@ TransportPlan FerryPlanner::planTransport(int owner, const std::vector<entt::ent
         float shipSpeed;
     };
     std::vector<Cand> ships;
-    reg.view<Ship, Owner, Info, Pos, Unit>().each([&](entt::entity e, const Ship &, const Owner &o, const Info &in, const Pos &p, const Unit &u)
-                                                  {
-        if (o.id != owner || in.kind != K_Ship || reg.all_of<Voyage>(e) || !u.path.empty() || world.clock - reg.get<Ship>(e).idleSince < FERRY_IDLE || world.dying.count(reg.get<Uid>(e).id)) return;
+    reg.view<Ship, Owner, Info, Pos, Unit>().each(
+        [&](entt::entity e, const Ship &, const Owner &o, const Info &in, const Pos &p, const Unit &u)
+    {
+        if (o.id != owner || in.kind != K_Ship || reg.all_of<Voyage>(e) || !u.path.empty() ||
+            world.clock - reg.get<Ship>(e).idleSince < FERRY_IDLE || world.dying.count(reg.get<Uid>(e).id))
+            return;
         int tf;
         float rf;
         s.naval.shipFree(e, tf, rf);
-        if (reg.get<Ship>(e).pax.size() || tf < n || rf + 1e-3f < cargo || tf < shipTroopCap(in.level)) return;   // fully empty, unreserved ships only
-        ships.push_back({e, p, KINFO[K_Ship].speed}); });
+        if (reg.get<Ship>(e).pax.size() || tf < n || rf + 1e-3f < cargo || tf < shipTroopCap(in.level))
+            return; // fully empty, unreserved ships only
+        ships.push_back({e, p, KINFO[K_Ship].speed});
+    });
     if (ships.empty())
         return plan;
     if (planBudget <= 0)
@@ -165,7 +172,7 @@ TransportPlan FerryPlanner::planTransport(int owner, const std::vector<entt::ent
     if (bCands.empty() || lCands.empty())
         return plan;
     std::sort(ships.begin(), ships.end(), [&](const Cand &a, const Cand &b)
-              { return std::hypot(a.p.x - from.x, a.p.y - from.y) < std::hypot(b.p.x - from.x, b.p.y - from.y); });
+    { return std::hypot(a.p.x - from.x, a.p.y - from.y) < std::hypot(b.p.x - from.x, b.p.y - from.y); });
     if (ships.size() > 2)
         ships.resize(2);
 
@@ -216,12 +223,15 @@ TransportPlan FerryPlanner::planTransport(int owner, const std::vector<entt::ent
     plan.useBoat = bestBoat < INF_T * .5f && bestBoat < boatFactor * plan.etaLand;
     static const bool dbg = std::getenv("BW_SHIPDEBUG") != nullptr;
     if (dbg)
-        std::printf("[ferry] plan owner %d group %d from %.0f,%.0f to %.0f,%.0f: land %.1fs boat %.1fs -> %s\n", owner, n, from.x, from.y, to.x, to.y, plan.etaLand, plan.etaBoat, plan.useBoat ? "BOAT" : "walk");
+        std::printf("[ferry] plan owner %d group %d from %.0f,%.0f to %.0f,%.0f: land %.1fs boat %.1fs -> %s\n", owner,
+                    n, from.x, from.y, to.x, to.y, plan.etaLand, plan.etaBoat, plan.useBoat ? "BOAT" : "walk");
     return plan;
 }
-bool FerryPlanner::startTransport(const TransportPlan &plan, const std::vector<entt::entity> &group, Pos dest, uint32_t destUid)
+bool FerryPlanner::startTransport(const TransportPlan &plan, const std::vector<entt::entity> &group, Pos dest,
+                                  uint32_t destUid)
 {
-    if (!plan.useBoat || plan.ship == entt::null || !reg.valid(plan.ship) || !reg.all_of<Ship>(plan.ship) || reg.all_of<Voyage>(plan.ship))
+    if (!plan.useBoat || plan.ship == entt::null || !reg.valid(plan.ship) || !reg.all_of<Ship>(plan.ship) ||
+        reg.all_of<Voyage>(plan.ship))
         return false;
     if (!reg.get<Ship>(plan.ship).pax.empty())
         return false;

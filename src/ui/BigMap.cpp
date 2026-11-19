@@ -8,7 +8,10 @@
 
 #include <cmath>
 
-void BigMap::load() { mMapFrame = loadTMap("map_frame"); }
+void BigMap::load()
+{
+    mMapFrame = loadTMap("map_frame");
+}
 
 float BigMap::tpp() const
 {
@@ -135,7 +138,8 @@ void BigMap::refresh()
     for (int j = 0; j < h; j++)
         for (int i = 0; i < w; i++)
         {
-            int tx = int(std::floor(center.x + (float(i * 2 + 1) - in.width / 2) * k)), ty = int(std::floor(center.y + (float(j * 2 + 1) - in.height / 2) * k));
+            int tx = int(std::floor(center.x + (float(i * 2 + 1) - in.width / 2) * k)),
+                ty = int(std::floor(center.y + (float(j * 2 + 1) - in.height / 2) * k));
             bool ex = W.exploredAt(tx, ty);
             Color c = ex ? biomeColor(W.biomeAt(tx, ty)) : rgb(20, 26, 38);
             if (!ex && ((i / 4 + j / 4) & 1))
@@ -168,35 +172,43 @@ void BigMap::draw()
         if (inside(sp, 0))
             continue;
         Vector2 c{in.x + in.width / 2, in.y + in.height / 2}, d{sp.x - c.x, sp.y - c.y};
-        float k = std::min((in.width / 2 - 20) / std::max(1.f, std::abs(d.x)), (in.height / 2 - 20) / std::max(1.f, std::abs(d.y)));
+        float k = std::min((in.width / 2 - 20) / std::max(1.f, std::abs(d.x)),
+                           (in.height / 2 - 20) / std::max(1.f, std::abs(d.y)));
         Vector2 e{c.x + d.x * k, c.y + d.y * k};
         float ang = std::atan2(d.y, d.x);
         Color col = p.clan && p.clan == W.myClan() ? clanColor(p.clan) : rgb(150, 255, 170);
-        Vector2 a1{e.x + std::cos(ang) * 12, e.y + std::sin(ang) * 12}, a2{e.x + std::cos(ang + 2.5f) * 10, e.y + std::sin(ang + 2.5f) * 10}, a3{e.x + std::cos(ang - 2.5f) * 10, e.y + std::sin(ang - 2.5f) * 10};
+        Vector2 a1{e.x + std::cos(ang) * 12, e.y + std::sin(ang) * 12},
+            a2{e.x + std::cos(ang + 2.5f) * 10, e.y + std::sin(ang + 2.5f) * 10},
+            a3{e.x + std::cos(ang - 2.5f) * 10, e.y + std::sin(ang - 2.5f) * 10};
         DrawTriangle(a1, a3, a2, col);
         DrawTriangleLines(a1, a3, a2, BLACK);
         float dist = std::hypot(p.lx - center.x, p.ly - center.y);
         std::string lb = p.name + " " + std::to_string(int(dist)) + "m";
-        float tx = std::clamp(e.x - float(MeasureText(lb.c_str(), 11)) / 2 - std::cos(ang) * 22, in.x + 4, in.x + in.width - float(MeasureText(lb.c_str(), 11)) - 4);
+        float tx = std::clamp(e.x - float(MeasureText(lb.c_str(), 11)) / 2 - std::cos(ang) * 22, in.x + 4,
+                              in.x + in.width - float(MeasureText(lb.c_str(), 11)) - 4);
         float ty = std::clamp(e.y - 6 - std::sin(ang) * 18, in.y + 4, in.y + in.height - 16);
         textShadow(lb, int(tx), int(ty), 11, col);
     }
     { // where the game camera currently looks
-        Vector2 tl = GetScreenToWorld2D({0, 0}, app.cam), br = GetScreenToWorld2D({float(::GetScreenWidth()), float(::GetScreenHeight())}, app.cam);
+        Vector2 tl = GetScreenToWorld2D({0, 0}, app.cam),
+                br = GetScreenToWorld2D({float(::GetScreenWidth()), float(::GetScreenHeight())}, app.cam);
         Vector2 a = tileToMap(tl.x / TILE, tl.y / TILE), b = tileToMap(br.x / TILE, br.y / TILE);
-        float x0 = std::max(a.x, in.x), y0 = std::max(a.y, in.y), x1 = std::min(b.x, in.x + in.width), y1 = std::min(b.y, in.y + in.height);
+        float x0 = std::max(a.x, in.x), y0 = std::max(a.y, in.y), x1 = std::min(b.x, in.x + in.width),
+              y1 = std::min(b.y, in.y + in.height);
         if (x1 > x0 && y1 > y0)
             DrawRectangleLinesEx({x0, y0, x1 - x0, y1 - y0}, 1, rgb(255, 255, 255, 220));
     }
     DrawRectangleLinesEx(in, 2, rgb(60, 40, 26));
     textShadow("WORLD MAP", int(fr.x + fr.width / 2) - 50, int(fr.y) + 10, 18, rgb(255, 240, 200));
     std::string hint = "Click: travel   Right-click ally: support patrol   Drag: pan   Wheel: zoom   N/Esc: close";
-    textShadow(hint, int(fr.x + fr.width / 2) - MeasureText(hint.c_str(), 12) / 2, int(fr.y + fr.height) - 24, 12, rgb(255, 240, 200));
+    textShadow(hint, int(fr.x + fr.width / 2) - MeasureText(hint.c_str(), 12) / 2, int(fr.y + fr.height) - 24, 12,
+               rgb(255, 240, 200));
     if (CheckCollisionPointRec(m, in))
     {
         Vector2 t = mapToTile(m);
         std::string cs = TextFormat("%d, %d", int(std::floor(t.x)), int(std::floor(t.y)));
-        DrawRectangleRounded({m.x + 14, m.y + 16, float(MeasureText(cs.c_str(), 14)) + 12, 22}, .3f, 4, rgb(30, 22, 16, 225));
+        DrawRectangleRounded({m.x + 14, m.y + 16, float(MeasureText(cs.c_str(), 14)) + 12, 22}, .3f, 4,
+                             rgb(30, 22, 16, 225));
         DrawText(cs.c_str(), int(m.x) + 20, int(m.y) + 20, 14, WHITE);
     }
     drawMenu();
@@ -208,9 +220,12 @@ std::vector<BigMap::Cand> BigMap::candidates()
     const ClientWorld &W = app.world;
     std::vector<Cand> v;
     W.reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
-                                  {
-        if ((i.kind != K_TownHall && i.kind != K_Outpost) || i.owner == W.me || isFactionOwner(i.owner) || !W.alliedWith(i.owner) || i.prog < 100) return;
-        v.push_back({W.nameOf(i.owner) + (i.kind == K_TownHall ? " (town)" : " (outpost)"), g.x, g.y}); });
+    {
+        if ((i.kind != K_TownHall && i.kind != K_Outpost) || i.owner == W.me || isFactionOwner(i.owner) ||
+            !W.alliedWith(i.owner) || i.prog < 100)
+            return;
+        v.push_back({W.nameOf(i.owner) + (i.kind == K_TownHall ? " (town)" : " (outpost)"), g.x, g.y});
+    });
     for (auto &p : W.roster)
     {
         if (p.id == W.me || !p.hasLoc || !(p.flags & 2 || (p.clan && p.clan == W.myClan())))
@@ -227,7 +242,8 @@ std::vector<BigMap::Cand> BigMap::candidates()
 Rectangle BigMap::menuRect() const
 {
     float mw = 250, mh = 112;
-    return {std::clamp(menu.at.x, 4.f, float(ui::screenW()) - mw - 4), std::clamp(menu.at.y, 4.f, float(ui::screenH()) - mh - 4), mw, mh};
+    return {std::clamp(menu.at.x, 4.f, float(ui::screenW()) - mw - 4),
+            std::clamp(menu.at.y, 4.f, float(ui::screenH()) - mh - 4), mw, mh};
 }
 Rectangle BigMap::minusBtn() const
 {
@@ -304,7 +320,9 @@ void BigMap::drawMenu()
     DrawText(t.c_str(), int(r.x) + 10, int(r.y) + 9, 15, rgb(70, 45, 30));
     DrawText("Troops:", int(r.x) + 12, int(r.y) + 41, 15, rgb(70, 45, 30));
     ui::drawButton(minusBtn(), "-", true, false, CheckCollisionPointRec(m, minusBtn()), false, 16);
-    DrawText(TextFormat("%d", patrolN), int(r.x) + 178 - MeasureText(TextFormat("%d", patrolN), 16) / 2, int(r.y) + 41, 16, rgb(70, 45, 30));
+    DrawText(TextFormat("%d", patrolN), int(r.x) + 178 - MeasureText(TextFormat("%d", patrolN), 16) / 2, int(r.y) + 41,
+             16, rgb(70, 45, 30));
     ui::drawButton(plusBtn(), "+", true, false, CheckCollisionPointRec(m, plusBtn()), false, 16);
-    ui::drawButton(sendBtn(), TextFormat("Send support patrol (%d)", patrolN), true, false, CheckCollisionPointRec(m, sendBtn()), false, 14);
+    ui::drawButton(sendBtn(), TextFormat("Send support patrol (%d)", patrolN), true, false,
+                   CheckCollisionPointRec(m, sendBtn()), false, 14);
 }

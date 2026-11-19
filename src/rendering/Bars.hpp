@@ -14,7 +14,7 @@ inline constexpr Color BAR_CARGO = {255, 200, 70, 255};   // ship cargo
 inline constexpr Color BAR_TROOPS = {90, 190, 255, 255};  // ship troops aboard
 inline constexpr Color BAR_IDLE = {150, 150, 165, 255};   // waiting (no pawn at work yet)
 
-void barRect(Rectangle r, float frac, Color fill);                 // the bar itself, filling r (outline drawn just outside)
-void drawBar(Vector2 c, float w, float frac, Color fill);          // world / UI small bar centred at c.x, top at c.y
-void brackets(Rectangle r, Color c);                               // corner brackets around a selected building
+void barRect(Rectangle r, float frac, Color fill);        // the bar itself, filling r (outline drawn just outside)
+void drawBar(Vector2 c, float w, float frac, Color fill); // world / UI small bar centred at c.x, top at c.y
+void brackets(Rectangle r, Color c);                      // corner brackets around a selected building
 void clearBar(float cx, float by, float pct, bool working = true); // clearing progress above a tree / rock

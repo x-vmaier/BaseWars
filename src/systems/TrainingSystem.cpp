@@ -38,10 +38,14 @@ int TrainingSystem::queuedUnits(int id)
 {
     int n = 0;
     reg.view<TrainQ, Owner>().each([&](const TrainQ &q, const Owner &o)
-                                   { if (o.id == id) n += int(q.q.size()); });
+    {
+        if (o.id == id)
+            n += int(q.q.size());
+    });
     return n;
 }
-// Creates the unit that a finished queue entry produces (ships etc. may change what is spawned here). Null if there is no room.
+// Creates the unit that a finished queue entry produces (ships etc. may change what is spawned here). Null if there is
+// no room.
 entt::entity TrainingSystem::spawnTrained(entt::entity be, Kind k)
 {
     int id = reg.get<Owner>(be).id;
@@ -80,7 +84,8 @@ void TrainingSystem::enqueueTrain(int id, entt::entity be, Kind k)
     }
     if (reg.get<Info>(be).kind == K_Archery && reg.get<Info>(be).level < unitUnlockLevel(k))
     {
-        world.say(id, std::string(KINFO[k].name) + "s unlock at Archery level " + std::to_string(unitUnlockLevel(k)) + ".");
+        world.say(id,
+                  std::string(KINFO[k].name) + "s unlock at Archery level " + std::to_string(unitUnlockLevel(k)) + ".");
         return;
     }
     auto &tq = reg.get_or_emplace<TrainQ>(be);
@@ -93,7 +98,8 @@ void TrainingSystem::enqueueTrain(int id, entt::entity be, Kind k)
     unitCost(k, cost);
     if (!world.afford(id, cost))
     {
-        world.say(id, cost[R_Meat] > world.pl[id].res[R_Meat] ? "Not enough food: hunt sheep or build a Harbour." : "Not enough resources.");
+        world.say(id, cost[R_Meat] > world.pl[id].res[R_Meat] ? "Not enough food: hunt sheep or build a Harbour."
+                                                              : "Not enough resources.");
         return;
     }
     if (world.unitCount(id) + queuedUnits(id) >= UNIT_CAP)

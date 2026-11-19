@@ -10,7 +10,7 @@ class App;
 
 class MainMenu
 {
-public:
+  public:
     explicit MainMenu(App &app) : app(app) {}
     void load();
 
@@ -20,7 +20,7 @@ public:
     void update();
     void draw();
 
-private:
+  private:
     void buildList();
     Rectangle rect() const;
     Rectangle tabBtn(int i) const;

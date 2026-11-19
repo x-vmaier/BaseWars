@@ -12,10 +12,11 @@ struct DefRoute
 
 class DefenseSystem
 {
-public:
+  public:
     DefenseSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
-    void baseOnDamage(entt::entity e, int owner, int attacker); // from damage(): cheap gate, real work is deferred to flushAlerts()
+    void baseOnDamage(entt::entity e, int owner,
+                      int attacker); // from damage(): cheap gate, real work is deferred to flushAlerts()
     DefRoute planDefenseRoute(int member, Pos from, Pos to);
     bool idleArmy(entt::entity e, Kind only = K_Count); // only: restrict to one troop type (monks count then too)
     std::vector<entt::entity> pickIdleArmy(int owner, Pos near2, int n, Kind only = K_Count);
@@ -27,7 +28,7 @@ public:
     void doSupport(int id, Pos dest, int n); // manual support patrol (big map right-click on an allied town)
     void supportSecond();
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

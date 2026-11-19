@@ -10,7 +10,7 @@ class App;
 
 class ShipPanel
 {
-public:
+  public:
     explicit ShipPanel(App &app) : app(app) {}
 
     uint32_t ship = 0; // ship shown, 0 = closed
@@ -21,7 +21,7 @@ public:
     void draw();
     std::string tooltip(const Info &in) const; // hover label suffix for ships
 
-private:
+  private:
     Rectangle rect() const;
     Rectangle btn(int i) const;
     App &app;

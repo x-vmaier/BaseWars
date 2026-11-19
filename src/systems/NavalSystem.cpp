@@ -26,9 +26,10 @@ void NavalSystem::paxStats(entt::entity ship, int &troops, float &res, int *kind
     auto &sh = reg.get<Ship>(ship);
     uint32_t suid = reg.get<Uid>(ship).id;
     std::erase_if(sh.pax, [&](uint32_t uid)
-                  {
+    {
         auto e = world.find(uid);
-        return e == entt::null || !reg.all_of<Aboard>(e) || reg.get<Aboard>(e).ship != suid; });
+        return e == entt::null || !reg.all_of<Aboard>(e) || reg.get<Aboard>(e).ship != suid;
+    });
     troops = 0;
     res = 0;
     if (kinds)
@@ -57,10 +58,12 @@ void NavalSystem::shipFree(entt::entity ship, int &troopsFree, float &resFree, b
         return;
     uint32_t suid = reg.get<Uid>(ship).id;
     reg.view<Boarding>().each([&](entt::entity e, const Boarding &b)
-                              {
-        if (b.ship != suid) return;
+    {
+        if (b.ship != suid)
+            return;
         troopsFree--;
-        resFree -= cargoTotal(e); });
+        resFree -= cargoTotal(e);
+    });
 }
 void NavalSystem::initShip(entt::entity ship, int harbourLevel)
 { // called when a Harbour builds a ship: empty boat, tier = harbour level
@@ -98,15 +101,15 @@ std::vector<IV> NavalSystem::freeLandTiles(Pos center, int rmax)
                 continue;
             c.push_back({std::hypot(float(x) + .5f - center.x, float(y) + .5f - center.y), IV{x, y}});
         }
-    std::sort(c.begin(), c.end(), [](auto &a, auto &b)
-              { return a.first < b.first; });
+    std::sort(c.begin(), c.end(), [](auto &a, auto &b) { return a.first < b.first; });
     std::vector<IV> out;
     for (auto &p : c)
         out.push_back(p.second);
     return out;
 }
 // Put units that are aboard `ship` onto land tiles near `center`; returns the units that were placed.
-std::vector<entt::entity> NavalSystem::landUnits(entt::entity ship, const std::vector<entt::entity> &us, Pos center, int rmax)
+std::vector<entt::entity> NavalSystem::landUnits(entt::entity ship, const std::vector<entt::entity> &us, Pos center,
+                                                 int rmax)
 {
     std::vector<entt::entity> placed;
     auto tiles = freeLandTiles(center, rmax);
@@ -167,7 +170,8 @@ void NavalSystem::runBoarding(entt::entity e, Unit &u, Boarding &bd, float dt)
 {
     auto ship = world.find(bd.ship);
     int ow = reg.get<Owner>(e).id;
-    if (ship == entt::null || !reg.all_of<Ship>(ship) || reg.get<Owner>(ship).id != ow || (bd.meetSet && !reg.all_of<Voyage>(ship)))
+    if (ship == entt::null || !reg.all_of<Ship>(ship) || reg.get<Owner>(ship).id != ow ||
+        (bd.meetSet && !reg.all_of<Voyage>(ship)))
     {
         reg.remove<Boarding>(e);
         u.path.clear();
@@ -218,7 +222,10 @@ void NavalSystem::tickVoyage(entt::entity ship, Voyage &v)
     auto &su = reg.get<Unit>(ship);
     Pos sp = reg.get<Pos>(ship);
     std::erase_if(v.units, [&](uint32_t uid)
-                  { auto e = world.find(uid); return e == entt::null || (!reg.all_of<Aboard>(e) && !reg.all_of<Boarding>(e)); });
+    {
+        auto e = world.find(uid);
+        return e == entt::null || (!reg.all_of<Aboard>(e) && !reg.all_of<Boarding>(e));
+    });
     if (v.phase == 0)
     {
         int aboard = 0, waiting = 0;
@@ -248,8 +255,7 @@ void NavalSystem::tickVoyage(entt::entity ship, Voyage &v)
                 reg.remove<Boarding>(e);
                 reg.get<Unit>(e).path.clear();
             }
-            std::erase_if(v.units, [&](uint32_t uid)
-                          { return !reg.all_of<Aboard>(world.find(uid)); });
+            std::erase_if(v.units, [&](uint32_t uid) { return !reg.all_of<Aboard>(world.find(uid)); });
             if (v.units.empty())
             {
                 reg.remove<Voyage>(ship);
@@ -287,7 +293,8 @@ void NavalSystem::tickVoyage(entt::entity ship, Voyage &v)
         for (auto e : placed)
             if (!reg.all_of<Haul>(e))
                 world.order(e, v.dest, v.destUid);
-        reg.get<Ship>(ship).idleSince = world.clock - FERRY_IDLE; // our own ferry: immediately available for the next run
+        reg.get<Ship>(ship).idleSince =
+            world.clock - FERRY_IDLE; // our own ferry: immediately available for the next run
         reg.remove<Voyage>(ship);
     }
 }
@@ -295,8 +302,12 @@ void NavalSystem::shipsTick(float dt)
 {
     s.ferry.planBudget = 1;
     std::vector<entt::entity> ships;
-    reg.view<Info, Unit, Pos, Owner>().each([&](entt::entity e, const Info &in, const Unit &, const Pos &, const Owner &)
-                                            { if (in.kind == K_Ship) ships.push_back(e); });
+    reg.view<Info, Unit, Pos, Owner>().each(
+        [&](entt::entity e, const Info &in, const Unit &, const Pos &, const Owner &)
+    {
+        if (in.kind == K_Ship)
+            ships.push_back(e);
+    });
     for (auto e : ships)
     {
         if (!reg.valid(e) || world.dying.count(reg.get<Uid>(e).id))
@@ -368,9 +379,11 @@ bool NavalSystem::shipPacket(int id, uint8_t type, Reader &r)
         for (uint32_t uid : ids)
         {
             auto e = world.find(uid);
-            if (e == entt::null || !reg.all_of<Unit, Owner, Info, Pos>(e) || reg.get<Owner>(e).id != id || !isTroop(reg.get<Info>(e).kind))
+            if (e == entt::null || !reg.all_of<Unit, Owner, Info, Pos>(e) || reg.get<Owner>(e).id != id ||
+                !isTroop(reg.get<Info>(e).kind))
                 continue;
-            if (reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e) || reg.all_of<Aboard>(e))
+            if (reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e) ||
+                reg.all_of<Aboard>(e))
                 continue;
             if (taken >= tf)
             {
@@ -396,7 +409,9 @@ bool NavalSystem::shipPacket(int id, uint8_t type, Reader &r)
             taken++;
         }
         if (over)
-            world.say(id, std::string("The ") + SHIP_NAME[shipTier(lvl) - 1] + " only carries " + std::to_string(shipTroopCap(lvl)) + " troops: " + std::to_string(over) + " could not board.");
+            world.say(id, std::string("The ") + SHIP_NAME[shipTier(lvl) - 1] + " only carries " +
+                              std::to_string(shipTroopCap(lvl)) + " troops: " + std::to_string(over) +
+                              " could not board.");
         return true;
     }
     if (type == C_Disembark)
@@ -420,7 +435,8 @@ bool NavalSystem::shipPacket(int id, uint8_t type, Reader &r)
 
 // outgoing
 // Called from sendState for every record: false hides it. Fills the ship/boarded fields.
-bool NavalSystem::shipStateHook(int viewer, entt::entity e, int ownerId, const Info &in, uint8_t &aux, uint8_t &prog, uint16_t &stock)
+bool NavalSystem::shipStateHook(int viewer, entt::entity e, int ownerId, const Info &in, uint8_t &aux, uint8_t &prog,
+                                uint16_t &stock)
 {
     if (reg.all_of<Aboard>(e))
     {

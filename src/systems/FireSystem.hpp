@@ -8,7 +8,7 @@ inline constexpr float BURN_TIME = 12.f, BURN_FRAC_PER_SEC = .016f, EXTINGUISH_P
 
 class FireSystem
 {
-public:
+  public:
     FireSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void ignite(entt::entity b, int byOwner);
@@ -17,7 +17,7 @@ public:
     void burnSecond();
     bool extinguishTick(entt::entity e, Unit &u, Pos &p, float dt); // true while the unit is busy firefighting
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

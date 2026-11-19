@@ -11,16 +11,17 @@ struct TerrainView;
 
 class EffectsRenderer
 {
-public:
+  public:
     explicit EffectsRenderer(App &app) : app(app) {}
     void queueMarkers(DrawList &items);
     void queueGhosts(DrawList &items, double t);
     void queueFx(DrawList &items, double t);
     void queueDrops(DrawList &items, double t);
-    void queueBuildingStatus(const Info &i, uint32_t id, float cx, float bottom, int fw, int fh, float sortY, DrawList &items, double t);
+    void queueBuildingStatus(const Info &i, uint32_t id, float cx, float bottom, int fw, int fh, float sortY,
+                             DrawList &items, double t);
     void drawLandClouds(const TerrainView &v, float t);
 
-private:
+  private:
     void queueBaseFx(const Fx &f, DrawList &items, double t); // fire arrows, extinguishing
     App &app;
 };

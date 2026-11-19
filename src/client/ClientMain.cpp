@@ -12,44 +12,44 @@
 namespace
 {
 
-    void loadConfig(std::string &ip, int &port, std::string &name)
+void loadConfig(std::string &ip, int &port, std::string &name)
+{
+    ip = "127.0.0.1";
+    port = DEFAULT_PORT;
+
+    std::ifstream f(std::string(GetApplicationDirectory()) + "config.txt");
+    if (!f)
+        f.open("config.txt");
+    if (!f)
     {
-        ip = "127.0.0.1";
-        port = DEFAULT_PORT;
-
-        std::ifstream f(std::string(GetApplicationDirectory()) + "config.txt");
-        if (!f)
-            f.open("config.txt");
-        if (!f)
-        {
-            TraceLog(LOG_WARNING, "config.txt not found next to the executable; using %s:%d", ip.c_str(), port);
-            return;
-        }
-
-        auto trim = [](const std::string &s)
-        {
-            auto b = s.find_first_not_of(" \t\r\n");
-            if (b == std::string::npos)
-                return std::string();
-            return s.substr(b, s.find_last_not_of(" \t\r\n") - b + 1);
-        };
-
-        std::string ln;
-        while (std::getline(f, ln))
-        {
-            auto p = ln.find('=');
-            if (p == std::string::npos || ln[0] == '#')
-                continue;
-
-            std::string k = trim(ln.substr(0, p)), v = trim(ln.substr(p + 1));
-            if (k == "server_ip" || k == "ip")
-                ip = v;
-            else if (k == "server_port" || k == "port")
-                port = std::atoi(v.c_str());
-            else if (k == "name" || k == "player_name")
-                name = v;
-        }
+        TraceLog(LOG_WARNING, "config.txt not found next to the executable; using %s:%d", ip.c_str(), port);
+        return;
     }
+
+    auto trim = [](const std::string &s)
+    {
+        auto b = s.find_first_not_of(" \t\r\n");
+        if (b == std::string::npos)
+            return std::string();
+        return s.substr(b, s.find_last_not_of(" \t\r\n") - b + 1);
+    };
+
+    std::string ln;
+    while (std::getline(f, ln))
+    {
+        auto p = ln.find('=');
+        if (p == std::string::npos || ln[0] == '#')
+            continue;
+
+        std::string k = trim(ln.substr(0, p)), v = trim(ln.substr(p + 1));
+        if (k == "server_ip" || k == "ip")
+            ip = v;
+        else if (k == "server_port" || k == "port")
+            port = std::atoi(v.c_str());
+        else if (k == "name" || k == "player_name")
+            name = v;
+    }
+}
 
 } // namespace
 

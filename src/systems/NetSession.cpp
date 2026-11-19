@@ -74,8 +74,10 @@ void NetSession::onHello(uint64_t conn, Reader &r)
         world.pl[id].used = true;
         world.pl[id].uuid = uuid;
         world.resetProfile(id);
-        for (int f = 0; f < FACTION_COUNT; f++) // a configurable share of the factions are aggressive towards each newcomer
-            if (hash2(int(std::hash<std::string>{}(uuid) & 0x7fffffff), f, world.seed + 71) % 100 < uint32_t(cfg().hostileFactionPercent))
+        for (int f = 0; f < FACTION_COUNT;
+             f++) // a configurable share of the factions are aggressive towards each newcomer
+            if (hash2(int(std::hash<std::string>{}(uuid) & 0x7fffffff), f, world.seed + 71) % 100 <
+                uint32_t(cfg().hostileFactionPercent))
                 world.pl[id].rep[f] = -50.f;
         if (const char *ag = std::getenv("BW_AGGRO"))
         {
@@ -101,7 +103,10 @@ void NetSession::onHello(uint64_t conn, Reader &r)
     {
         bool hasTH = false;
         reg.view<Info, Owner>().each([&](const Info &i, const Owner &o)
-                                     { if (i.kind == K_TownHall && o.id == id) hasTH = true; });
+        {
+            if (i.kind == K_TownHall && o.id == id)
+                hasTH = true;
+        });
         if (!hasTH && !world.bp[id].homeless)
         {
             world.resetProfile(id);
@@ -115,7 +120,11 @@ void NetSession::onHello(uint64_t conn, Reader &r)
         world.reveal(id, int(c.x), int(c.y), std::atoi(rv));
     }
     Writer w;
-    w.put<uint8_t>(S_Welcome).put<uint8_t>(uint8_t(id)).put<uint32_t>(world.seed).put<float>(p.cam.x).put<float>(p.cam.y);
+    w.put<uint8_t>(S_Welcome)
+        .put<uint8_t>(uint8_t(id))
+        .put<uint32_t>(world.seed)
+        .put<float>(p.cam.x)
+        .put<float>(p.cam.y);
     w.str(p.name);
     putRules(w); // progression / food / donation tunables (common/Progression.hpp)
     world.net.send(conn, w);
@@ -123,7 +132,8 @@ void NetSession::onHello(uint64_t conn, Reader &r)
     s.clearing.sendClearedFull(id); // [world] cleared surface features
     s.spawn.worldTestSpawn(id, fresh);
     s.repl.sendRoster();
-    world.say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu." : "Welcome back, " + p.name + "! Your base is just as you left it.");
+    world.say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu."
+                        : "Welcome back, " + p.name + "! Your base is just as you left it.");
     std::printf("%s (%d) %s\n", p.name.c_str(), id, fresh ? "joined" : "rejoined");
 }
 void NetSession::onDisconnect(uint64_t conn)

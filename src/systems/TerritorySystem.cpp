@@ -16,10 +16,13 @@ void TerritorySystem::evalFunctional()
     std::vector<Pos> ths[MAX_PLAYERS + 1], ops[MAX_PLAYERS + 1];
     std::vector<entt::entity> mine;
     reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info &i, const Building &b, const Owner &o)
-                                           {
-        if (!isPlayer(o.id)) return;
+    {
+        if (!isPlayer(o.id))
+            return;
         mine.push_back(e);
-        if (i.kind == K_TownHall && !(b.progress < 1.f && reg.all_of<RelocNew>(e))) ths[o.id].push_back(footCenter(i.kind, b.tx, b.ty)); });
+        if (i.kind == K_TownHall && !(b.progress < 1.f && reg.all_of<RelocNew>(e)))
+            ths[o.id].push_back(footCenter(i.kind, b.tx, b.ty));
+    });
     auto within = [](const std::vector<Pos> &v, Pos c, float r)
     {
         for (auto &a : v)
@@ -28,7 +31,10 @@ void TerritorySystem::evalFunctional()
         return false;
     };
     auto center = [&](entt::entity e)
-    { const auto& b = reg.get<Building>(e); return footCenter(reg.get<Info>(e).kind, b.tx, b.ty); };
+    {
+        const auto &b = reg.get<Building>(e);
+        return footCenter(reg.get<Info>(e).kind, b.tx, b.ty);
+    };
     std::vector<uint8_t> want(mine.size(), 0);
     for (size_t n = 0; n < mine.size(); n++)
     { // Outposts need a Town Hall within reach
@@ -53,7 +59,10 @@ void TerritorySystem::evalFunctional()
         else if (k != K_Outpost)
         {
             Pos c = center(e);
-            want[n] = (reg.all_of<Moving>(e) || !(within(ths[o], c, float(anchorRadius(K_TownHall))) || within(ops[o], c, float(anchorRadius(K_Outpost))))) ? 1 : 0;
+            want[n] = (reg.all_of<Moving>(e) || !(within(ths[o], c, float(anchorRadius(K_TownHall))) ||
+                                                  within(ops[o], c, float(anchorRadius(K_Outpost)))))
+                          ? 1
+                          : 0;
         }
         auto *f = reg.try_get<BFlags>(e);
         bool cur = f && f->dis;
@@ -66,7 +75,8 @@ void TerritorySystem::evalFunctional()
     for (int id = 1; id <= MAX_PLAYERS; id++)
     {
         if (off[id])
-            world.say(id, std::to_string(off[id]) + " building(s) are outside your functional territory and stopped working. Right-click them and choose Relocate.");
+            world.say(id, std::to_string(off[id]) + " building(s) are outside your functional territory and stopped "
+                                                    "working. Right-click them and choose Relocate.");
         if (on[id])
             world.say(id, std::to_string(on[id]) + " building(s) work again.");
     }
@@ -105,7 +115,8 @@ void TerritorySystem::doMoveTown(int id, int tx, int ty)
     reg.emplace<Moving>(th, Moving{reg.get<Uid>(n).id});
     Pos c = world.posOf(n);
     world.fx(E_Dust, c.x, c.y);
-    world.say(id, "Your new town is under construction (" + std::to_string(int(TOWN_MOVE_TIME)) + " s). Troops and pawns will move in when it is finished.");
+    world.say(id, "Your new town is under construction (" + std::to_string(int(TOWN_MOVE_TIME)) +
+                      " s). Troops and pawns will move in when it is finished.");
 }
 void TerritorySystem::doRelocate(int id, uint32_t uid, int tx, int ty)
 {
@@ -146,7 +157,8 @@ void TerritorySystem::doRelocate(int id, uint32_t uid, int tx, int ty)
     reg.emplace<Moving>(be, Moving{reg.get<Uid>(n).id});
     Pos c = world.posOf(n);
     world.fx(E_Dust, c.x, c.y);
-    world.say(id, std::string("Relocating your ") + KINFO[k].name + " (" + std::to_string(int(total)) + " s). Level and stock are kept.");
+    world.say(id, std::string("Relocating your ") + KINFO[k].name + " (" + std::to_string(int(total)) +
+                      " s). Level and stock are kept.");
 }
 void TerritorySystem::migrateTown(int ow, entt::entity nth)
 { // every troop and pawn walks into the new town (teleport with dust)
@@ -165,10 +177,13 @@ void TerritorySystem::migrateTown(int ow, entt::entity nth)
     if (spots.empty())
         return;
     std::vector<entt::entity> us;
-    reg.view<Owner, Unit, Info, Pos>().each([&](entt::entity e, const Owner &o, const Unit &, const Info &i, const Pos &)
-                                            {
-        if (o.id != ow || !isTroop(i.kind) || reg.any_of<Convoy, Haul, Aboard, Boarding>(e)) return;
-        us.push_back(e); });
+    reg.view<Owner, Unit, Info, Pos>().each(
+        [&](entt::entity e, const Owner &o, const Unit &, const Info &i, const Pos &)
+    {
+        if (o.id != ow || !isTroop(i.kind) || reg.any_of<Convoy, Haul, Aboard, Boarding>(e))
+            return;
+        us.push_back(e);
+    });
     size_t n = 0;
     for (auto e : us)
     {
@@ -214,9 +229,15 @@ void TerritorySystem::finishReloc(entt::entity n)
         if (auto *tq = reg.try_get<TrainQ>(old))
             reg.emplace_or_replace<TrainQ>(n, *tq);
         reg.view<Worker>().each([&](Worker &w)
-                                { if (w.home == rn.from) w.home = nuid; });
+        {
+            if (w.home == rn.from)
+                w.home = nuid;
+        });
         reg.view<Haul>().each([&](Haul &hl)
-                              { if (hl.storage == rn.from) hl.storage = nuid; });
+        {
+            if (hl.storage == rn.from)
+                hl.storage = nuid;
+        });
         Pos oc = world.posOf(old);
         world.fx(E_Dust, oc.x, oc.y);
         reg.remove<Moving>(old);
@@ -238,13 +259,20 @@ void TerritorySystem::relocSecond()
 {
     std::vector<entt::entity> done, stale;
     reg.view<RelocNew, Building>().each([&](entt::entity e, const RelocNew &, const Building &b)
-                                        { if (b.progress >= 1.f) done.push_back(e); });
+    {
+        if (b.progress >= 1.f)
+            done.push_back(e);
+    });
     for (auto e : done)
         finishReloc(e);
     reg.view<Moving>().each([&](entt::entity e, const Moving &m)
-                            { if (world.find(m.to) == entt::null) stale.push_back(e); }); // replacement was destroyed: cancel the move
+    {
+        if (world.find(m.to) == entt::null)
+            stale.push_back(e);
+    }); // replacement was destroyed: cancel the move
     for (auto e : stale)
         reg.remove<Moving>(e);
-    std::vector<entt::entity> orphan; // old building destroyed while the replacement is under construction: keep building
+    std::vector<entt::entity>
+        orphan; // old building destroyed while the replacement is under construction: keep building
     (void)orphan;
 }

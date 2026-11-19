@@ -47,15 +47,15 @@ struct ClientWorld
     std::vector<DropFx> drops;
 
     // side tables
-    std::unordered_map<uint32_t, QEntry> queues;             // building uid -> training queue (S_Queue)
-    std::unordered_map<uint32_t, BJob> jobs;                 // building uid -> construction / upgrade / repair job (S_Jobs)
-    double donateReadyAt = 0;                                // S_Econ: local time when donations / transfers are allowed again
-    FacDemand demand[FACTION_COUNT];                         // S_Econ: what each faction wants
+    std::unordered_map<uint32_t, QEntry> queues; // building uid -> training queue (S_Queue)
+    std::unordered_map<uint32_t, BJob> jobs;     // building uid -> construction / upgrade / repair job (S_Jobs)
+    double donateReadyAt = 0;                    // S_Econ: local time when donations / transfers are allowed again
+    FacDemand demand[FACTION_COUNT];             // S_Econ: what each faction wants
     std::unordered_map<uint32_t, ShipDetail> shipDetails;    // own ships (S_ShipInfo)
     std::unordered_map<uint32_t, std::vector<IV>> pathLines; // S_Paths
     int quota[QUOTA_TYPES]{3, 2, 0, 0}, movePct = 0;         // S_BaseInfo: defense quota per QUOTA_KINDS type
     int alloc[R_Count]{100, 100, 100, 100};                  // S_BaseInfo: Town Hall storage share per resource (%)
-    double baseEditAt = -10;                                 // local edit time: ignore S_BaseInfo quota / shares briefly (no flicker)
+    double baseEditAt = -10; // local edit time: ignore S_BaseInfo quota / shares briefly (no flicker)
     bool homeless = false, wasHomeless = false, townMoving = false;
 
     // ---- terrain

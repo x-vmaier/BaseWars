@@ -5,7 +5,8 @@
 //   client/     Session (connection), PacketHandler (S_*), Commands (C_*), Input, Placement, TestHooks
 //   rendering/  WaterRenderer, WorldRenderer (terrain, features, buildings, units, ships, effects), PostFx,
 //               Minimap, MapOverlay, MenuBackdrop
-//   ui/         Hud, BuildMenu, ContextPanel, TrainingPanel, TownHallWindow (+ TownHallTabs), CostRow, SocialMenu, Chat, PauseMenu, MainMenu, BigMap,
+//   ui/         Hud, BuildMenu, ContextPanel, TrainingPanel, TownHallWindow (+ TownHallTabs), CostRow, SocialMenu,
+//   Chat, PauseMenu, MainMenu, BigMap,
 //               ShipPanel, BaseMenus (+ UiScale, Widgets)
 #include "client/ClientWorld.hpp"
 #include "client/Commands.hpp"
@@ -41,7 +42,7 @@
 
 class App
 {
-public:
+  public:
     App();
     App(const App &) = delete;
     App &operator=(const App &) = delete;
@@ -89,7 +90,7 @@ public:
     void resetWorld();                 // drop all replicated state and close panels (join / leave)
     void travelTo(float tx, float ty); // move the camera to a tile and close the social menu / world map
 
-private:
+  private:
     void loadGfx();
     void drawUI(float dt);
 };

@@ -9,7 +9,8 @@
 
 inline Color rgb(int r, int g, int b, int a = 255)
 {
-    return Color{(unsigned char)std::clamp(r, 0, 255), (unsigned char)std::clamp(g, 0, 255), (unsigned char)std::clamp(b, 0, 255), (unsigned char)std::clamp(a, 0, 255)};
+    return Color{(unsigned char)std::clamp(r, 0, 255), (unsigned char)std::clamp(g, 0, 255),
+                 (unsigned char)std::clamp(b, 0, 255), (unsigned char)std::clamp(a, 0, 255)};
 }
 
 // assets

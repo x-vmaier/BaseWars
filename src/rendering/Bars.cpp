@@ -10,7 +10,8 @@ Color healthColor(float f)
     f = std::clamp(f, 0.f, 1.f);
     auto mix = [](Color a, Color b, float t)
     {
-        return Color{(unsigned char)(a.r + (b.r - a.r) * t), (unsigned char)(a.g + (b.g - a.g) * t), (unsigned char)(a.b + (b.b - a.b) * t), 255};
+        return Color{(unsigned char)(a.r + (b.r - a.r) * t), (unsigned char)(a.g + (b.g - a.g) * t),
+                     (unsigned char)(a.b + (b.b - a.b) * t), 255};
     };
     Color red{240, 50, 40, 255}, yellow{255, 215, 30, 255}, green{60, 225, 70, 255};
     return f < .5f ? mix(red, yellow, f / .5f) : mix(yellow, green, (f - .5f) / .5f);

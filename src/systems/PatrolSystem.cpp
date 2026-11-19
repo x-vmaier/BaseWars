@@ -28,7 +28,8 @@ void PatrolSystem::patrolLoot(Kind k, float mul, int killer, Pos p)
         shown++;
     }
     if (isPlayer(killer) && tot > 0)
-        world.say(killer, std::string("Loot from the fallen ") + KINFO[k].name + ": +" + std::to_string(int(tot)) + " resources.");
+        world.say(killer, std::string("Loot from the fallen ") + KINFO[k].name + ": +" + std::to_string(int(tot)) +
+                              " resources.");
 }
 PatGroup *PatrolSystem::groupOf(uint32_t id)
 {
@@ -174,12 +175,20 @@ bool PatrolSystem::pickSiege(PatGroup &g, Pos from, int owner)
     entt::entity best = entt::null;
     float bd = float(cfg().patrolSiegeRange);
     reg.view<Info, Building, Owner>().each([&](entt::entity b, const Info &i, const Building &bb, const Owner &o)
-                                           {
-        if (i.kind != K_TownHall || bb.progress < 1.f || !world.hostile(owner, o.id) || world.dying.count(reg.get<Uid>(b).id)) return;
-        if (isPlayer(o.id) && !world.pl[o.id].online) return;                         // players are only besieged while they can defend
+    {
+        if (i.kind != K_TownHall || bb.progress < 1.f || !world.hostile(owner, o.id) ||
+            world.dying.count(reg.get<Uid>(b).id))
+            return;
+        if (isPlayer(o.id) && !world.pl[o.id].online)
+            return; // players are only besieged while they can defend
         Pos c = footCenter(i.kind, bb.tx, bb.ty);
         float d = std::hypot(c.x - from.x, c.y - from.y);
-        if (d < bd) { bd = d; best = b; } });
+        if (d < bd)
+        {
+            bd = d;
+            best = b;
+        }
+    });
     if (best == entt::null)
         return false;
     Pos c = world.posOf(best);
@@ -193,14 +202,16 @@ bool PatrolSystem::pickSiege(PatGroup &g, Pos from, int owner)
         world.say(to, std::string("A ") + FACTION_NAME[owner - FACTION_BASE] + " patrol is marching on your town!");
     static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;
     if (logIt)
-        std::printf("[world] patrol of %s marches on the town hall of %s at %.0f,%.0f\n", FACTION_NAME[owner - FACTION_BASE], world.ownerName(to).c_str(), c.x, c.y);
+        std::printf("[world] patrol of %s marches on the town hall of %s at %.0f,%.0f\n",
+                    FACTION_NAME[owner - FACTION_BASE], world.ownerName(to).c_str(), c.x, c.y);
     return true;
 }
 bool PatrolSystem::pickWaypoint(PatGroup &g)
 {
     g.siege = false;
     auto le = world.find(g.leader);
-    if (le != entt::null && world.rng() % 100 < uint32_t(cfg().patrolSiegePercent) && pickSiege(g, reg.get<Pos>(le), reg.get<Owner>(le).id))
+    if (le != entt::null && world.rng() % 100 < uint32_t(cfg().patrolSiegePercent) &&
+        pickSiege(g, reg.get<Pos>(le), reg.get<Owner>(le).id))
         return true;
     if (g.roam)
     { // map-wide group: wander through land the players know
@@ -322,7 +333,10 @@ void PatrolSystem::patrolSecond()
 {
     for (auto &t : world.towns)
     { // make sure each living town owns its patrol groups
-        int span = cfg().patrolsPerTownMax - cfg().patrolsPerTownMin, want = cfg().patrolsPerTownMin + (span > 0 ? int(hash2(t.id, 0, world.seed + 444) % uint32_t(span + 1)) : 0), have = 0;
+        int span = cfg().patrolsPerTownMax - cfg().patrolsPerTownMin,
+            want =
+                cfg().patrolsPerTownMin + (span > 0 ? int(hash2(t.id, 0, world.seed + 444) % uint32_t(span + 1)) : 0),
+            have = 0;
         for (auto &[id, g] : pgroups)
             if (g.town == t.id && !g.roam)
                 have++;
@@ -355,7 +369,10 @@ void PatrolSystem::patrolSecond()
             if (!g.pending)
             {
                 g.pending = true;
-                g.respawnAt = world.clock + (fastAll ? 8.0 : cfg().patrolRespawnMin + double(world.rng() % uint32_t(std::max(1.0, cfg().patrolRespawnRandom))));
+                g.respawnAt = world.clock +
+                              (fastAll ? 8.0
+                                       : cfg().patrolRespawnMin +
+                                             double(world.rng() % uint32_t(std::max(1.0, cfg().patrolRespawnRandom))));
             }
             else if (world.clock >= g.respawnAt && (g.roam || (t && t->alive)))
                 spawnPatrol(gid, g);
@@ -423,12 +440,33 @@ void PatrolSystem::patrolSecond()
         uint32_t nearUid = 0, anyUid = 0;
         Pos nearPos{0, 0}, anyPos{0, 0};
         reg.view<Owner, Uid, Info>().each([&](entt::entity e, const Owner &o, const Uid &u, const Info &)
-                                          {
-            if (o.id != g.ret || world.dying.count(u.id)) return;
+        {
+            if (o.id != g.ret || world.dying.count(u.id))
+                return;
             Pos q = world.posOf(e);
             float d = std::hypot(q.x - lp.x, q.y - lp.y);
-            if (d < bestAny) { bestAny = d; anyUid = u.id; anyPos = q; }
-            for (auto id : g.m) { auto me = world.find(id); if (me != entt::null) { Pos mp = reg.get<Pos>(me); float dm = std::hypot(q.x - mp.x, q.y - mp.y); if (dm < bestNear) { bestNear = dm; nearUid = u.id; nearPos = q; } } } });
+            if (d < bestAny)
+            {
+                bestAny = d;
+                anyUid = u.id;
+                anyPos = q;
+            }
+            for (auto id : g.m)
+            {
+                auto me = world.find(id);
+                if (me != entt::null)
+                {
+                    Pos mp = reg.get<Pos>(me);
+                    float dm = std::hypot(q.x - mp.x, q.y - mp.y);
+                    if (dm < bestNear)
+                    {
+                        bestNear = dm;
+                        nearUid = u.id;
+                        nearPos = q;
+                    }
+                }
+            }
+        });
         if (!anyUid)
         {
             g.ret = 0;
@@ -460,7 +498,9 @@ void PatrolSystem::manageRoamers()
             if (world.pl[i].used)
                 for (auto &kv : world.pl[i].expl)
                     chunks.insert(kv.first);
-        roamWant = cfg().patrolMapGroups > 0 && !chunks.empty() ? std::max(1, int(std::lround(double(cfg().patrolMapGroups) * double(chunks.size()) / 100.0))) : 0;
+        roamWant = cfg().patrolMapGroups > 0 && !chunks.empty()
+                       ? std::max(1, int(std::lround(double(cfg().patrolMapGroups) * double(chunks.size()) / 100.0)))
+                       : 0;
         roamWant = std::min(roamWant, 40);
     }
     int have = 0;

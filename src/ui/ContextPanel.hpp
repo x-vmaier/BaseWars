@@ -14,7 +14,7 @@ class App;
 
 class ContextPanel
 {
-public:
+  public:
     struct MenuAct
     {
         std::string label;
@@ -37,10 +37,10 @@ public:
     void rebuild(); // re-evaluate lines and buttons for the target (closes when it vanished)
     bool over(Vector2 m) const { return isOpen && CheckCollisionPointRec(m, rect()); }
     bool sliderInput(Vector2 m, bool lp, bool lr); // true: input consumed
-    bool click(Vector2 m);                         // left click while open: true when consumed, otherwise the panel closes
+    bool click(Vector2 m); // left click while open: true when consumed, otherwise the panel closes
     void draw();
 
-private:
+  private:
     void run(const MenuAct &a);
     void baseContext(const Info &in, bool mine, bool done); // fire / territory / queue lines, move town, relocate
     void siteLines(const Info &in, bool friendly);          // site job progress, damage efficiency, paused production

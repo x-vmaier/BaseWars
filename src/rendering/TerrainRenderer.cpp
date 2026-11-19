@@ -5,8 +5,14 @@
 #include <cmath>
 #include <string>
 
-int TerrainView::B(int x, int y) const { return x < wx0 || y < wy0 || x > wx1 || y > wy1 ? int(INVALID_BIOME) : int(bio[size_t((y - wy0) * bw + (x - wx0))]); }
-bool TerrainView::E(int x, int y) const { return x < wx0 || y < wy0 || x > wx1 || y > wy1 ? false : exp[size_t((y - wy0) * bw + (x - wx0))] != 0; }
+int TerrainView::B(int x, int y) const
+{
+    return x < wx0 || y < wy0 || x > wx1 || y > wy1 ? int(INVALID_BIOME) : int(bio[size_t((y - wy0) * bw + (x - wx0))]);
+}
+bool TerrainView::E(int x, int y) const
+{
+    return x < wx0 || y < wy0 || x > wx1 || y > wy1 ? false : exp[size_t((y - wy0) * bw + (x - wx0))] != 0;
+}
 
 TerrainView TerrainRenderer::view(Vector2 tl, Vector2 br) const
 {
@@ -48,13 +54,10 @@ TerrainView TerrainRenderer::view(Vector2 tl, Vector2 br) const
 void TerrainRenderer::drawGround(const TerrainView &v, float t)
 {
     const int x0 = v.x0, y0 = v.y0, x1 = v.x1, y1 = v.y1;
-    auto B = [&](int x, int y)
-    { return v.B(x, y); };
-    auto E = [&](int x, int y)
-    { return v.E(x, y); };
+    auto B = [&](int x, int y) { return v.B(x, y); };
+    auto E = [&](int x, int y) { return v.E(x, y); };
     static const char *tileset[B_Count] = {"", "1", "3", "2", "4", "2", "5"};
-    auto tint = [](int b)
-    { return b == B_Desert ? rgb(255, 232, 170) : (b == B_Snow ? rgb(236, 246, 255) : WHITE); };
+    auto tint = [](int b) { return b == B_Desert ? rgb(255, 232, 170) : (b == B_Snow ? rgb(236, 246, 255) : WHITE); };
     auto autoTile = [&](Texture2D ts, int x, int y, int colOff, auto member, Color tn)
     {
         bool U = member(x, y - 1), D = member(x, y + 1), L = member(x - 1, y), R = member(x + 1, y);
@@ -74,12 +77,15 @@ void TerrainRenderer::drawGround(const TerrainView &v, float t)
             c = !L ? 0 : (!R ? 2 : 1);
             r = !U ? 0 : (!D ? 2 : 1);
         }
-        DrawTexturePro(ts, {float((c + colOff) * 64), float(r * 64), 64, 64}, {float(x) * TILE, float(y) * TILE, TILE, TILE}, {0, 0}, 0, tn);
+        DrawTexturePro(ts, {float((c + colOff) * 64), float(r * 64), 64, 64},
+                       {float(x) * TILE, float(y) * TILE, TILE, TILE}, {0, 0}, 0, tn);
     };
     auto land = [&](int x, int y)
-    { int b = B(x, y); return b != B_Ocean && b != INVALID_BIOME; };
-    auto high = [&](int x, int y)
-    { return B(x, y) == B_Highlands; };
+    {
+        int b = B(x, y);
+        return b != B_Ocean && b != INVALID_BIOME;
+    };
+    auto high = [&](int x, int y) { return B(x, y) == B_Highlands; };
     Texture2D foam = tex("Terrain/Tileset/Water Foam.png");
     // foam under the shore
     for (int y = y0; y <= y1; y++)
@@ -98,7 +104,8 @@ void TerrainRenderer::drawGround(const TerrainView &v, float t)
             if (!shore)
                 continue;
             int fr = int(t * 10.f + float(hash2(x, y, 4) % 16)) % 16;
-            DrawTexturePro(foam, {float(fr * 192), 0, 192, 192}, {float(x) * TILE - 64, float(y) * TILE - 64, 192, 192}, {0, 0}, 0, WHITE);
+            DrawTexturePro(foam, {float(fr * 192), 0, 192, 192}, {float(x) * TILE - 64, float(y) * TILE - 64, 192, 192},
+                           {0, 0}, 0, WHITE);
         }
     // flat grass (every land tile), then plateau tops, then cliff faces
     for (int y = y0; y <= y1; y++)
@@ -124,12 +131,16 @@ void TerrainRenderer::drawGround(const TerrainView &v, float t)
             if (b != B_Highlands && b != INVALID_BIOME && above == B_Highlands)
             {
                 auto cl = [&](int cx2)
-                { int bb = B(cx2, y); return bb != B_Highlands && bb != INVALID_BIOME && B(cx2, y - 1) == B_Highlands; };
+                {
+                    int bb = B(cx2, y);
+                    return bb != B_Highlands && bb != INVALID_BIOME && B(cx2, y - 1) == B_Highlands;
+                };
                 bool l = cl(x - 1), r = cl(x + 1);
                 int c = (!l && !r) ? 8 : (!l ? 5 : (!r ? 7 : 6)), row = b == B_Ocean ? 5 : 4;
                 if (b != B_Ocean)
                     autoTile(tex("Terrain/Tileset/Tilemap_color1.png"), x, y, 0, land, WHITE);
-                DrawTexturePro(tex("Terrain/Tileset/Tilemap_color2.png"), {float(c * 64), float(row * 64), 64, 64}, {float(x) * TILE, float(y) * TILE, TILE, TILE}, {0, 0}, 0, WHITE);
+                DrawTexturePro(tex("Terrain/Tileset/Tilemap_color2.png"), {float(c * 64), float(row * 64), 64, 64},
+                               {float(x) * TILE, float(y) * TILE, TILE, TILE}, {0, 0}, 0, WHITE);
             }
         }
     // unexplored tiles
@@ -143,8 +154,7 @@ void TerrainRenderer::drawGround(const TerrainView &v, float t)
 void TerrainRenderer::drawFog(const TerrainView &v, float t)
 {
     const int x0 = v.x0, y0 = v.y0, x1 = v.x1, y1 = v.y1, wx0 = v.wx0, wy0 = v.wy0, wx1 = v.wx1, wy1 = v.wy1;
-    auto E = [&](int x, int y)
-    { return v.E(x, y); };
+    auto E = [&](int x, int y) { return v.E(x, y); };
     for (int y = y0; y <= y1; y++)
         for (int x = x0; x <= x1; x++)
         {
@@ -165,6 +175,7 @@ void TerrainRenderer::drawFog(const TerrainView &v, float t)
                 continue;
             Texture2D ct = tex(std::string("Terrain/Decorations/Clouds/Clouds_0") + char('1' + (h >> 8) % 8) + ".png");
             float drift = std::sin(t * .12f + float(h % 100)) * 48.f;
-            DrawTexturePro(ct, {0, 0, 576, 256}, {float(cx) * TILE - 220 + drift, float(cy) * TILE - 110, 576, 256}, {0, 0}, 0, rgb(255, 255, 255, 235));
+            DrawTexturePro(ct, {0, 0, 576, 256}, {float(cx) * TILE - 220 + drift, float(cy) * TILE - 110, 576, 256},
+                           {0, 0}, 0, rgb(255, 255, 255, 235));
         }
 }

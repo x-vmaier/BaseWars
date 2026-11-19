@@ -1,6 +1,7 @@
 #pragma once
-// Shared server state: the ECS registry, player profiles, clans, NPC towns, terrain cache, cleared tiles, time and seed,
-// plus the entity / query helpers every system uses (creation, lookup, pathfinding, vision, relations, messaging).
+// Shared server state: the ECS registry, player profiles, clans, NPC towns, terrain cache, cleared tiles, time and
+// seed, plus the entity / query helpers every system uses (creation, lookup, pathfinding, vision, relations,
+// messaging).
 #include "common/Shared.hpp"
 #include "components/Components.hpp"
 #include "networking/SteamServerNet.hpp"
@@ -71,8 +72,9 @@ struct Demand
 }; // what a faction's towns want right now
 
 struct BaseProf
-{                                               // per-player base mechanics state (saved in the "base" section)
-    uint8_t quota[QUOTA_TYPES]{3, 2, 0, 0};     // defense quota per QUOTA_KINDS type: troops sent to every attacked clan mate
+{ // per-player base mechanics state (saved in the "base" section)
+    uint8_t quota[QUOTA_TYPES]{3, 2, 0,
+                               0}; // defense quota per QUOTA_KINDS type: troops sent to every attacked clan mate
     uint8_t alloc[R_Count]{100, 100, 100, 100}; // Town Hall storage share per resource (% of the hall's capacity)
     bool homeless = false, testDone = false;
     double alertNext = 0, defNext = 0, supNext = 0, donateNote = 0, allocNote = 0;
@@ -97,7 +99,8 @@ struct Source
 {
     float x, y, r;
 };
-// Vision sources bucketed into 16x16-tile cells (each source is inserted with a 3-tile margin, the largest padding used by callers).
+// Vision sources bucketed into 16x16-tile cells (each source is inserted with a 3-tile margin, the largest padding used
+// by callers).
 struct SrcGrid
 {
     std::unordered_map<int64_t, std::vector<Source>> cells;
@@ -106,18 +109,34 @@ struct SrcGrid
 };
 bool seen(const std::vector<Source> &s, float x, float y, float pad = 0);
 
-inline uint64_t nowSec() { return uint64_t(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count()); }
-inline int64_t tkey(int x, int y) { return chunkKey(x, y); }
-inline bool isPlayer(int o) { return o >= 1 && o <= MAX_PLAYERS; }
-inline Pos tileCenter(IV t) { return {float(t.x) + .5f, float(t.y) + .5f}; }
-inline IV tileOf(Pos p) { return {int(std::floor(p.x)), int(std::floor(p.y))}; }
+inline uint64_t nowSec()
+{
+    return uint64_t(
+        std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+}
+inline int64_t tkey(int x, int y)
+{
+    return chunkKey(x, y);
+}
+inline bool isPlayer(int o)
+{
+    return o >= 1 && o <= MAX_PLAYERS;
+}
+inline Pos tileCenter(IV t)
+{
+    return {float(t.x) + .5f, float(t.y) + .5f};
+}
+inline IV tileOf(Pos p)
+{
+    return {int(std::floor(p.x)), int(std::floor(p.y))};
+}
 float baseTestSpeed(); // test hook: BW_BASESPEED=<x> speeds up queues, moves and relocations
 
 inline constexpr int MAX_QUOTA = 20;
 
 class World
 {
-public:
+  public:
     World(uint32_t seed, std::string savePath);
 
     // ---- state
@@ -155,7 +174,8 @@ public:
     uint8_t featOf(int x, int y);
     bool isCleared(int x, int y) const;
     void markCleared(int x, int y);
-    void markFootprint(Kind k, int tx, int ty); // a building's footprint never shows (or demands clearing of) features again
+    void markFootprint(Kind k, int tx,
+                       int ty); // a building's footprint never shows (or demands clearing of) features again
 
     // ---- relations
     bool sameClan(int a, int b) const;
@@ -174,11 +194,12 @@ public:
     float totalRes(int id) const;
     float stockOf(entt::entity e) const;
     float capOf(entt::entity e) const;
-    float storeCargo(entt::entity st, float *cargo); // returns the amount stored (the hall discards cargo beyond a resource's share)
-    float allocRoom(int id, int r);                  // room left under resource r's storage share (huge without a Town Hall)
-    float creditRes(int id, int r, float amt);       // adds income within the storage share; returns the amount kept
-    void noteDiscard(int id, int r, float lost);     // throttled "storage share full" message
-    bool afford(int id, const float *cost) const;    // pooled resources: own first, then allies
+    float storeCargo(entt::entity st,
+                     float *cargo); // returns the amount stored (the hall discards cargo beyond a resource's share)
+    float allocRoom(int id, int r); // room left under resource r's storage share (huge without a Town Hall)
+    float creditRes(int id, int r, float amt);    // adds income within the storage share; returns the amount kept
+    void noteDiscard(int id, int r, float lost);  // throttled "storage share full" message
+    bool afford(int id, const float *cost) const; // pooled resources: own first, then allies
     void spend(int id, const float *cost);
     void resetProfile(int id);
 
@@ -210,7 +231,7 @@ public:
     bool townMoveActive(int id);
     bool isPatrol(entt::entity e) const { return reg.all_of<Patrol>(e); }
     bool ephemeral(entt::entity e) const { return reg.all_of<Raider>(e) || reg.all_of<Patrol>(e); } // not persisted
-    void releaseUnit(entt::entity e);                                                               // a player command takes the unit over
+    void releaseUnit(entt::entity e); // a player command takes the unit over
 
     // ---- fog of war
     bool bitAt(const std::unordered_map<int64_t, Bits> &m, int x, int y) const;
@@ -239,21 +260,25 @@ struct PlaceWorld
     int biome(int x, int y) { return s.biome(x, y); }
     bool explored(int x, int y) { return s.explored(me, x, y); }
     bool occupied(int x, int y) { return s.occ.count(tkey(x, y)) > 0; }
-    template <class F>
-    void anchors(F f)
+    template <class F> void anchors(F f)
     {
         s.reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info &i, const Building &b, const Owner &o)
-                                                 {
-            if ((i.kind == K_TownHall || i.kind == K_Outpost) && !s.inactive(e)) f(footCenter(i.kind, b.tx, b.ty), i.kind, o.id == me, s.allied(me, o.id) && o.id != me); });
+        {
+            if ((i.kind == K_TownHall || i.kind == K_Outpost) && !s.inactive(e))
+                f(footCenter(i.kind, b.tx, b.ty), i.kind, o.id == me, s.allied(me, o.id) && o.id != me);
+        });
     }
     bool campfireNear(Pos c, float r)
     {
         bool hit = false;
         s.reg.view<Info, Building>().each([&](const Info &i, const Building &b)
-                                          {
-            if (i.kind != K_Campfire) return;
+        {
+            if (i.kind != K_Campfire)
+                return;
             Pos q = footCenter(i.kind, b.tx, b.ty);
-            if (std::hypot(q.x - c.x, q.y - c.y) < r) hit = true; });
+            if (std::hypot(q.x - c.x, q.y - c.y) < r)
+                hit = true;
+        });
         return hit;
     }
     bool inClanRadius(Pos c) { return s.inClanRadiusOf(me, c); }

@@ -7,9 +7,9 @@
 #include "ui/Widgets.hpp"
 
 App::App()
-    : session(*this), packets(*this), cmd(*this), placement(*this), input(*this), hooks(*this),
-      water(*this), post(*this), worldRenderer(*this), minimap(*this), mapOverlay(*this), backdrop(*this),
-      hud(*this), buildMenu(*this), context(*this), training(*this), townHall(*this), social(*this), chat(*this), pause(*this),
+    : session(*this), packets(*this), cmd(*this), placement(*this), input(*this), hooks(*this), water(*this),
+      post(*this), worldRenderer(*this), minimap(*this), mapOverlay(*this), backdrop(*this), hud(*this),
+      buildMenu(*this), context(*this), training(*this), townHall(*this), social(*this), chat(*this), pause(*this),
       mainMenu(*this), bigMap(*this), shipPanel(*this), baseMenus(*this)
 {
     ui::bindScale(&settings.uiScale);

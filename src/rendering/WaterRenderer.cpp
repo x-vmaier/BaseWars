@@ -3,7 +3,10 @@
 #include "client/App.hpp"
 #include "rendering/Shaders.hpp"
 
-void WaterRenderer::load() { sh = loadShader("water.fs", ok); }
+void WaterRenderer::load()
+{
+    sh = loadShader("water.fs", ok);
+}
 
 void WaterRenderer::draw(float t)
 {
@@ -20,8 +23,7 @@ void WaterRenderer::draw(float t)
             rp[i][0] = rp[i][1] = 0;
             rp[i][2] = -1;
         }
-        std::erase_if(ripples, [&](const Ripple &r)
-                      { return GetTime() - r.t > 2.2; });
+        std::erase_if(ripples, [&](const Ripple &r) { return GetTime() - r.t > 2.2; });
         for (size_t i = 0; i < ripples.size() && i < 8; i++)
         {
             auto &r = ripples[ripples.size() - 1 - i];

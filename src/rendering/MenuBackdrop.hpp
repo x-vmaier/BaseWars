@@ -4,10 +4,10 @@ class App;
 
 class MenuBackdrop
 {
-public:
+  public:
     explicit MenuBackdrop(App &app) : app(app) {}
     void draw(float t);
 
-private:
+  private:
     App &app;
 };

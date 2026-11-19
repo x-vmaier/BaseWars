@@ -11,7 +11,7 @@ class App;
 
 class Placement
 {
-public:
+  public:
     enum Mode
     {
         Normal = 0,
@@ -34,11 +34,12 @@ public:
     static IV placeTile(Kind k, Vector2 world);
     int placeCheck(Kind k, IV t);
     void begin(int mode, Kind k, uint32_t target);
-    void selectBuildKind(Kind k);               // build menu entry / hotkey (toggles)
-    void click(Vector2 world, bool shift);      // left click in the world while placing
-    std::string ghostLabel(Kind k, IV t) const; // "click to clear N tiles first:" or "" (the wood cost is drawn as a cost row)
+    void selectBuildKind(Kind k);          // build menu entry / hotkey (toggles)
+    void click(Vector2 world, bool shift); // left click in the world while placing
+    std::string ghostLabel(Kind k,
+                           IV t) const; // "click to clear N tiles first:" or "" (the wood cost is drawn as a cost row)
 
-private:
+  private:
     void place(Kind k, IV t);
     bool clearClick(Kind k, IV t); // when only features block the footprint, start clearing exactly those tiles
     App &app;

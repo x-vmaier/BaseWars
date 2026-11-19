@@ -83,9 +83,11 @@ bool ClanSystem::baseDefeat(int victim)
     world.pl[victim].cam = hall;
     world.pl[victim].sentFog.clear();
     world.pl[victim].sentTerr.clear();
-    world.say(victim, "Your Town Hall fell! You are homeless: place a new Town Hall (free) within " + std::to_string(int(CLAN_TOWN_RADIUS)) + " tiles of a clan Town Hall.");
+    world.say(victim, "Your Town Hall fell! You are homeless: place a new Town Hall (free) within " +
+                          std::to_string(int(CLAN_TOWN_RADIUS)) + " tiles of a clan Town Hall.");
     world.sendAlert(victim, 2, hall, "Your town was destroyed. Place a new Town Hall near your clan.");
-    world.notifyClan(world.pl[victim].clan, world.pl[victim].name + " lost their town and is homeless. Resources were donated.");
+    world.notifyClan(world.pl[victim].clan,
+                     world.pl[victim].name + " lost their town and is homeless. Resources were donated.");
     std::printf("%s was defeated (clan: homeless)\n", world.pl[victim].name.c_str());
     return true;
 }

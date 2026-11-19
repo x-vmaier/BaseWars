@@ -7,7 +7,7 @@ class App;
 
 class PostFx
 {
-public:
+  public:
     explicit PostFx(App &app) : app(app) {}
     void load();
     void ensureTargets();  // (re)create targets on resize
@@ -17,7 +17,7 @@ public:
 
     float shake = 0, damage = 0; // screen shake (pixels) and damage vignette, decay over time
 
-private:
+  private:
     void runBloom();
     void uniforms(float t);
     App &app;

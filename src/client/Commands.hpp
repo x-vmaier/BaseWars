@@ -11,7 +11,7 @@ class App;
 
 class Commands
 {
-public:
+  public:
     explicit Commands(App &app) : app(app) {}
     void move(Vector2 world); // selected units; adds a click marker (and a ripple on water)
     void attackMove(Vector2 world);
@@ -29,7 +29,8 @@ public:
     void chat(int ch, const std::string &text);
     void clanLeader(int id);
     void build(Kind k, IV t);
-    void clear(const std::vector<IV> &tiles, const std::vector<uint32_t> &pawns = {}); // pawns: who should go (empty = nearest free pawn)
+    void clear(const std::vector<IV> &tiles,
+               const std::vector<uint32_t> &pawns = {}); // pawns: who should go (empty = nearest free pawn)
     void board(uint32_t ship, const std::vector<uint32_t> &units);
     void disembark(uint32_t ship);
     void quotas(const int *perType); // QUOTA_TYPES values (Warrior, Archer, Lancer, Monk)
@@ -42,6 +43,6 @@ public:
     void repair(uint32_t building, int mode); // 0 start a repair, 1 cancel the running upgrade / repair
     void camera(Vector2 camTarget);           // where we look (server streams nearby chunks)
 
-private:
+  private:
     App &app;
 };

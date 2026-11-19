@@ -4,15 +4,24 @@
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
 
-const char *Chat::channelName(int c) { return c == 0 ? "Global" : (c == 1 ? "Clan" : "Friends"); }
-Color Chat::channelColor(int c) { return c == 0 ? rgb(255, 255, 255) : (c == 1 ? rgb(110, 230, 255) : rgb(150, 255, 160)); }
+const char *Chat::channelName(int c)
+{
+    return c == 0 ? "Global" : (c == 1 ? "Clan" : "Friends");
+}
+Color Chat::channelColor(int c)
+{
+    return c == 0 ? rgb(255, 255, 255) : (c == 1 ? rgb(110, 230, 255) : rgb(150, 255, 160));
+}
 // The bar sits high enough that the helper line below it stays inside the window.
 Rectangle Chat::bar() const
 {
     float w = std::min(388.f, float(ui::screenW()) - 16);
     return {float(ui::screenW()) - w - 8, float(ui::screenH()) - 54, w, 26};
 }
-bool Chat::channelOk(int c) const { return c != 1 || app.world.myClan() != 0; } // clan chat needs a clan
+bool Chat::channelOk(int c) const
+{
+    return c != 1 || app.world.myClan() != 0;
+} // clan chat needs a clan
 Rectangle Chat::tab(int i) const
 {
     Rectangle b = bar();
@@ -68,7 +77,8 @@ void Chat::draw()
             vis.push_back(&*it);
     float y = b.y - 28 - 17.f * float(vis.size());
     if (!vis.empty())
-        DrawRectangleRounded({b.x, y - 4, b.width, 17.f * float(vis.size()) + 8}, .1f, 4, rgb(20, 14, 10, isOpen ? 190 : 120));
+        DrawRectangleRounded({b.x, y - 4, b.width, 17.f * float(vis.size()) + 8}, .1f, 4,
+                             rgb(20, 14, 10, isOpen ? 190 : 120));
     for (auto it = vis.rbegin(); it != vis.rend(); ++it)
     {
         const ChatLine &c = **it;
@@ -76,12 +86,14 @@ void Chat::draw()
         while (MeasureText(t.c_str(), 13) > int(b.width) - 12 && t.size() > 4)
             t.pop_back();
         float a = isOpen ? 1.f : std::clamp(float(14 - (now - c.t)) / 3.f, 0.f, 1.f);
-        DrawText(t.c_str(), int(b.x) + 6, int(y), 13, Color{channelColor(c.ch).r, channelColor(c.ch).g, channelColor(c.ch).b, (unsigned char)(255 * a)});
+        DrawText(t.c_str(), int(b.x) + 6, int(y), 13,
+                 Color{channelColor(c.ch).r, channelColor(c.ch).g, channelColor(c.ch).b, (unsigned char)(255 * a)});
         y += 17;
     }
     if (!isOpen)
     {
-        DrawText("Enter: chat", int(b.x + b.width) - MeasureText("Enter: chat", 11) - 4, int(b.y) + 8, 11, rgb(210, 214, 225, 170));
+        DrawText("Enter: chat", int(b.x + b.width) - MeasureText("Enter: chat", 11) - 4, int(b.y) + 8, 11,
+                 rgb(210, 214, 225, 170));
         return;
     }
     Vector2 m = ui::mouse();

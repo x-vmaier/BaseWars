@@ -20,12 +20,12 @@ struct TerrainView
 
 class TerrainRenderer
 {
-public:
+  public:
     explicit TerrainRenderer(App &app) : app(app) {}
     TerrainView view(Vector2 tl, Vector2 br) const; // world-space corners of the screen
     void drawGround(const TerrainView &v, float t); // under all sprites
     void drawFog(const TerrainView &v, float t);    // over all sprites
 
-private:
+  private:
     App &app;
 };

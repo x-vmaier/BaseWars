@@ -14,18 +14,18 @@ struct Systems;
 
 class ConstructionSystem
 {
-public:
+  public:
     ConstructionSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
-    bool needsPawn(entt::entity e) const;                                    // construction that waits for pawn work
-    void tick(float dt);                                                     // create construction jobs, (re)assign pawns, S_Jobs
+    bool needsPawn(entt::entity e) const; // construction that waits for pawn work
+    void tick(float dt);                  // create construction jobs, (re)assign pawns, S_Jobs
     void pawnTick(entt::entity e, Unit &u, BuildTask &bt, Pos &p, float dt); // unit loop: a pawn on a site job
-    void releasePawn(entt::entity e, bool manual);                           // ends a pawn's site task and restores its previous work
-    void upgrade(int id, entt::entity be);                                   // C_Upgrade
-    void repairCmd(int id, Reader &r);                                       // C_Repair: start a repair / cancel the running upgrade or repair
+    void releasePawn(entt::entity e, bool manual); // ends a pawn's site task and restores its previous work
+    void upgrade(int id, entt::entity be);         // C_Upgrade
+    void repairCmd(int id, Reader &r);             // C_Repair: start a repair / cancel the running upgrade or repair
     void sendJobs(int id);
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

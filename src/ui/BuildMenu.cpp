@@ -9,7 +9,10 @@
 #include "ui/GameText.hpp"
 #include "ui/UiScale.hpp"
 
-void BuildMenu::load() { mBuild = loadTMap("build_menu"); }
+void BuildMenu::load()
+{
+    mBuild = loadTMap("build_menu");
+}
 
 // The open menu sits right of the social tab button (x 0..40) so both stay usable.
 Rectangle BuildMenu::rect() const
@@ -17,14 +20,20 @@ Rectangle BuildMenu::rect() const
     Vector2 s = mBuild.size();
     return {LEFT - (1 - slide) * (s.x + LEFT + 12), 150, s.x, s.y};
 }
-Rectangle BuildMenu::tab() const { return {std::max(0.f, rect().x + rect().width - 6), 150, 40, 56}; }
+Rectangle BuildMenu::tab() const
+{
+    return {std::max(0.f, rect().x + rect().width - 6), 150, 40, 56};
+}
 Rectangle BuildMenu::item(int i) const
 {
     Rectangle b = rect();
     float pad = float(mBuild.padding);
     return {b.x + pad + 2, b.y + pad + 34 + float(i) * 47.f, b.width - 2 * pad - 4, 44};
 }
-bool BuildMenu::over(Vector2 m) const { return CheckCollisionPointRec(m, tab()) || (slide > .02f && CheckCollisionPointRec(m, rect())); }
+bool BuildMenu::over(Vector2 m) const
+{
+    return CheckCollisionPointRec(m, tab()) || (slide > .02f && CheckCollisionPointRec(m, rect()));
+}
 
 void BuildMenu::hotkeys()
 {
@@ -77,12 +86,15 @@ void BuildMenu::draw(float dt)
         buildCost(k, cost);
         int gate = W.buildGateErr(k);
         bool act = app.placement.buildKind == int(k), hov = CheckCollisionPointRec(m, it) && slide > .9f;
-        DrawRectangleRounded(it, .2f, 5, act ? rgb(80, 150, 80, 210) : (gate ? rgb(20, 20, 30, 120) : (hov ? rgb(255, 255, 255, 70) : rgb(0, 0, 0, 60))));
+        DrawRectangleRounded(it, .2f, 5,
+                             act ? rgb(80, 150, 80, 210)
+                                 : (gate ? rgb(20, 20, 30, 120) : (hov ? rgb(255, 255, 255, 70) : rgb(0, 0, 0, 60))));
         Color dim = gate ? rgb(120, 120, 130, 255) : WHITE;
         BSpr s = buildingSprite(k, 1);
         if (s.file[0])
         {
-            Texture2D bt = tex(std::string("Buildings/") + COLOR_NAME[colorIdx(W.me)] + " Buildings/" + s.file + ".png");
+            Texture2D bt =
+                tex(std::string("Buildings/") + COLOR_NAME[colorIdx(W.me)] + " Buildings/" + s.file + ".png");
             float sc = 38.f / s.artH * 1.f;
             DrawTexturePro(bt, {0, 0, s.artW, s.artH}, {it.x + 4, it.y + 3, s.artW * sc, s.artH * sc}, {0, 0}, 0, dim);
         }
@@ -101,12 +113,15 @@ void BuildMenu::draw(float dt)
         if (mx > 0)
         {
             std::string cnt = TextFormat("%d/%d", have, mx);
-            DrawText(cnt.c_str(), int(it.x + it.width) - MeasureText(cnt.c_str(), 12) - 6, int(it.y) + 8, 12, have >= mx ? rgb(255, 140, 120) : rgb(220, 220, 220));
+            DrawText(cnt.c_str(), int(it.x + it.width) - MeasureText(cnt.c_str(), 12) - 6, int(it.y) + 8, 12,
+                     have >= mx ? rgb(255, 140, 120) : rgb(220, 220, 220));
         }
         if (gate == G_Locked)
-            DrawText(TextFormat("Requires Town Hall Lv%d", thUnlock(k)), int(it.x) + 54, int(it.y) + 26, 13, rgb(255, 150, 120));
+            DrawText(TextFormat("Requires Town Hall Lv%d", thUnlock(k)), int(it.x) + 54, int(it.y) + 26, 13,
+                     rgb(255, 150, 120));
         else if (gate)
-            DrawText(TextFormat("Limit reached (Town Hall Lv%d)", th), int(it.x) + 54, int(it.y) + 26, 13, rgb(255, 150, 120));
+            DrawText(TextFormat("Limit reached (Town Hall Lv%d)", th), int(it.x) + 54, int(it.y) + 26, 13,
+                     rgb(255, 150, 120));
         else
         { // cost row: icon + value per resource, red when missing
             ui::CostStyle st = rowStyle(it.width - 58, cost);
@@ -118,7 +133,8 @@ void BuildMenu::draw(float dt)
             hoverGate = gate;
         }
     }
-    DrawText("Shift: keep placing", int(br.x) + mBuild.padding + 4, int(br.y + br.height) - mBuild.padding - 20, 12, rgb(255, 235, 200));
+    DrawText("Shift: keep placing", int(br.x) + mBuild.padding + 4, int(br.y + br.height) - mBuild.padding - 20, 12,
+             rgb(255, 235, 200));
     if (hoverItem >= 0)
         tooltip(LIST[hoverItem], item(hoverItem), hoverGate);
 }

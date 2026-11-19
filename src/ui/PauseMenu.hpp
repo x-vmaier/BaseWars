@@ -6,7 +6,7 @@ class App;
 
 class PauseMenu
 {
-public:
+  public:
     explicit PauseMenu(App &app) : app(app) {}
     void load();
 
@@ -17,7 +17,7 @@ public:
     void input();
     void draw();
 
-private:
+  private:
     Rectangle rect() const;
     Rectangle row(int i) const;
     Rectangle slider() const;

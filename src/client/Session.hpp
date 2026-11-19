@@ -19,7 +19,7 @@ enum class Screen
 
 class Session
 {
-public:
+  public:
     explicit Session(App &app) : app(app) {}
 
     Screen screen = Screen::Menu;
@@ -42,6 +42,6 @@ public:
     void resetFlags() { welcomed = lost = connected = helloSent = false; }
     static bool parseAddr(const std::string &s, std::string &host, uint16_t &port);
 
-private:
+  private:
     App &app;
 };

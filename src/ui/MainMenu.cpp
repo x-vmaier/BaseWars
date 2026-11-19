@@ -4,7 +4,10 @@
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
 
-void MainMenu::load() { mMenu = loadTMap("main_menu"); }
+void MainMenu::load()
+{
+    mMenu = loadTMap("main_menu");
+}
 
 Rectangle MainMenu::rect() const
 {
@@ -86,8 +89,8 @@ void MainMenu::buildList()
     for (auto &e : s.browser.entries())
         if (e.friends == (tab == 1))
             list.push_back(e);
-    std::stable_sort(list.begin() + (tab == 0 ? 1 : 0), list.end(), [](const ServerEntry &a, const ServerEntry &b)
-                     { return a.ping < b.ping; });
+    std::stable_sort(list.begin() + (tab == 0 ? 1 : 0), list.end(),
+                     [](const ServerEntry &a, const ServerEntry &b) { return a.ping < b.ping; });
 }
 
 void MainMenu::joinDirect()
@@ -207,8 +210,10 @@ void MainMenu::draw()
     drawTMap(mMenu, r);
     Rectangle tr{r.x + r.width / 2 - 200, r.y - 46, 400, 80};
     drawTMap(ui::titleMap(), {tr.x, tr.y, tr.width, tr.height});
-    DrawText("BASE WARS", int(tr.x + tr.width / 2) - MeasureText("BASE WARS", 34) / 2 + 2, int(tr.y) + 22, 34, rgb(20, 40, 60));
-    DrawText("BASE WARS", int(tr.x + tr.width / 2) - MeasureText("BASE WARS", 34) / 2, int(tr.y) + 20, 34, rgb(255, 245, 210));
+    DrawText("BASE WARS", int(tr.x + tr.width / 2) - MeasureText("BASE WARS", 34) / 2 + 2, int(tr.y) + 22, 34,
+             rgb(20, 40, 60));
+    DrawText("BASE WARS", int(tr.x + tr.width / 2) - MeasureText("BASE WARS", 34) / 2, int(tr.y) + 20, 34,
+             rgb(255, 245, 210));
     static const char *tabs[3] = {"Internet", "Friends", "Direct"};
     for (int i = 0; i < 3; i++)
         ui::drawButton(tabBtn(i), tabs[i], true, false, CheckCollisionPointRec(m, tabBtn(i)), tab == i, 13);
@@ -229,7 +234,11 @@ void MainMenu::draw()
     int rows = int(la.height / 28.f);
     if (list.empty() || (tab < 2 && !s.steam.ok && list.size() <= 1))
     {
-        std::string hint = tab == 2 ? "Type an address above and press Connect." : (s.steam.ok ? (s.browser.loading() ? "Searching for servers..." : "No servers found. Press Refresh.") : "Steam is not running or not built in: use the local server or the Direct tab.");
+        std::string hint =
+            tab == 2
+                ? "Type an address above and press Connect."
+                : (s.steam.ok ? (s.browser.loading() ? "Searching for servers..." : "No servers found. Press Refresh.")
+                              : "Steam is not running or not built in: use the local server or the Direct tab.");
         DrawText(hint.c_str(), int(la.x) + 10, int(la.y) + 6 + (list.empty() ? 0 : 28), 14, rgb(120, 90, 60));
     }
     for (int i = 0; i < rows && i < int(list.size()); i++)
@@ -237,12 +246,16 @@ void MainMenu::draw()
         const ServerEntry &e = list[size_t(i)];
         Rectangle rr{la.x, la.y + float(i) * 28.f, la.width, 28};
         bool selected = i == sel, hov = CheckCollisionPointRec(m, rr);
-        DrawRectangleRec(rr, selected ? rgb(120, 180, 240, 160) : (hov ? rgb(255, 255, 255, 90) : (i % 2 ? rgb(0, 0, 0, 14) : rgb(255, 255, 255, 40))));
+        DrawRectangleRec(
+            rr, selected ? rgb(120, 180, 240, 160)
+                         : (hov ? rgb(255, 255, 255, 90) : (i % 2 ? rgb(0, 0, 0, 14) : rgb(255, 255, 255, 40))));
         DrawText(e.name.c_str(), int(rr.x) + 8, int(rr.y) + 6, 15, rgb(60, 40, 28));
         if (!e.local)
         {
-            DrawText(TextFormat("%d / %d", e.players, e.maxPlayers), int(rr.x + rr.width) - 200, int(rr.y) + 7, 14, rgb(60, 40, 28));
-            DrawText(TextFormat("%d ms", e.ping), int(rr.x + rr.width) - 110, int(rr.y) + 7, 14, e.ping < 80 ? rgb(30, 120, 40) : (e.ping < 160 ? rgb(170, 120, 20) : rgb(170, 40, 30)));
+            DrawText(TextFormat("%d / %d", e.players, e.maxPlayers), int(rr.x + rr.width) - 200, int(rr.y) + 7, 14,
+                     rgb(60, 40, 28));
+            DrawText(TextFormat("%d ms", e.ping), int(rr.x + rr.width) - 110, int(rr.y) + 7, 14,
+                     e.ping < 80 ? rgb(30, 120, 40) : (e.ping < 160 ? rgb(170, 120, 20) : rgb(170, 40, 30)));
         }
         const char *via = e.friends ? "Friend" : (e.steamId ? "Steam" : "IP");
         DrawText(via, int(rr.x + rr.width) - 54, int(rr.y) + 7, 13, e.friends ? rgb(30, 130, 60) : rgb(90, 70, 50));
@@ -250,12 +263,15 @@ void MainMenu::draw()
     bool canJoin = tab == 2 ? !directAddr.empty() : (sel >= 0 && sel < int(list.size()));
     ui::drawButton(btn(0), tab == 2 ? "Connect" : "Join", canJoin, false, CheckCollisionPointRec(m, btn(0)), false, 14);
     if (tab < 2)
-        ui::drawButton(btn(1), s.browser.loading() ? "Searching..." : "Refresh", s.steam.ok, false, CheckCollisionPointRec(m, btn(1)), false, 14);
+        ui::drawButton(btn(1), s.browser.loading() ? "Searching..." : "Refresh", s.steam.ok, false,
+                       CheckCollisionPointRec(m, btn(1)), false, 14);
     ui::drawButton(quitBtn(), "Quit", true, true, CheckCollisionPointRec(m, quitBtn()), false, 14);
     std::string st = s.steam.ok ? "Steam: " + s.steam.name : "Steam: offline";
-    DrawText(st.c_str(), int(r.x) + int(mMenu.padding) + 120, int(r.y + r.height) - int(mMenu.padding) - 34, 12, s.steam.ok ? rgb(30, 110, 50) : rgb(130, 90, 60));
+    DrawText(st.c_str(), int(r.x) + int(mMenu.padding) + 120, int(r.y + r.height) - int(mMenu.padding) - 34, 12,
+             s.steam.ok ? rgb(30, 110, 50) : rgb(130, 90, 60));
     if (!status.empty())
-        DrawText(status.c_str(), int(r.x) + int(mMenu.padding) + 120, int(r.y + r.height) - int(mMenu.padding) - 18, 13, rgb(170, 50, 30));
+        DrawText(status.c_str(), int(r.x) + int(mMenu.padding) + 120, int(r.y + r.height) - int(mMenu.padding) - 18, 13,
+                 rgb(170, 50, 30));
     if (s.screen == Screen::Connecting)
     {
         int sw = ui::screenW(), sh = ui::screenH();

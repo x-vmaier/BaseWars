@@ -6,7 +6,10 @@
 
 #include <cmath>
 
-void PauseMenu::load() { mPause = loadTMap("pause_menu"); }
+void PauseMenu::load()
+{
+    mPause = loadTMap("pause_menu");
+}
 
 void PauseMenu::applyWindowMode(int modeIdx)
 {
@@ -143,7 +146,8 @@ void PauseMenu::draw()
     DrawRectangleRounded({sl.x, sl.y, std::max(8.f, sl.width * k), sl.height}, .5f, 6, rgb(80, 170, 220));
     DrawCircleV({sl.x + sl.width * k, sl.y + sl.height / 2}, 11, rgb(250, 235, 200));
     DrawCircleLines(int(sl.x + sl.width * k), int(sl.y + sl.height / 2), 11, rgb(60, 40, 28));
-    DrawText(TextFormat("%d%%", int(std::lround(s.uiScale * 100.f))), int(row0.x + row0.width) - 46, int(row0.y) + 14, 15, ink);
+    DrawText(TextFormat("%d%%", int(std::lround(s.uiScale * 100.f))), int(row0.x + row0.width) - 46, int(row0.y) + 14,
+             15, ink);
     Rectangle row1 = row(1);
     DrawText("Window", int(row1.x), int(row1.y) + 9, 15, ink);
     for (int d = -1; d <= 1; d += 2)
@@ -157,9 +161,11 @@ void PauseMenu::draw()
             DrawTriangle({cx - 5, cy - 8}, {cx - 5, cy + 8}, {cx + 7, cy}, rgb(255, 245, 210));
     }
     const char *mn = Settings::modeName(s.windowMode);
-    DrawText(mn, int(row1.x + 96 + (row1.width - 96 - 0) / 2) - 15 - MeasureText(mn, 14) / 2 + 0, int(row1.y) + 10, 14, ink);
+    DrawText(mn, int(row1.x + 96 + (row1.width - 96 - 0) / 2) - 15 - MeasureText(mn, 14) / 2 + 0, int(row1.y) + 10, 14,
+             ink);
     bool saved = GetTime() - savedAt < 2.0;
-    ui::drawButton(row(2), saved ? "Saved!" : "Save settings", true, false, CheckCollisionPointRec(m, row(2)), false, 15);
+    ui::drawButton(row(2), saved ? "Saved!" : "Save settings", true, false, CheckCollisionPointRec(m, row(2)), false,
+                   15);
     ui::drawButton(row(3), "Resume", true, false, CheckCollisionPointRec(m, row(3)), false, 15);
     ui::drawButton(row(4), "Leave to main menu", true, false, CheckCollisionPointRec(m, row(4)), false, 15);
     ui::drawButton(row(5), "Quit game", true, true, CheckCollisionPointRec(m, row(5)), false, 15);

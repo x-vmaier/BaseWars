@@ -1,5 +1,6 @@
 #pragma once
-// Base mechanics: building flags (fire, territory), relocation, training queues, support patrols, firefighting, site jobs.
+// Base mechanics: building flags (fire, territory), relocation, training queues, support patrols, firefighting, site
+// jobs.
 #include "common/Shared.hpp"
 
 #include <cstdint>
@@ -51,8 +52,9 @@ struct Extinguish
     float t = 0;
 };
 
-// Pawn work at a building site (SiteKind: construction while Building.progress < 1, upgrade, repair). The timer only runs
-// while the assigned pawn stands at the site (SitePhase); `paid` is refunded when an upgrade / repair is cancelled.
+// Pawn work at a building site (SiteKind: construction while Building.progress < 1, upgrade, repair). The timer only
+// runs while the assigned pawn stands at the site (SitePhase); `paid` is refunded when an upgrade / repair is
+// cancelled.
 struct SiteJob
 {
     uint8_t kind = 0, phase = 0;

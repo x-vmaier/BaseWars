@@ -10,7 +10,10 @@
 
 #include <cmath>
 
-void ContextPanel::load() { mCtx = loadTMap("context_panel"); }
+void ContextPanel::load()
+{
+    mCtx = loadTMap("context_panel");
+}
 
 void ContextPanel::open(uint32_t id, Vector2 at)
 {
@@ -37,14 +40,17 @@ void ContextPanel::rebuild()
     const Info &in = W.reg.get<Info>(it->second);
     bool mine = in.owner == W.me, done = in.prog >= 100;
     Color ink = rgb(70, 45, 30);
-    auto line = [&](const std::string &t, Color c)
-    { lines.push_back({t, c}); };
-    line(std::string("Owner: ") + W.nameOf(in.owner), mine ? rgb(30, 90, 40) : (isFactionOwner(in.owner) ? rgb(60, 50, 110) : rgb(150, 40, 30)));
+    auto line = [&](const std::string &t, Color c) { lines.push_back({t, c}); };
+    line(std::string("Owner: ") + W.nameOf(in.owner),
+         mine ? rgb(30, 90, 40) : (isFactionOwner(in.owner) ? rgb(60, 50, 110) : rgb(150, 40, 30)));
     if (isFactionOwner(in.owner))
     {
         int f = in.owner - FACTION_BASE, rp = W.facRep[f];
-        line(TextFormat("Reputation: %s (%d)", repTier(rp), rp), rp <= HOSTILE_REP ? rgb(170, 40, 30) : (rp >= FRIENDLY_REP ? rgb(30, 110, 40) : ink));
-        line(rp <= HOSTILE_REP ? "They will fight you on sight." : (rp >= FRIENDLY_REP ? "They will aid you if attacked." : "Gifts earn their trust."), ink);
+        line(TextFormat("Reputation: %s (%d)", repTier(rp), rp),
+             rp <= HOSTILE_REP ? rgb(170, 40, 30) : (rp >= FRIENDLY_REP ? rgb(30, 110, 40) : ink));
+        line(rp <= HOSTILE_REP ? "They will fight you on sight."
+                               : (rp >= FRIENDLY_REP ? "They will aid you if attacked." : "Gifts earn their trust."),
+             ink);
         const FacDemand &d = W.demand[f];
         int left = std::max(0, int(d.changeAt - GetTime()));
         line(TextFormat("Town demand: %s (x%.1f reputation)", RES_NAME[d.res], cfg().demandBonus), rgb(150, 95, 0));
@@ -56,7 +62,10 @@ void ContextPanel::rebuild()
     if (mine || W.alliedWith(in.owner))
     {
         int lvCap = maxLevelFor(in.kind, mine ? W.thLevel() : MAX_LEVEL);
-        line(lvCap < MAX_LEVEL && in.kind != K_Campfire ? TextFormat("Level %d / %d (max %d at Town Hall Lv%d)", in.aux, MAX_LEVEL, lvCap, W.thLevel()) : TextFormat("Level %d / %d", in.aux, in.kind == K_Campfire ? 1 : MAX_LEVEL), ink);
+        line(lvCap < MAX_LEVEL && in.kind != K_Campfire
+                 ? TextFormat("Level %d / %d (max %d at Town Hall Lv%d)", in.aux, MAX_LEVEL, lvCap, W.thLevel())
+                 : TextFormat("Level %d / %d", in.aux, in.kind == K_Campfire ? 1 : MAX_LEVEL),
+             ink);
         Pos c = {W.reg.get<Goal>(it->second).x, W.reg.get<Goal>(it->second).y};
         int b = W.biomeAt(int(std::floor(c.x)), int(std::floor(c.y)));
         line(std::string("Biome: ") + (b == INVALID_BIOME ? "?" : BIOME_NAME[b]), ink);
@@ -72,9 +81,15 @@ void ContextPanel::rebuild()
                     pr += TextFormat("%s %.2f/s  ", RES_NAME[r], yv.r[r] * productionMul(in.aux) * gb * eff);
             line("Output: " + pr, ink);
             if (in.kind == K_Mine)
-                line(goldN ? TextFormat("Gold deposits nearby: %d (+%d%% output)", goldN, int(std::lround((gb - 1.f) * 100.f))) : "No gold deposits nearby (+20% each, max +100%)", goldN ? rgb(150, 105, 0) : rgb(130, 90, 30));
+                line(goldN ? TextFormat("Gold deposits nearby: %d (+%d%% output)", goldN,
+                                        int(std::lround((gb - 1.f) * 100.f)))
+                           : "No gold deposits nearby (+20% each, max +100%)",
+                     goldN ? rgb(150, 105, 0) : rgb(130, 90, 30));
             bool pref = preferredBiome(in.kind, b);
-            line(pref ? "Preferred biome: BONUS ACTIVE" : (in.kind == K_Lumber ? "Best in: Forest" : (in.kind == K_Mine ? "Best in: Highlands, Desert" : "Coastal fishing")), pref ? rgb(30, 110, 40) : rgb(130, 90, 30));
+            line(pref ? "Preferred biome: BONUS ACTIVE"
+                      : (in.kind == K_Lumber ? "Best in: Forest"
+                                             : (in.kind == K_Mine ? "Best in: Highlands, Desert" : "Coastal fishing")),
+                 pref ? rgb(30, 110, 40) : rgb(130, 90, 30));
             line(TextFormat("Stock waiting: %d", in.stock), ink);
         }
         else if (isStorage(in.kind))
@@ -85,7 +100,10 @@ void ContextPanel::rebuild()
             else
                 line(TextFormat("Stored: %d / %d (%d%%)", int(in.stock), int(cap), int(in.stock * 100.f / cap)), ink);
             if (KINFO[in.kind].dps > 0)
-                line(TextFormat("Defence %.0f dps, territory %d", KINFO[in.kind].dps * levelMul(in.aux) * hpEfficiency(in.hp / std::max(1.f, in.maxhp)), anchorRadius(in.kind)), ink);
+                line(TextFormat("Defence %.0f dps, territory %d",
+                                KINFO[in.kind].dps * levelMul(in.aux) * hpEfficiency(in.hp / std::max(1.f, in.maxhp)),
+                                anchorRadius(in.kind)),
+                     ink);
             if (mine && done && (in.kind == K_Outpost || in.kind == K_Storage))
             {
                 slider = true;
@@ -108,9 +126,12 @@ void ContextPanel::rebuild()
             unitCost(Kind(u), c);
             bool locked = th < unitThLevel(Kind(u));
             if (locked)
-                addAct({TextFormat("%s: requires Town Hall Lv%d", KINFO[u].name, unitThLevel(Kind(u))), 1, target, uint32_t(u), false, false});
+                addAct({TextFormat("%s: requires Town Hall Lv%d", KINFO[u].name, unitThLevel(Kind(u))), 1, target,
+                        uint32_t(u), false, false});
             else
-                addAct({std::string(u == K_Ship ? "Build " : "Train ") + KINFO[u].name, 1, target, uint32_t(u), W.affordable(c), false}, c);
+                addAct({std::string(u == K_Ship ? "Build " : "Train ") + KINFO[u].name, 1, target, uint32_t(u),
+                        W.affordable(c), false},
+                       c);
         }
         if (k != K_Campfire)
         {
@@ -119,11 +140,13 @@ void ContextPanel::rebuild()
             std::string why = upgradeBlock(k, in.aux, th);
             const BJob *j = W.jobOf(target);
             if (j && j->kind != SJ_Build)
-                addAct({j->kind == SJ_Upgrade ? "Cancel upgrade (partial refund)" : "Cancel repair (partial refund)", 8, target, 1, true, true});
+                addAct({j->kind == SJ_Upgrade ? "Cancel upgrade (partial refund)" : "Cancel repair (partial refund)", 8,
+                        target, 1, true, true});
             else if (!why.empty())
                 addAct({why, 2, target, 0, false, false});
             else
-                addAct({"Upgrade to Lv" + std::to_string(in.aux + 1), 2, target, 0, W.affordable(c), false}, c, timeText(upgradeSeconds(k, in.aux)));
+                addAct({"Upgrade to Lv" + std::to_string(in.aux + 1), 2, target, 0, W.affordable(c), false}, c,
+                       timeText(upgradeSeconds(k, in.aux)));
             if (!j && in.hp < in.maxhp - .5f)
             {
                 float rc[R_Count];
@@ -145,7 +168,9 @@ void ContextPanel::rebuild()
                 int mul = W.demand[f].mul[r];
                 float gift[R_Count]{};
                 gift[r] = 50.f;
-                std::string note = wait > 0 ? TextFormat("wait %d s", int(std::ceil(wait))) : TextFormat("rep x%.1f%s", float(mul) / 100.f, W.demand[f].res == r ? " WANTED" : "");
+                std::string note =
+                    wait > 0 ? TextFormat("wait %d s", int(std::ceil(wait)))
+                             : TextFormat("rep x%.1f%s", float(mul) / 100.f, W.demand[f].res == r ? " WANTED" : "");
                 addAct({"Give", 6, uint32_t(f), uint32_t(r), W.res[r] >= 50.f && wait <= 0, false}, gift, note);
             }
         }
@@ -192,7 +217,8 @@ void ContextPanel::baseContext(const Info &in, bool mine, bool done)
         lines.push_back({"ON FIRE! Idle units will put it out.", red});
     siteLines(in, mine || W.alliedWith(in.owner));
     if (mov)
-        lines.push_back({in.kind == K_TownHall ? "Town is being moved to a new site." : "Being relocated.", rgb(120, 80, 160)});
+        lines.push_back(
+            {in.kind == K_TownHall ? "Town is being moved to a new site." : "Being relocated.", rgb(120, 80, 160)});
     else if (dis)
         lines.push_back({"NON-FUNCTIONAL: outside your territory", red});
     if (!mine || !done)
@@ -202,7 +228,8 @@ void ContextPanel::baseContext(const Info &in, bool mine, bool done)
     {
         std::string s = "Queue:";
         for (size_t i = 0; i < q->second.kinds.size(); i++)
-            s += std::string(i ? ", " : " ") + KINFO[q->second.kinds[i]].name + (i == 0 ? TextFormat(" %d%%", q->second.pct) : "");
+            s += std::string(i ? ", " : " ") + KINFO[q->second.kinds[i]].name +
+                 (i == 0 ? TextFormat(" %d%%", q->second.pct) : "");
         lines.push_back({s, ink});
     }
     if (dis && !mov && in.kind != K_TownHall && in.kind != K_Campfire)
@@ -237,7 +264,8 @@ void ContextPanel::siteLines(const Info &in, bool friendly)
     if (in.prog >= 100 && (in.state & BLD_CRIPPLED))
         lines.push_back({"CRITICAL DAMAGE: disabled until repaired", red});
     else if (in.prog >= 100 && hpf < .995f && friendly)
-        lines.push_back({TextFormat("Damaged: working at %d%% efficiency", int(std::lround(hpEfficiency(hpf) * 100.f))), rgb(170, 90, 30)});
+        lines.push_back({TextFormat("Damaged: working at %d%% efficiency", int(std::lround(hpEfficiency(hpf) * 100.f))),
+                         rgb(170, 90, 30)});
     bool producer = isResourceBuilding(in.kind) || in.kind == K_Archery || in.kind == K_Harbour;
     if (friendly && producer && (in.prog < 100 || (in.state & BLD_WORK)))
         lines.push_back({"Production and training paused", red});
@@ -296,16 +324,19 @@ bool ContextPanel::baseRun(const MenuAct &a)
 // Rows: [button: label only][cost row, wrapping][note]. A row is as tall as its wrapped cost row (at least a button).
 namespace
 {
-    constexpr float BTN_H = 30, ROW_GAP = 6, COST_GAP = 10, NOTE_FS = 12;
-    float btnWidth(const ContextPanel::MenuAct &a, float inner)
-    {
-        if (!a.hasCost)
-            return inner;
-        return std::clamp(float(MeasureText(a.label.c_str(), 14)) + 28.f, 76.f, inner * .5f);
-    }
+constexpr float BTN_H = 30, ROW_GAP = 6, COST_GAP = 10, NOTE_FS = 12;
+float btnWidth(const ContextPanel::MenuAct &a, float inner)
+{
+    if (!a.hasCost)
+        return inner;
+    return std::clamp(float(MeasureText(a.label.c_str(), 14)) + 28.f, 76.f, inner * .5f);
+}
 } // namespace
 
-float ContextPanel::innerW() const { return mCtx.size().x - 2 * float(mCtx.padding) - 12; }
+float ContextPanel::innerW() const
+{
+    return mCtx.size().x - 2 * float(mCtx.padding) - 12;
+}
 void ContextPanel::layout()
 {
     rowY.assign(acts.size(), 0);
@@ -322,7 +353,9 @@ void ContextPanel::layout()
             Vector2 cs = ui::measureCosts(a.cost, cw, st);
             float nh = 0;
             if (!a.note.empty())
-                nh = cs.x + 8 + float(MeasureText(a.note.c_str(), int(NOTE_FS))) <= cw ? 0.f : NOTE_FS + 3; // the note wraps below
+                nh = cs.x + 8 + float(MeasureText(a.note.c_str(), int(NOTE_FS))) <= cw
+                         ? 0.f
+                         : NOTE_FS + 3; // the note wraps below
             h = std::max(BTN_H, cs.y + nh);
         }
         rowY[i] = y;
@@ -337,7 +370,8 @@ Rectangle ContextPanel::rect() const
 {
     Vector2 s = mCtx.size();
     float h = panelH > 0 ? panelH : s.y;
-    return {std::clamp(pos.x, 8.f, float(ui::screenW()) - s.x - 8), std::clamp(pos.y, 56.f, std::max(56.f, float(ui::screenH()) - h - 8)), s.x, h};
+    return {std::clamp(pos.x, 8.f, float(ui::screenW()) - s.x - 8),
+            std::clamp(pos.y, 56.f, std::max(56.f, float(ui::screenH()) - h - 8)), s.x, h};
 }
 float ContextPanel::topY() const
 {
@@ -449,7 +483,8 @@ void ContextPanel::draw()
     {
         const MenuAct &a = acts[i];
         Rectangle b = button(int(i));
-        ui::drawButton(b, a.label, a.enabled, a.red, CheckCollisionPointRec(m, b), IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(m, b));
+        ui::drawButton(b, a.label, a.enabled, a.red, CheckCollisionPointRec(m, b),
+                       IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(m, b));
         if (!a.hasCost)
             continue;
         Rectangle ca = costArea(int(i));

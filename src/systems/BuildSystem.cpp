@@ -40,8 +40,7 @@ bool BuildSystem::buildingTick(entt::entity e, float dt)
 void BuildSystem::tick(const std::vector<entt::entity> &blds, float dt)
 {
     std::unordered_map<uint32_t, int> workerCount;
-    reg.view<Worker>().each([&](const Worker &w)
-                            { workerCount[w.home]++; });
+    reg.view<Worker>().each([&](const Worker &w) { workerCount[w.home]++; });
 
     // construction, production, towers
     for (auto e : blds)
@@ -65,7 +64,9 @@ void BuildSystem::tick(const std::vector<entt::entity> &blds, float dt)
         if (isResourceBuilding(in.kind) && isPlayer(ow) && !world.siteBusy(e))
         { // upgrades / repairs pause production
             Yield y = yieldOf(in.kind, world.biome(int(std::floor(c.x)), int(std::floor(c.y))), in.kind == K_Harbour);
-            float f = productionMul(in.level) * eff * s.clearing.mineMul(e, in.kind, c) * (world.pl[ow].online ? 1.f : OFFLINE_PROD) * dt, tot = 0; // [world] gold deposits boost mines
+            float f = productionMul(in.level) * eff * s.clearing.mineMul(e, in.kind, c) *
+                      (world.pl[ow].online ? 1.f : OFFLINE_PROD) * dt,
+                  tot = 0; // [world] gold deposits boost mines
             for (int r = 0; r < R_Count; r++)
                 tot += b.stock[r];
             if (tot < 150)

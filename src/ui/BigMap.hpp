@@ -10,7 +10,7 @@ class App;
 
 class BigMap
 {
-public:
+  public:
     explicit BigMap(App &app) : app(app) {}
     void load();
 
@@ -21,7 +21,7 @@ public:
     void input(Vector2 m);
     void draw();
 
-private:
+  private:
     struct Cand
     {
         std::string name;

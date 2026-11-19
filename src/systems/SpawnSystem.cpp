@@ -24,9 +24,12 @@ bool SpawnSystem::clearingOk(int cx, int cy)
             return false;
     bool nearBase = false;
     reg.view<Info, Building>().each([&](const Info &i, const Building &b)
-                                    {
-        if (i.kind != K_TownHall) return;
-        if (std::max(std::abs(b.tx - cx), std::abs(b.ty - cy)) < 70) nearBase = true; });
+    {
+        if (i.kind != K_TownHall)
+            return;
+        if (std::max(std::abs(b.tx - cx), std::abs(b.ty - cy)) < 70)
+            nearBase = true;
+    });
     return !nearBase;
 }
 IV SpawnSystem::findClearing(const Pos *anchor)
@@ -34,34 +37,43 @@ IV SpawnSystem::findClearing(const Pos *anchor)
     if (anchor) // new bases appear close to an existing player, but outside their base
         for (int n = 0; n < 6000; n++)
         {
-            float ang = float(world.rng() % 6283) / 1000.f, r = float(SPAWN_MIN_DIST + int(world.rng() % uint32_t(SPAWN_RADIUS - SPAWN_MIN_DIST)));
+            float ang = float(world.rng() % 6283) / 1000.f,
+                  r = float(SPAWN_MIN_DIST + int(world.rng() % uint32_t(SPAWN_RADIUS - SPAWN_MIN_DIST)));
             int x = int(anchor->x + std::cos(ang) * r), y = int(anchor->y + std::sin(ang) * r);
             if (clearingOk(x, y))
                 return {x, y};
         }
     int ths = 0;
     reg.view<Info>().each([&](const Info &i)
-                          { if (i.kind == K_TownHall) ths++; });
+    {
+        if (i.kind == K_TownHall)
+            ths++;
+    });
     for (int pass = 0; pass < 3; pass++)
         for (int n = 0; n < 12000; n++)
         {
-            float ang = float(world.rng() % 6283) / 1000.f, r = (ths ? 90.f : 0.f) + float(n) * .35f + float(pass) * 400.f;
+            float ang = float(world.rng() % 6283) / 1000.f,
+                  r = (ths ? 90.f : 0.f) + float(n) * .35f + float(pass) * 400.f;
             int x = int(std::cos(ang) * r), y = int(std::sin(ang) * r);
             if (clearingOk(x, y))
                 return {x, y};
         }
     return {0, 0};
 }
-// Where should a newcomer (or a player who lost their base) appear? Near Steam friends, then allies / clan mates, then any player.
+// Where should a newcomer (or a player who lost their base) appear? Near Steam friends, then allies / clan mates, then
+// any player.
 bool SpawnSystem::spawnAnchor(int id, const std::vector<uint64_t> &friends, Pos &out)
 {
     std::vector<Pos> friendsAt, alliesAt, anyAt;
     reg.view<Info, Building, Owner>().each([&](const Info &i, const Building &b, const Owner &o)
-                                           {
-        if (i.kind != K_TownHall || !isPlayer(o.id) || o.id == id) return;
+    {
+        if (i.kind != K_TownHall || !isPlayer(o.id) || o.id == id)
+            return;
         Pos c = footCenter(i.kind, b.tx, b.ty);
-        bool isFriend = world.pl[o.id].steamId != 0 && std::find(friends.begin(), friends.end(), world.pl[o.id].steamId) != friends.end();
-        (isFriend ? friendsAt : (world.allied(id, o.id) ? alliesAt : anyAt)).push_back(c); });
+        bool isFriend = world.pl[o.id].steamId != 0 &&
+                        std::find(friends.begin(), friends.end(), world.pl[o.id].steamId) != friends.end();
+        (isFriend ? friendsAt : (world.allied(id, o.id) ? alliesAt : anyAt)).push_back(c);
+    });
     auto &pick = !friendsAt.empty() ? friendsAt : (!alliesAt.empty() ? alliesAt : anyAt);
     if (pick.empty())
         return false;

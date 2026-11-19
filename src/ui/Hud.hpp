@@ -11,7 +11,7 @@ class App;
 
 class Hud
 {
-public:
+  public:
     explicit Hud(App &app) : app(app) {}
     void load();
     void onLog(const LogEvent &e); // dispatcher sink
@@ -32,7 +32,7 @@ public:
     void drawHoverLabel();
     void drawCursor();
 
-private:
+  private:
     struct LogLine
     {
         std::string text;

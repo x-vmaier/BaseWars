@@ -6,12 +6,12 @@ class App;
 
 class WaterRenderer
 {
-public:
+  public:
     explicit WaterRenderer(App &app) : app(app) {}
     void load();
     void draw(float t); // screen space, uses the camera for the shader's world mapping
 
-private:
+  private:
     App &app;
     Shader sh{};
     bool ok = false;

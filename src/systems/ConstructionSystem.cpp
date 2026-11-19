@@ -9,8 +9,11 @@
 
 namespace
 {
-    constexpr float SITE_REACH = 1.1f; // a pawn works on a building from this close to its footprint
-    const char *jobName(uint8_t k) { return k == SJ_Upgrade ? "upgrade" : (k == SJ_Repair ? "repair" : "construction"); }
+constexpr float SITE_REACH = 1.1f; // a pawn works on a building from this close to its footprint
+const char *jobName(uint8_t k)
+{
+    return k == SJ_Upgrade ? "upgrade" : (k == SJ_Repair ? "repair" : "construction");
+}
 } // namespace
 
 bool ConstructionSystem::needsPawn(entt::entity e) const
@@ -24,9 +27,11 @@ bool ConstructionSystem::needsPawn(entt::entity e) const
 // pawns
 bool ConstructionSystem::freePawn(entt::entity e, int owner) const
 {
-    if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Info>(e).kind != K_Pawn || reg.get<Owner>(e).id != owner)
+    if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Info>(e).kind != K_Pawn ||
+        reg.get<Owner>(e).id != owner)
         return false;
-    if (reg.any_of<Convoy, Haul, Raider, Aboard, Boarding, Extinguish, ClearTask, BuildTask, Support>(e) || world.dying.count(reg.get<Uid>(e).id))
+    if (reg.any_of<Convoy, Haul, Raider, Aboard, Boarding, Extinguish, ClearTask, BuildTask, Support>(e) ||
+        world.dying.count(reg.get<Uid>(e).id))
         return false;
     if (auto it = manualUntil.find(reg.get<Uid>(e).id); it != manualUntil.end() && it->second > world.clock)
         return false;
@@ -38,11 +43,19 @@ entt::entity ConstructionSystem::pickPawn(int owner, Pos at)
 {
     entt::entity best = entt::null;
     float bd = 1e9f;
-    reg.view<Info, Owner, Unit, Pos>().each([&](entt::entity e, const Info &i, const Owner &o, const Unit &, const Pos &q)
-                                            {
-        if (i.kind != K_Pawn || o.id != owner || !freePawn(e, owner)) return;
-        float d = std::hypot(q.x - at.x, q.y - at.y) + (reg.all_of<Worker>(e) ? 12.f : 0.f);   // idle pawns before workers
-        if (d < bd) { bd = d; best = e; } });
+    reg.view<Info, Owner, Unit, Pos>().each(
+        [&](entt::entity e, const Info &i, const Owner &o, const Unit &, const Pos &q)
+    {
+        if (i.kind != K_Pawn || o.id != owner || !freePawn(e, owner))
+            return;
+        float d =
+            std::hypot(q.x - at.x, q.y - at.y) + (reg.all_of<Worker>(e) ? 12.f : 0.f); // idle pawns before workers
+        if (d < bd)
+        {
+            bd = d;
+            best = e;
+        }
+    });
     return best;
 }
 void ConstructionSystem::assign(entt::entity site, SiteJob &j, entt::entity e)
@@ -188,7 +201,8 @@ void ConstructionSystem::finishUpgrade(entt::entity site)
     h.hp = std::min(h.maxhp, h.hp + h.maxhp - old);
     Pos c = world.posOf(site);
     world.fx(E_Dust, c.x, c.y);
-    world.say(reg.get<Owner>(site).id, std::string(KINFO[in.kind].name) + " upgraded to level " + std::to_string(in.level) + ".");
+    world.say(reg.get<Owner>(site).id,
+              std::string(KINFO[in.kind].name) + " upgraded to level " + std::to_string(in.level) + ".");
 }
 void ConstructionSystem::endJob(entt::entity site)
 {
@@ -205,7 +219,10 @@ void ConstructionSystem::tick(float dt)
     if (world.tick % 5 == 0)
     {
         reg.view<Building, Owner>().each([&](entt::entity e, const Building &b, const Owner &)
-                                         { if (b.progress < 1.f && !reg.all_of<SiteJob>(e) && needsPawn(e)) fresh.push_back(e); });
+        {
+            if (b.progress < 1.f && !reg.all_of<SiteJob>(e) && needsPawn(e))
+                fresh.push_back(e);
+        });
         for (auto e : fresh)
         {
             SiteJob j;
@@ -219,21 +236,28 @@ void ConstructionSystem::tick(float dt)
     { // pawn validation and assignment, twice a second
         std::vector<entt::entity> sites;
         reg.view<SiteJob>().each([&](entt::entity e, SiteJob &j)
-                                 {
-            if (j.pawn) {
+        {
+            if (j.pawn)
+            {
                 auto pe = world.find(j.pawn);
-                const BuildTask* bt = pe == entt::null ? nullptr : reg.try_get<BuildTask>(pe);
-                if (!bt || bt->site != reg.get<Uid>(e).id) { j.pawn = 0; j.phase = SP_Waiting; j.since = world.clock; }
+                const BuildTask *bt = pe == entt::null ? nullptr : reg.try_get<BuildTask>(pe);
+                if (!bt || bt->site != reg.get<Uid>(e).id)
+                {
+                    j.pawn = 0;
+                    j.phase = SP_Waiting;
+                    j.since = world.clock;
+                }
             }
-            if (!j.pawn) sites.push_back(e); });
+            if (!j.pawn)
+                sites.push_back(e);
+        });
         for (auto e : sites)
         {
             auto pawn = pickPawn(reg.get<Owner>(e).id, world.posOf(e));
             if (pawn != entt::null)
                 assign(e, reg.get<SiteJob>(e), pawn);
         }
-        std::erase_if(manualUntil, [&](auto &kv)
-                      { return kv.second < world.clock; });
+        std::erase_if(manualUntil, [&](auto &kv) { return kv.second < world.clock; });
     }
     if (world.tick % 5 == 2)
         for (int id = 1; id <= MAX_PLAYERS; id++)
@@ -250,7 +274,8 @@ void ConstructionSystem::upgrade(int id, entt::entity be)
     std::string nm = KINFO[in.kind].name;
     if (reg.all_of<SiteJob>(be))
     {
-        world.say(id, "The " + nm + " is already being " + (reg.get<SiteJob>(be).kind == SJ_Repair ? "repaired." : "upgraded."));
+        world.say(id, "The " + nm + " is already being " +
+                          (reg.get<SiteJob>(be).kind == SJ_Repair ? "repaired." : "upgraded."));
         return;
     }
     if (world.outOfTerritory(be) || reg.all_of<Moving>(be))
@@ -288,7 +313,9 @@ void ConstructionSystem::upgrade(int id, entt::entity be)
     j.since = world.clock;
     std::copy(cost, cost + R_Count, j.paid);
     reg.emplace<SiteJob>(be, j);
-    world.say(id, "Upgrade of the " + nm + " to level " + std::to_string(in.level + 1) + " ordered (" + std::to_string(int(j.total)) + " s of work). A pawn is on the way; production and training pause meanwhile.");
+    world.say(id, "Upgrade of the " + nm + " to level " + std::to_string(in.level + 1) + " ordered (" +
+                      std::to_string(int(j.total)) +
+                      " s of work). A pawn is on the way; production and training pause meanwhile.");
 }
 void ConstructionSystem::repair(int id, entt::entity be)
 {
@@ -332,7 +359,8 @@ void ConstructionSystem::repair(int id, entt::entity be)
     j.since = world.clock;
     std::copy(cost, cost + R_Count, j.paid);
     reg.emplace<SiteJob>(be, j);
-    world.say(id, "Repair of the " + nm + " ordered (" + std::to_string(int(j.total)) + " s of work). A pawn is on the way.");
+    world.say(id, "Repair of the " + nm + " ordered (" + std::to_string(int(j.total)) +
+                      " s of work). A pawn is on the way.");
 }
 void ConstructionSystem::cancel(int id, entt::entity be)
 {
@@ -347,7 +375,8 @@ void ConstructionSystem::cancel(int id, entt::entity be)
         world.pl[id].res[r] += std::floor(j->paid[r] * keep);
     std::string what = jobName(j->kind);
     endJob(be);
-    world.say(id, "The " + what + " was cancelled; " + std::to_string(int(std::lround(keep * 100.f))) + "% of its cost was refunded.");
+    world.say(id, "The " + what + " was cancelled; " + std::to_string(int(std::lround(keep * 100.f))) +
+                      "% of its cost was refunded.");
 }
 void ConstructionSystem::repairCmd(int id, Reader &r)
 {
@@ -370,10 +399,13 @@ void ConstructionSystem::sendJobs(int id)
     w.put<uint16_t>(0);
     uint16_t n = 0;
     reg.view<SiteJob, Owner, Uid>().each([&](const SiteJob &j, const Owner &o, const Uid &uid)
-                                         {
-        if (!world.allied(id, o.id) || n >= 400) return;
-        w.put<uint32_t>(uid.id).put<uint8_t>(j.kind).put<uint8_t>(j.phase).put<uint8_t>(uint8_t(std::clamp(j.t / std::max(.01f, j.total), 0.f, 1.f) * 100.f));
-        n++; });
+    {
+        if (!world.allied(id, o.id) || n >= 400)
+            return;
+        w.put<uint32_t>(uid.id).put<uint8_t>(j.kind).put<uint8_t>(j.phase).put<uint8_t>(
+            uint8_t(std::clamp(j.t / std::max(.01f, j.total), 0.f, 1.f) * 100.f));
+        n++;
+    });
     if (!n && !jobsWereSent[id])
         return;
     jobsWereSent[id] = n > 0;

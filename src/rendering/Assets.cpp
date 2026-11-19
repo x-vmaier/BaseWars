@@ -15,8 +15,8 @@ namespace fs = std::filesystem;
 // assets
 namespace
 {
-    std::string assetRoot;
-    std::unordered_map<std::string, Texture2D> texCache;
+std::string assetRoot;
+std::unordered_map<std::string, Texture2D> texCache;
 } // namespace
 
 void findAssets()
@@ -74,147 +74,148 @@ Rectangle frameRect(const Anim &a, int f)
 
 namespace
 {
-    // tiny JSON (for Tiled .tmj)
-    struct J
+// tiny JSON (for Tiled .tmj)
+struct J
+{
+    enum T
     {
-        enum T
-        {
-            Null,
-            Num,
-            Str,
-            Arr,
-            Obj
-        } t = Null;
+        Null,
+        Num,
+        Str,
+        Arr,
+        Obj
+    } t = Null;
 
-        double n = 0;
-        std::string s;
-        std::vector<J> a;
-        std::vector<std::pair<std::string, J>> o;
+    double n = 0;
+    std::string s;
+    std::vector<J> a;
+    std::vector<std::pair<std::string, J>> o;
 
-        const J *get(const std::string &k) const
-        {
-            for (auto &p : o)
-                if (p.first == k)
-                    return &p.second;
-            return nullptr;
-        }
-    };
-
-    struct JParser
+    const J *get(const std::string &k) const
     {
-        const std::string &s;
-        size_t i = 0;
-        bool ok = true;
+        for (auto &p : o)
+            if (p.first == k)
+                return &p.second;
+        return nullptr;
+    }
+};
 
-        void ws()
-        {
-            while (i < s.size() && std::isspace(uint8_t(s[i])))
-                i++;
-        }
+struct JParser
+{
+    const std::string &s;
+    size_t i = 0;
+    bool ok = true;
 
-        std::string str()
-        {
-            std::string r;
+    void ws()
+    {
+        while (i < s.size() && std::isspace(uint8_t(s[i])))
             i++;
-            while (i < s.size() && s[i] != '"')
-            {
-                if (s[i] == '\\' && i + 1 < s.size())
-                {
-                    i++;
-                    r += s[i] == 'n' ? '\n' : (s[i] == 't' ? '\t' : s[i]);
-                }
-                else
-                    r += s[i];
-                i++;
-            }
-            i++;
-            return r;
-        }
+    }
 
-        J parse()
+    std::string str()
+    {
+        std::string r;
+        i++;
+        while (i < s.size() && s[i] != '"')
         {
-            J v;
-            ws();
-            if (i >= s.size())
+            if (s[i] == '\\' && i + 1 < s.size())
             {
-                ok = false;
-                return v;
-            }
-            char c = s[i];
-            if (c == '{')
-            {
-                v.t = J::Obj;
                 i++;
-                ws();
-                while (i < s.size() && s[i] != '}')
-                {
-                    ws();
-                    std::string k = str();
-                    ws();
-                    if (s[i] == ':')
-                        i++;
-                    v.o.push_back({k, parse()});
-                    ws();
-                    if (s[i] == ',')
-                        i++;
-                    ws();
-                }
-                i++;
-            }
-            else if (c == '[')
-            {
-                v.t = J::Arr;
-                i++;
-                ws();
-                while (i < s.size() && s[i] != ']')
-                {
-                    v.a.push_back(parse());
-                    ws();
-                    if (s[i] == ',')
-                        i++;
-                    ws();
-                }
-                i++;
-            }
-            else if (c == '"')
-            {
-                v.t = J::Str;
-                v.s = str();
-            }
-            else if (s.compare(i, 4, "true") == 0)
-            {
-                v.t = J::Num;
-                v.n = 1;
-                i += 4;
-            }
-            else if (s.compare(i, 5, "false") == 0)
-            {
-                v.t = J::Num;
-                v.n = 0;
-                i += 5;
-            }
-            else if (s.compare(i, 4, "null") == 0)
-            {
-                i += 4;
+                r += s[i] == 'n' ? '\n' : (s[i] == 't' ? '\t' : s[i]);
             }
             else
-            {
-                size_t e = i;
-                while (e < s.size() && (std::isdigit(uint8_t(s[e])) || s[e] == '-' || s[e] == '+' || s[e] == '.' || s[e] == 'e' || s[e] == 'E'))
-                    e++;
-                if (e == i)
-                {
-                    ok = false;
-                    i++;
-                    return v;
-                }
-                v.t = J::Num;
-                v.n = std::atof(s.substr(i, e - i).c_str());
-                i = e;
-            }
+                r += s[i];
+            i++;
+        }
+        i++;
+        return r;
+    }
+
+    J parse()
+    {
+        J v;
+        ws();
+        if (i >= s.size())
+        {
+            ok = false;
             return v;
         }
-    };
+        char c = s[i];
+        if (c == '{')
+        {
+            v.t = J::Obj;
+            i++;
+            ws();
+            while (i < s.size() && s[i] != '}')
+            {
+                ws();
+                std::string k = str();
+                ws();
+                if (s[i] == ':')
+                    i++;
+                v.o.push_back({k, parse()});
+                ws();
+                if (s[i] == ',')
+                    i++;
+                ws();
+            }
+            i++;
+        }
+        else if (c == '[')
+        {
+            v.t = J::Arr;
+            i++;
+            ws();
+            while (i < s.size() && s[i] != ']')
+            {
+                v.a.push_back(parse());
+                ws();
+                if (s[i] == ',')
+                    i++;
+                ws();
+            }
+            i++;
+        }
+        else if (c == '"')
+        {
+            v.t = J::Str;
+            v.s = str();
+        }
+        else if (s.compare(i, 4, "true") == 0)
+        {
+            v.t = J::Num;
+            v.n = 1;
+            i += 4;
+        }
+        else if (s.compare(i, 5, "false") == 0)
+        {
+            v.t = J::Num;
+            v.n = 0;
+            i += 5;
+        }
+        else if (s.compare(i, 4, "null") == 0)
+        {
+            i += 4;
+        }
+        else
+        {
+            size_t e = i;
+            while (e < s.size() && (std::isdigit(uint8_t(s[e])) || s[e] == '-' || s[e] == '+' || s[e] == '.' ||
+                                    s[e] == 'e' || s[e] == 'E'))
+                e++;
+            if (e == i)
+            {
+                ok = false;
+                i++;
+                return v;
+            }
+            v.t = J::Num;
+            v.n = std::atof(s.substr(i, e - i).c_str());
+            i = e;
+        }
+        return v;
+    }
+};
 
 } // namespace
 
@@ -242,7 +243,10 @@ TMap loadTMap(const std::string &name)
     }
 
     auto num = [&](const J &j, const char *k, double d)
-    { auto v = j.get(k); return v ? v->n : d; };
+    {
+        auto v = j.get(k);
+        return v ? v->n : d;
+    };
 
     m.w = int(num(root, "width", 0));
     m.h = int(num(root, "height", 0));
@@ -268,7 +272,8 @@ TMap loadTMap(const std::string &name)
             auto img = t.get("image");
             if (!img)
             {
-                TraceLog(LOG_WARNING, "%s: external tilesets are not supported; use 'Embed tileset' in Tiled", name.c_str());
+                TraceLog(LOG_WARNING, "%s: external tilesets are not supported; use 'Embed tileset' in Tiled",
+                         name.c_str());
                 continue;
             }
 
@@ -281,7 +286,8 @@ TMap loadTMap(const std::string &name)
             }
 
             SetTextureFilter(tx, TEXTURE_FILTER_POINT);
-            m.sets.push_back({int(num(t, "firstgid", 1)), int(num(t, "columns", 1)), int(num(t, "tilewidth", 64)), int(num(t, "tileheight", 64)), tx});
+            m.sets.push_back({int(num(t, "firstgid", 1)), int(num(t, "columns", 1)), int(num(t, "tilewidth", 64)),
+                              int(num(t, "tileheight", 64)), tx});
         }
 
     if (auto ls = root.get("layers"))
@@ -302,8 +308,7 @@ TMap loadTMap(const std::string &name)
             }
         }
 
-    std::sort(m.sets.begin(), m.sets.end(), [](const TMap::TS &a, const TMap::TS &b)
-              { return a.first > b.first; });
+    std::sort(m.sets.begin(), m.sets.end(), [](const TMap::TS &a, const TMap::TS &b) { return a.first > b.first; });
 
     m.ok = m.w > 0 && m.h > 0 && !m.sets.empty() && !m.data.empty();
     TraceLog(LOG_INFO, "UI map %s: %dx%d tiles, scale %.2f, ok=%d", name.c_str(), m.w, m.h, m.scale, int(m.ok));

@@ -30,7 +30,8 @@ void UnitSystem::behave(const std::vector<entt::entity> &units, float dt)
             if (wd.timer <= 0 && u.path.empty())
             {
                 wd.timer = 2.f + float(world.rng() % 400) / 100.f;
-                int nx = int(std::floor(p.x)) + int(world.rng() % 7) - 3, ny = int(std::floor(p.y)) + int(world.rng() % 7) - 3;
+                int nx = int(std::floor(p.x)) + int(world.rng() % 7) - 3,
+                    ny = int(std::floor(p.y)) + int(world.rng() % 7) - 3;
                 if (world.walkable(nx, ny, false, 0) && world.biome(nx, ny) != B_Highlands)
                 {
                     u.path = {{float(nx) + .5f, float(ny) + .5f}};

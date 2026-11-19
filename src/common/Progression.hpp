@@ -66,7 +66,8 @@ enum GateErr
     G_Count
 };
 
-// Can one more building of kind k be placed? th = own Town Hall level (0 = none), have = existing + queued of that kind.
+// Can one more building of kind k be placed? th = own Town Hall level (0 = none), have = existing + queued of that
+// kind.
 inline int buildGate(Kind k, int th, int have)
 {
     if (k == K_TownHall)
@@ -102,7 +103,9 @@ inline std::string gateText(int err, Kind k, int th)
         return "Requires Town Hall level " + std::to_string(thUnlock(k));
     case G_Count:
     {
-        std::string s = "Limit reached: " + std::to_string(maxCount(k, th)) + " " + (maxCount(k, th) == 1 ? std::string(KINFO[k].name) : pluralName(k)) + " at Town Hall level " + std::to_string(th);
+        std::string s = "Limit reached: " + std::to_string(maxCount(k, th)) + " " +
+                        (maxCount(k, th) == 1 ? std::string(KINFO[k].name) : pluralName(k)) + " at Town Hall level " +
+                        std::to_string(th);
         for (int t = th + 1; t <= MAX_LEVEL; t++)
             if (maxCount(k, t) > maxCount(k, th))
                 return s + " (level " + std::to_string(t) + " allows " + std::to_string(maxCount(k, t)) + ")";
@@ -178,7 +181,8 @@ inline float upgradeSeconds(Kind k, int level)
 
 inline float repairSeconds(Kind k, float missing)
 {
-    return std::max(3.f, KINFO[k].buildTime * cfg().buildTimeScale * cfg().repairTimeScale * std::clamp(missing, 0.f, 1.f));
+    return std::max(3.f,
+                    KINFO[k].buildTime * cfg().buildTimeScale * cfg().repairTimeScale * std::clamp(missing, 0.f, 1.f));
 }
 
 // storage and production
@@ -229,23 +233,22 @@ enum SitePhase : uint8_t
 }; // waiting for a pawn / pawn on the way / pawn at work
 
 // tunables sent in S_Welcome (same order on both sides)
-template <class W>
-void putRules(W &w)
+template <class W> void putRules(W &w)
 {
     const ServerConfig &c = cfg();
-    for (float v : {c.buildTimeScale, c.upgradeCostGrowth, c.upgradeTimeGrowth, c.productionScale, c.repairCostFraction, c.repairTimeScale,
-                    c.damageMinEfficiency, c.damageCriticalHp, c.foodCostBuild, c.foodCostUpgrade, c.foodCostRepair, c.foodCostTrain,
-                    c.donationCooldown, c.demandBonus})
+    for (float v : {c.buildTimeScale, c.upgradeCostGrowth, c.upgradeTimeGrowth, c.productionScale, c.repairCostFraction,
+                    c.repairTimeScale, c.damageMinEfficiency, c.damageCriticalHp, c.foodCostBuild, c.foodCostUpgrade,
+                    c.foodCostRepair, c.foodCostTrain, c.donationCooldown, c.demandBonus})
         w.template put<float>(v);
 }
 
-template <class R>
-void getRules(R &r)
+template <class R> void getRules(R &r)
 {
     ServerConfig &c = cfg();
-    for (float *v : {&c.buildTimeScale, &c.upgradeCostGrowth, &c.upgradeTimeGrowth, &c.productionScale, &c.repairCostFraction, &c.repairTimeScale,
-                     &c.damageMinEfficiency, &c.damageCriticalHp, &c.foodCostBuild, &c.foodCostUpgrade, &c.foodCostRepair, &c.foodCostTrain,
-                     &c.donationCooldown, &c.demandBonus})
+    for (float *v :
+         {&c.buildTimeScale, &c.upgradeCostGrowth, &c.upgradeTimeGrowth, &c.productionScale, &c.repairCostFraction,
+          &c.repairTimeScale, &c.damageMinEfficiency, &c.damageCriticalHp, &c.foodCostBuild, &c.foodCostUpgrade,
+          &c.foodCostRepair, &c.foodCostTrain, &c.donationCooldown, &c.demandBonus})
     {
         float x = r.template get<float>();
         if (r.ok && std::isfinite(x))

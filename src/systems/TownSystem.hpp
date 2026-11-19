@@ -6,7 +6,7 @@ struct Systems;
 
 class TownSystem
 {
-public:
+  public:
     TownSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     bool townSiteOk(int cx, int cy);
@@ -17,7 +17,7 @@ public:
     void townDestroyed(uint16_t town, int killer);
     void townTick();
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

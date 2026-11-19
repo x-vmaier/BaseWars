@@ -6,13 +6,13 @@ struct Systems;
 
 class EnvironmentSystem
 {
-public:
+  public:
     EnvironmentSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void coldAndWake(const std::vector<entt::entity> &units, const std::vector<entt::entity> &blds); // once per second
     void explore(const std::vector<entt::entity> &units, const std::vector<entt::entity> &blds);     // every 4th tick
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

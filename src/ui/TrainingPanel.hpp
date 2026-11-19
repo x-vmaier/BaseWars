@@ -1,5 +1,6 @@
 #pragma once
-// Archery window: troop cards, troop details / training / troop upgrades, building upgrade, and the training queue strip.
+// Archery window: troop cards, troop details / training / troop upgrades, building upgrade, and the training queue
+// strip.
 #include "common/Shared.hpp"
 #include "rendering/Assets.hpp"
 
@@ -7,7 +8,7 @@ class App;
 
 class TrainingPanel
 {
-public:
+  public:
     explicit TrainingPanel(App &app) : app(app) {}
     void load();
 
@@ -24,7 +25,7 @@ public:
     void input(Vector2 mouse);
     void draw();
 
-private:
+  private:
     struct PanelXf
     {
         float ox, oy, sc;

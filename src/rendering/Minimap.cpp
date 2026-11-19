@@ -51,11 +51,16 @@ void Minimap::update()
             pix[size_t(j * MM + i)] = c;
         }
     W.reg.view<Info, Goal>().each([&](const Info &in, const Goal &g)
-                                  {
+    {
         int i = int(std::floor(g.x)) - cx, j = int(std::floor(g.y)) - cy;
-        if (i < 1 || j < 1 || i >= MM - 1 || j >= MM - 1 || in.kind == K_Sheep) return;
+        if (i < 1 || j < 1 || i >= MM - 1 || j >= MM - 1 || in.kind == K_Sheep)
+            return;
         int sz = isBuilding(in.kind) ? 2 : 1;
-        for (int a = 0; a < sz + 1; a++) for (int b = 0; b < sz + 1; b++) if (i + a < MM && j + b < MM) pix[size_t((j + b) * MM + i + a)] = teamColor(in.owner); });
+        for (int a = 0; a < sz + 1; a++)
+            for (int b = 0; b < sz + 1; b++)
+                if (i + a < MM && j + b < MM)
+                    pix[size_t((j + b) * MM + i + a)] = teamColor(in.owner);
+    });
     UpdateTexture(texture, pix.data());
 }
 
@@ -67,12 +72,16 @@ void Minimap::draw()
     DrawRectangleRec(mr, rgb(18, 22, 30));
     if (texture.id)
         DrawTexturePro(texture, {0, 0, float(MM), float(MM)}, mr, {0, 0}, 0, WHITE);
-    app.mapOverlay.draw(mr, {std::floor(cam.target.x / TILE) + .5f, std::floor(cam.target.y / TILE) + .5f}, float(MM) / mr.width, true);
+    app.mapOverlay.draw(mr, {std::floor(cam.target.x / TILE) + .5f, std::floor(cam.target.y / TILE) + .5f},
+                        float(MM) / mr.width, true);
     DrawRectangleLinesEx(mr, 2, rgb(60, 40, 26));
-    Vector2 tl = GetScreenToWorld2D({0, 0}, cam), brr = GetScreenToWorld2D({float(::GetScreenWidth()), float(::GetScreenHeight())}, cam); // camera view
+    Vector2 tl = GetScreenToWorld2D({0, 0}, cam),
+            brr = GetScreenToWorld2D({float(::GetScreenWidth()), float(::GetScreenHeight())}, cam); // camera view
     float k = mr.width / float(MM) / TILE;
-    Rectangle vr{mr.x + mr.width / 2 + (tl.x - cam.target.x) * k, mr.y + mr.height / 2 + (tl.y - cam.target.y) * k, (brr.x - tl.x) * k, (brr.y - tl.y) * k};
-    float x0 = std::max(vr.x, mr.x), y0 = std::max(vr.y, mr.y), x1 = std::min(vr.x + vr.width, mr.x + mr.width), y1 = std::min(vr.y + vr.height, mr.y + mr.height);
+    Rectangle vr{mr.x + mr.width / 2 + (tl.x - cam.target.x) * k, mr.y + mr.height / 2 + (tl.y - cam.target.y) * k,
+                 (brr.x - tl.x) * k, (brr.y - tl.y) * k};
+    float x0 = std::max(vr.x, mr.x), y0 = std::max(vr.y, mr.y), x1 = std::min(vr.x + vr.width, mr.x + mr.width),
+          y1 = std::min(vr.y + vr.height, mr.y + mr.height);
     if (x1 > x0 && y1 > y0)
         DrawRectangleLinesEx({x0, y0, x1 - x0, y1 - y0}, 1, WHITE);
 }

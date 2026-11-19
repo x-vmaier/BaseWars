@@ -7,7 +7,7 @@ inline constexpr int MAX_QUEUE = 5;
 
 class TrainingSystem
 {
-public:
+  public:
     TrainingSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     int queuedUnits(int id);
@@ -17,7 +17,7 @@ public:
     void dequeueTrain(int id, entt::entity be, int idx);
     void trainTick(entt::entity e, float dt);
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

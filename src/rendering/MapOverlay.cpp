@@ -41,9 +41,11 @@ void MapOverlay::draw(Rectangle in, Vector2 c, float tpp, bool mini)
         if (!inside(sp, mini ? 6.f : 10.f))
             continue;
         int rp = W.facRep[t.faction];
-        Color ring = rp <= HOSTILE_REP ? rgb(240, 70, 60) : (rp >= FRIENDLY_REP ? rgb(90, 220, 110) : rgb(235, 220, 120));
+        Color ring =
+            rp <= HOSTILE_REP ? rgb(240, 70, 60) : (rp >= FRIENDLY_REP ? rgb(90, 220, 110) : rgb(235, 220, 120));
         DrawCircleV({sp.x, sp.y - castle * .25f}, castle * .52f, Color{ring.r, ring.g, ring.b, 90});
-        icon(std::string("Buildings/") + COLOR_NAME[FACTION_COLOR[t.faction]] + " Buildings/Castle.png", sp, castle - 2, 320, 256);
+        icon(std::string("Buildings/") + COLOR_NAME[FACTION_COLOR[t.faction]] + " Buildings/Castle.png", sp, castle - 2,
+             320, 256);
         if (!mini)
         {
             std::string nm = FACTION_NAME[t.faction];
@@ -89,7 +91,8 @@ void MapOverlay::draw(Rectangle in, Vector2 c, float tpp, bool mini)
         Vector2 sp = T(p.lx, p.ly);
         if (!inside(sp, mini ? 4.f : 8.f))
             continue;
-        icon(std::string("Buildings/") + COLOR_NAME[colorIdx(p.id)] + " Buildings/Castle.png", sp, castle - 2, 320, 256, rgb(255, 255, 255, 200));
+        icon(std::string("Buildings/") + COLOR_NAME[colorIdx(p.id)] + " Buildings/Castle.png", sp, castle - 2, 320, 256,
+             rgb(255, 255, 255, 200));
         if (!mini)
             DrawText(p.name.c_str(), int(sp.x) - MeasureText(p.name.c_str(), 11) / 2, int(sp.y) + 6, 11, WHITE);
     }
@@ -127,10 +130,12 @@ void MapOverlay::supportIcons(Rectangle in, Vector2 c, float tpp, bool mini)
     const ClientWorld &W = app.world;
     double now = GetTime();
     W.reg.view<Info, RPos>().each([&](const Info &i, const RPos &p)
-                                  {
-        if (isBuilding(i.kind) || !(i.state & UNIT_SUPPORT_FLAG)) return;
+    {
+        if (isBuilding(i.kind) || !(i.state & UNIT_SUPPORT_FLAG))
+            return;
         Vector2 sp{in.x + in.width / 2 + (p.x - c.x) / tpp, in.y + in.height / 2 + (p.y - c.y) / tpp};
-        if (sp.x < in.x + 3 || sp.y < in.y + 3 || sp.x > in.x + in.width - 3 || sp.y > in.y + in.height - 3) return;
+        if (sp.x < in.x + 3 || sp.y < in.y + 3 || sp.x > in.x + in.width - 3 || sp.y > in.y + in.height - 3)
+            return;
         bool friendly = W.alliedWith(i.owner);
         Color col = friendly ? rgb(255, 170, 40) : rgb(255, 70, 60);
         float s = mini ? 4.f : 9.f + (friendly ? 0.f : 2.f * float(std::sin(now * 6) * .5 + .5));
@@ -140,8 +145,12 @@ void MapOverlay::supportIcons(Rectangle in, Vector2 c, float tpp, bool mini)
         DrawTriangleLines(a, e, b, BLACK);
         DrawLineV(e, d, BLACK);
         DrawLineV(d, b, BLACK);
-        if (mini) return;
-        DrawLineEx({sp.x - 4, sp.y + 4}, {sp.x + 4, sp.y - 4}, 2, WHITE);          // crossed sword
+        if (mini)
+            return;
+        DrawLineEx({sp.x - 4, sp.y + 4}, {sp.x + 4, sp.y - 4}, 2, WHITE); // crossed sword
         DrawLineEx({sp.x - 4, sp.y - 4}, {sp.x + 4, sp.y + 4}, 1, rgb(60, 40, 20));
-        if (tpp <= 2.f) DrawText(friendly ? "Patrol" : "Hostile patrol", int(sp.x) + 12, int(sp.y) - 5, 10, friendly ? rgb(255, 215, 130) : rgb(255, 150, 140)); });
+        if (tpp <= 2.f)
+            DrawText(friendly ? "Patrol" : "Hostile patrol", int(sp.x) + 12, int(sp.y) - 5, 10,
+                     friendly ? rgb(255, 215, 130) : rgb(255, 150, 140));
+    });
 }

@@ -8,7 +8,7 @@ class App;
 
 class BaseMenus
 {
-public:
+  public:
     explicit BaseMenus(App &app) : app(app) {}
 
     void push(const Toast &t);
@@ -16,7 +16,7 @@ public:
     bool input(Vector2 m); // true when a click was consumed
     void draw();
 
-private:
+  private:
     Rectangle toastRect(int i) const;
     Rectangle homelessBanner() const;
     App &app;

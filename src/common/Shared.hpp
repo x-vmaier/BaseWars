@@ -37,11 +37,7 @@ inline constexpr int HOSTILE_REP = -25;
 inline constexpr int FRIENDLY_REP = 25;
 inline constexpr uint8_t UNIT_CONVOY_FLAG = 0x80; // set in the state byte of tribute convoys
 inline constexpr const char *FACTION_NAME[FACTION_COUNT] = {
-    "Ironvale Kingdom",
-    "Sunreach Empire",
-    "Nightfall Order",
-    "Amethyst Conclave",
-    "Azure League",
+    "Ironvale Kingdom", "Sunreach Empire", "Nightfall Order", "Amethyst Conclave", "Azure League",
 };
 inline constexpr int FACTION_COLOR[FACTION_COUNT] = {1, 2, 4, 3, 0}; // index into Blue/Red/Yellow/Purple/Black
 
@@ -52,10 +48,11 @@ inline bool isFactionOwner(int o)
 
 inline const char *repTier(int rep)
 {
-    return rep <= -60 ? "Hated" : rep <= HOSTILE_REP ? "Hostile"
-                              : rep < FRIENDLY_REP   ? "Neutral"
-                              : rep < 60             ? "Friendly"
-                                                     : "Allied";
+    return rep <= -60           ? "Hated"
+           : rep <= HOSTILE_REP ? "Hostile"
+           : rep < FRIENDLY_REP ? "Neutral"
+           : rep < 60           ? "Friendly"
+                                : "Allied";
 }
 
 enum Biome : uint8_t
@@ -130,7 +127,8 @@ enum Msg : uint8_t
     C_Repair,  // [sites] u32 building, u8 mode (0 start a repair, 1 cancel the running upgrade / repair)
     C_SetQuotas,
     C_SetAlloc,
-    C_Dispose, // [town hall] u8 x4 defense quota per troop type (Warrior, Archer, Lancer, Monk); u8 res, u8 storage share %; u8 res (discard it)
+    C_Dispose, // [town hall] u8 x4 defense quota per troop type (Warrior, Archer, Lancer, Monk); u8 res, u8 storage
+               // share %; u8 res (discard it)
     S_Welcome,
     S_State,
     S_Fog,
@@ -150,7 +148,8 @@ enum Msg : uint8_t
     S_Jobs,     // [sites] construction / upgrade / repair jobs of own and allied buildings
     S_Econ
 }; // [economy] donation cooldown, faction demands and gift multipliers
-// S_BaseInfo: u8 quota (total), u8 homeless, u8 moving, u8 move %, then u8 x4 quota per QUOTA_KINDS type and u8 x R_Count storage shares %.
+// S_BaseInfo: u8 quota (total), u8 homeless, u8 moving, u8 move %, then u8 x4 quota per QUOTA_KINDS type and u8 x
+// R_Count storage shares %.
 
 enum EffectType : uint8_t
 {
@@ -174,12 +173,14 @@ enum UnitState : uint8_t
     US_Extinguish,
     US_Build
 }; // US_Build: pawn hammering at a building site
-// Bit registry for the `state` byte of a state record (units: low 3 bits are the UnitState; buildings: only the flags below).
+// Bit registry for the `state` byte of a state record (units: low 3 bits are the UnitState; buildings: only the flags
+// below).
 
-inline constexpr uint8_t UNIT_SUPPORT_FLAG = 0x40;                          // troop patrol sent to support a clan member (shown on maps)
-inline constexpr uint8_t BLD_BURNING = 1, BLD_DISABLED = 2, BLD_MOVING = 4; // building flags: on fire / outside any territory / being relocated
-inline constexpr uint8_t BLD_WORK = 8;                                      // building flag: upgrade or repair job running (no production / training)
-inline constexpr uint8_t BLD_CRIPPLED = 16;                                 // building flag: HP below damage_critical_hp, disabled until repaired
+inline constexpr uint8_t UNIT_SUPPORT_FLAG = 0x40; // troop patrol sent to support a clan member (shown on maps)
+inline constexpr uint8_t BLD_BURNING = 1, BLD_DISABLED = 2,
+                         BLD_MOVING = 4;    // building flags: on fire / outside any territory / being relocated
+inline constexpr uint8_t BLD_WORK = 8;      // building flag: upgrade or repair job running (no production / training)
+inline constexpr uint8_t BLD_CRIPPLED = 16; // building flag: HP below damage_critical_hp, disabled until repaired
 
 enum AllyAct : uint8_t
 {
@@ -187,7 +188,8 @@ enum AllyAct : uint8_t
     AA_Break
 };
 
-inline constexpr const char *BIOME_NAME[B_Count] = {"Ocean", "Plains", "Forest", "Highlands", "Desert", "Flower Fields", "Snow"};
+inline constexpr const char *BIOME_NAME[B_Count] = {"Ocean",  "Plains",        "Forest", "Highlands",
+                                                    "Desert", "Flower Fields", "Snow"};
 inline constexpr const char *RES_NAME[R_Count] = {"Wood", "Gold", "Stone", "Meat"};
 inline constexpr int INVALID_BIOME = 255;
 
@@ -211,42 +213,66 @@ struct KindInfo
     int vision; // reveal radius in tiles
 };
 
-inline constexpr KindInfo KINFO[K_Count] = {
-    {"Town Hall", true, 4, 3, {250, 200, 150, 0}, 800, 0, 14, 6.5f, 40, 9},
-    {"Outpost", true, 2, 2, {80, 40, 60, 0}, 350, 0, 8, 7.f, 20, 8},
-    {"Harbour", true, 2, 2, {120, 60, 40, 0}, 300, 0, 0, 0, 25, 7},
-    {"Storage House", true, 2, 2, {100, 20, 60, 0}, 400, 0, 0, 0, 25, 5},
-    {"Mine", true, 2, 2, {60, 20, 0, 0}, 250, 0, 0, 0, 18, 4},
-    {"Lumber Camp", true, 2, 2, {40, 10, 0, 0}, 250, 0, 0, 0, 15, 4},
-    {"Campfire", true, 1, 1, {20, 0, 0, 0}, 60, 0, 0, 0, 5, 4},
-    {"Archery", true, 3, 2, {120, 60, 80, 0}, 450, 0, 0, 0, 30, 5},
-    {"Pawn", false, 1, 1, {0, 0, 0, 30}, 40, 2.6f, 3, 1.2f, 0, 5},
-    {"Warrior", false, 1, 1, {10, 20, 0, 40}, 120, 2.6f, 12, 1.4f, 0, 6},
-    {"Archer", false, 1, 1, {30, 20, 0, 35}, 60, 2.8f, 9, 6.f, 0, 7},
-    {"Lancer", false, 1, 1, {20, 40, 20, 50}, 100, 3.4f, 15, 2.4f, 0, 6},
-    {"Monk", false, 1, 1, {0, 50, 0, 30}, 50, 2.6f, 8, 4.f, 0, 6},
-    {"Ship", false, 1, 1, {80, 30, 0, 20}, 220, 4.2f, 0, 0, 0, 10},
-    {"Sheep", false, 1, 1, {0, 0, 0, 0}, 12, 0.9f, 0, 0, 0, 0}};
+inline constexpr KindInfo KINFO[K_Count] = {{"Town Hall", true, 4, 3, {250, 200, 150, 0}, 800, 0, 14, 6.5f, 40, 9},
+                                            {"Outpost", true, 2, 2, {80, 40, 60, 0}, 350, 0, 8, 7.f, 20, 8},
+                                            {"Harbour", true, 2, 2, {120, 60, 40, 0}, 300, 0, 0, 0, 25, 7},
+                                            {"Storage House", true, 2, 2, {100, 20, 60, 0}, 400, 0, 0, 0, 25, 5},
+                                            {"Mine", true, 2, 2, {60, 20, 0, 0}, 250, 0, 0, 0, 18, 4},
+                                            {"Lumber Camp", true, 2, 2, {40, 10, 0, 0}, 250, 0, 0, 0, 15, 4},
+                                            {"Campfire", true, 1, 1, {20, 0, 0, 0}, 60, 0, 0, 0, 5, 4},
+                                            {"Archery", true, 3, 2, {120, 60, 80, 0}, 450, 0, 0, 0, 30, 5},
+                                            {"Pawn", false, 1, 1, {0, 0, 0, 30}, 40, 2.6f, 3, 1.2f, 0, 5},
+                                            {"Warrior", false, 1, 1, {10, 20, 0, 40}, 120, 2.6f, 12, 1.4f, 0, 6},
+                                            {"Archer", false, 1, 1, {30, 20, 0, 35}, 60, 2.8f, 9, 6.f, 0, 7},
+                                            {"Lancer", false, 1, 1, {20, 40, 20, 50}, 100, 3.4f, 15, 2.4f, 0, 6},
+                                            {"Monk", false, 1, 1, {0, 50, 0, 30}, 50, 2.6f, 8, 4.f, 0, 6},
+                                            {"Ship", false, 1, 1, {80, 30, 0, 20}, 220, 4.2f, 0, 0, 0, 10},
+                                            {"Sheep", false, 1, 1, {0, 0, 0, 0}, 12, 0.9f, 0, 0, 0, 0}};
 
 inline constexpr float START_RES[R_Count] = {300, 200, 150, 200};
 // Building level cap, Town Hall gates, cost / time curves and storage capacity: common/Progression.hpp
 
 // naval transport (ships are empty boats; the Harbour level at build time is the tier)
-// Strict capacities per tier (1..3). Ship state fields in S_State: Info.level = tier (aux), prog = troops aboard, stock = resources aboard.
-// Units aboard a ship are sent to allies with prog == UNIT_ABOARD_PROG (clients hide them) and are not sent to anyone else.
+// Strict capacities per tier (1..3). Ship state fields in S_State: Info.level = tier (aux), prog = troops aboard, stock
+// = resources aboard. Units aboard a ship are sent to allies with prog == UNIT_ABOARD_PROG (clients hide them) and are
+// not sent to anyone else.
 inline constexpr int SHIP_TROOP_CAP[3] = {6, 12, 20};
 inline constexpr int SHIP_RES_CAP[3] = {400, 900, 1600};
 inline constexpr const char *SHIP_NAME[3] = {"Small Boat", "Longship", "Galleon"};
 inline constexpr uint8_t UNIT_ABOARD_PROG = 255;
-inline int shipTier(int level) { return std::clamp(level, 1, 3); }
-inline int shipTroopCap(int level) { return SHIP_TROOP_CAP[shipTier(level) - 1]; }
-inline int shipResCap(int level) { return SHIP_RES_CAP[shipTier(level) - 1]; }
-inline float shipHpMul(int level) { return 1.f + .6f * float(shipTier(level) - 1); }
+inline int shipTier(int level)
+{
+    return std::clamp(level, 1, 3);
+}
+inline int shipTroopCap(int level)
+{
+    return SHIP_TROOP_CAP[shipTier(level) - 1];
+}
+inline int shipResCap(int level)
+{
+    return SHIP_RES_CAP[shipTier(level) - 1];
+}
+inline float shipHpMul(int level)
+{
+    return 1.f + .6f * float(shipTier(level) - 1);
+}
 
-inline bool isBuilding(Kind k) { return KINFO[k].building; }
-inline bool isResourceBuilding(Kind k) { return k == K_Mine || k == K_Lumber || k == K_Harbour; }
-inline bool isStorage(Kind k) { return k == K_TownHall || k == K_Outpost || k == K_Storage; }
-inline bool isArmy(Kind k) { return k == K_Warrior || k == K_Archer || k == K_Lancer; }
+inline bool isBuilding(Kind k)
+{
+    return KINFO[k].building;
+}
+inline bool isResourceBuilding(Kind k)
+{
+    return k == K_Mine || k == K_Lumber || k == K_Harbour;
+}
+inline bool isStorage(Kind k)
+{
+    return k == K_TownHall || k == K_Outpost || k == K_Storage;
+}
+inline bool isArmy(Kind k)
+{
+    return k == K_Warrior || k == K_Archer || k == K_Lancer;
+}
 // Troop types with a per-type clan defense quota (C_SetQuotas / S_BaseInfo order).
 inline constexpr int QUOTA_TYPES = 4;
 inline constexpr Kind QUOTA_KINDS[QUOTA_TYPES] = {K_Warrior, K_Archer, K_Lancer, K_Monk};
@@ -261,14 +287,32 @@ inline bool canTrain(Kind building, Kind unit)
     return building == K_Harbour && unit == K_Ship;
 }
 
-inline int unitUnlockLevel(Kind u) { return u == K_Pawn || u == K_Warrior ? 1 : (u == K_Archer || u == K_Monk ? 2 : (u == K_Lancer ? 3 : 1)); } // Archery level needed
+inline int unitUnlockLevel(Kind u)
+{
+    return u == K_Pawn || u == K_Warrior ? 1 : (u == K_Archer || u == K_Monk ? 2 : (u == K_Lancer ? 3 : 1));
+} // Archery level needed
 inline constexpr float HAULER_CARRY = 400.f;
 inline constexpr int MAX_UNIT_LEVEL = 5;
-inline bool isTroop(Kind k) { return k == K_Pawn || k == K_Warrior || k == K_Archer || k == K_Lancer || k == K_Monk; }
-inline float unitHpMul(int lv) { return 1.f + .22f * float(lv - 1); }
-inline float unitDmgMul(int lv) { return 1.f + .18f * float(lv - 1); }
-inline float unitSpeedMul(int lv) { return 1.f + .03f * float(lv - 1); }
-inline int troopUpgradeNeedsArchery(int toLevel) { return toLevel <= 2 ? 1 : (toLevel <= 4 ? 2 : 3); }
+inline bool isTroop(Kind k)
+{
+    return k == K_Pawn || k == K_Warrior || k == K_Archer || k == K_Lancer || k == K_Monk;
+}
+inline float unitHpMul(int lv)
+{
+    return 1.f + .22f * float(lv - 1);
+}
+inline float unitDmgMul(int lv)
+{
+    return 1.f + .18f * float(lv - 1);
+}
+inline float unitSpeedMul(int lv)
+{
+    return 1.f + .03f * float(lv - 1);
+}
+inline int troopUpgradeNeedsArchery(int toLevel)
+{
+    return toLevel <= 2 ? 1 : (toLevel <= 4 ? 2 : 3);
+}
 
 inline float damageVs(Kind attacker, Kind target)
 { // unit roles: lancers shred units, archers are poor against walls
@@ -280,9 +324,18 @@ inline float damageVs(Kind attacker, Kind target)
     return 1.f;
 }
 
-inline float armorOf(Kind target) { return target == K_Warrior ? .8f : 1.f; } // warriors take 20% less damage
-inline float levelMul(int level) { return 1.f + 0.5f * float(level - 1); }    // production / defence multiplier
-inline float levelHp(int level) { return 1.f + 0.25f * float(level - 1); }
+inline float armorOf(Kind target)
+{
+    return target == K_Warrior ? .8f : 1.f;
+} // warriors take 20% less damage
+inline float levelMul(int level)
+{
+    return 1.f + 0.5f * float(level - 1);
+} // production / defence multiplier
+inline float levelHp(int level)
+{
+    return 1.f + 0.25f * float(level - 1);
+}
 
 // hashing & noise
 inline uint32_t hash2(int x, int y, uint32_t s)
@@ -322,7 +375,8 @@ inline float fbm(float x, float y, uint32_t s, int oct = 4)
     return v / t;
 }
 
-inline constexpr float OCEAN_LEVEL = .43f, ISLAND_DEPTH = .06f, ISLAND_GATE = .68f, ISLAND_BLOB = .74f; // below OCEAN_LEVEL: ocean (rare islands excepted)
+inline constexpr float OCEAN_LEVEL = .43f, ISLAND_DEPTH = .06f, ISLAND_GATE = .68f,
+                       ISLAND_BLOB = .74f; // below OCEAN_LEVEL: ocean (rare islands excepted)
 
 inline float stretch(float v)
 {
@@ -343,11 +397,13 @@ inline uint8_t genBiome(int x, int y, uint32_t seed)
     e += (d - .5f) * .07f;
     if (e < c.oceanLevel)
     {
-        // rare small islands in open (deep) ocean: a regional gate keeps them scattered, a finer noise shapes 1-3 chunk wide blobs
+        // rare small islands in open (deep) ocean: a regional gate keeps them scattered, a finer noise shapes 1-3 chunk
+        // wide blobs
         if (e > c.oceanLevel - ISLAND_DEPTH)
             return B_Ocean;
         float gate = vnoise(fx * .021f + 17.f, fy * .021f - 41.f, seed + 91);
-        float blob = vnoise(fx * .033f - 9.f, fy * .033f + 23.f, seed + 93) * .88f + vnoise(fx * .12f, fy * .12f, seed + 95) * .12f;
+        float blob = vnoise(fx * .033f - 9.f, fy * .033f + 23.f, seed + 93) * .88f +
+                     vnoise(fx * .12f, fy * .12f, seed + 95) * .12f;
         if (gate < c.islandGate || blob < ISLAND_BLOB)
             return B_Ocean;
         e = .5f; // classify the island like ordinary lowland
@@ -478,11 +534,13 @@ inline uint8_t featureAt(int x, int y, int b, uint32_t seed)
     float dens = b >= 0 && b < 8 ? cfg().featureDensity[b] : 1.f;
     if (dens <= 0.f)
         return F_None;
-    uint32_t h = uint32_t(float(hash2(x, y, seed + 777) % 1000) / dens); // density > 1 compresses the roll so more tiles hit the feature thresholds
+    uint32_t h = uint32_t(float(hash2(x, y, seed + 777) % 1000) /
+                          dens); // density > 1 compresses the roll so more tiles hit the feature thresholds
     switch (b)
     {
     case B_Forest:
-        return h < 250 ? (hash2(x, y, 3) % 100 < 30 ? F_Oak : F_Pine) : (h < 290 ? F_Bush : (h < 315 ? F_Rock : F_None));
+        return h < 250 ? (hash2(x, y, 3) % 100 < 30 ? F_Oak : F_Pine)
+                       : (h < 290 ? F_Bush : (h < 315 ? F_Rock : F_None));
     case B_Plains:
         return h < 35 ? F_Oak : (h < 80 ? F_Bush : (h < 92 ? F_Rock : F_None));
     case B_Flowers:
@@ -523,7 +581,8 @@ inline const char *featName(uint8_t f)
     }
 }
 
-// seconds of pawn work, scaled by size / hardness (the pawn has to walk there first; the timer only runs while it works)
+// seconds of pawn work, scaled by size / hardness (the pawn has to walk there first; the timer only runs while it
+// works)
 inline float clearBaseSeconds(uint8_t f)
 {
     switch (f)
@@ -593,7 +652,8 @@ inline int dropAmount(uint8_t f)
 }
 
 inline constexpr int MAX_CLEAR_TILES = 24; // per C_Clear request
-// Gold deposits near a Mine raise its output: +GOLD_BONUS_EACH per deposit within GOLD_RADIUS tiles of its centre, capped.
+// Gold deposits near a Mine raise its output: +GOLD_BONUS_EACH per deposit within GOLD_RADIUS tiles of its centre,
+// capped.
 inline constexpr float GOLD_RADIUS = 4.5f, GOLD_BONUS_EACH = .2f, GOLD_BONUS_CAP = 1.f;
 
 inline float goldBonusOf(int deposits)
@@ -602,8 +662,7 @@ inline float goldBonusOf(int deposits)
 }
 
 // W: int biome(x,y); bool cleared(x,y); uint32_t seedValue()
-template <class W>
-int goldNear(W &w, Pos c)
+template <class W> int goldNear(W &w, Pos c)
 {
     int n = 0, cx = int(std::floor(c.x)), cy = int(std::floor(c.y)), r = int(std::ceil(GOLD_RADIUS));
     for (int y = cy - r; y <= cy + r; y++)
@@ -669,14 +728,15 @@ inline Pos footCenter(Kind k, int tx, int ty)
 
 // W: int biome(x,y) [INVALID_BIOME if unknown]; bool explored(x,y); bool occupied(x,y);
 //    void anchors(F) calling F(Pos center, Kind kind, bool mine, bool allied) for each FUNCTIONAL Town Hall / Outpost.
-//    optional: bool campfireNear(Pos c, float r)  (any campfire closer than r), bool inClanRadius(Pos c) (homeless Town Hall placement)
+//    optional: bool campfireNear(Pos c, float r)  (any campfire closer than r), bool inClanRadius(Pos c) (homeless Town
+//    Hall placement)
 inline constexpr float CAMPFIRE_SPACING = 6.f, CLAN_TOWN_RADIUS = 120.f;
 inline constexpr float OUTPOST_REACH = 34.f;
 inline constexpr float TOWN_MOVE_COST[R_Count] = {300, 500, 200, 0}; // wood, gold, stone, meat for moving the Town Hall
-inline constexpr float TOWN_MOVE_TIME = 180.f;                       // seconds of construction   // an Outpost may stand this far (tiles) from the Town Hall
+inline constexpr float TOWN_MOVE_TIME =
+    180.f; // seconds of construction   // an Outpost may stand this far (tiles) from the Town Hall
 
-template <class W>
-bool wCampfireNear(W &w, Pos c, float r)
+template <class W> bool wCampfireNear(W &w, Pos c, float r)
 {
     if constexpr (requires { w.campfireNear(c, r); })
         return w.campfireNear(c, r);
@@ -684,8 +744,7 @@ bool wCampfireNear(W &w, Pos c, float r)
         return false;
 }
 
-template <class W>
-bool wInClanRadius(W &w, Pos c)
+template <class W> bool wInClanRadius(W &w, Pos c)
 {
     if constexpr (requires { w.inClanRadius(c); })
         return w.inClanRadius(c);
@@ -693,8 +752,7 @@ bool wInClanRadius(W &w, Pos c)
         return true;
 }
 
-template <class W>
-int checkPlace(W &w, Kind k, int tx, int ty, int mode = PM_Normal)
+template <class W> int checkPlace(W &w, Kind k, int tx, int ty, int mode = PM_Normal)
 {
     const KindInfo &ki = KINFO[k];
     for (int y = ty; y < ty + ki.fh; y++)
@@ -731,21 +789,29 @@ int checkPlace(W &w, Kind k, int tx, int ty, int mode = PM_Normal)
     }
     Pos c = footCenter(k, tx, ty);
     if (k == K_Campfire)
-        return wCampfireNear(w, c, CAMPFIRE_SPACING) ? P_Spacing : P_OK; // campfires: anywhere, but spaced out; they claim no territory
+        return wCampfireNear(w, c, CAMPFIRE_SPACING)
+                   ? P_Spacing
+                   : P_OK; // campfires: anywhere, but spaced out; they claim no territory
 
     bool freeHall = k == K_TownHall && mode != PM_Normal;
     bool inTerritory = false, tooClose = false, enemy = false, anyOwn = false;
     float reach = k == K_TownHall ? 60.f : (k == K_Outpost ? OUTPOST_REACH : 0.f);
 
     w.anchors([&](Pos a, Kind ak, bool mine, bool ally)
-              {
+    {
         float d = std::max(std::abs(a.x - c.x), std::abs(a.y - c.y));
         int rad = anchorRadius(ak);
-        if (mine) anyOwn = true;
-        if (mine && (k == K_Outpost ? (ak == K_TownHall && d <= reach) : (reach > 0 ? d <= reach : d <= float(rad)))) inTerritory = true;
-        if (!mine && !ally && d <= float(rad + 2)) enemy = true;
-        if (k == K_Outpost && (mine || ally) && d < 12.f) tooClose = true;
-        if (k == K_TownHall && d < 26.f) tooClose = true; });
+        if (mine)
+            anyOwn = true;
+        if (mine && (k == K_Outpost ? (ak == K_TownHall && d <= reach) : (reach > 0 ? d <= reach : d <= float(rad))))
+            inTerritory = true;
+        if (!mine && !ally && d <= float(rad + 2))
+            enemy = true;
+        if (k == K_Outpost && (mine || ally) && d < 12.f)
+            tooClose = true;
+        if (k == K_TownHall && d < 26.f)
+            tooClose = true;
+    });
 
     if (enemy)
         return P_Enemy;
@@ -767,8 +833,7 @@ struct Writer
 {
     std::vector<uint8_t> b;
 
-    template <class T>
-    Writer &put(T v)
+    template <class T> Writer &put(T v)
     {
         static_assert(std::is_trivially_copyable_v<T>);
         auto p = reinterpret_cast<const uint8_t *>(&v);
@@ -795,8 +860,7 @@ struct Reader
     const uint8_t *e;
     bool ok = true;
 
-    template <class T>
-    T get()
+    template <class T> T get()
     {
         T v{};
         if (size_t(e - p) < sizeof(T))

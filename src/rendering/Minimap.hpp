@@ -9,7 +9,7 @@ class App;
 
 class Minimap
 {
-public:
+  public:
     static constexpr int MM = 100;
     static constexpr uint32_t TREE_EVERY = 4; // tree dot density: at most one in this many tiles
     explicit Minimap(App &app) : app(app) {}
@@ -20,7 +20,7 @@ public:
     Rectangle frame() const;
     Rectangle rect() const;
 
-private:
+  private:
     App &app;
     TMap mMini;
     double lastMM = 0;

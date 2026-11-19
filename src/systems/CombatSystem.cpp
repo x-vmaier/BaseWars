@@ -122,7 +122,10 @@ void CombatSystem::processKills()
         {
             bool other = false;
             reg.view<Info, Owner>().each([&](const Info &i, const Owner &o)
-                                         { if (i.kind == K_TownHall && o.id == owner) other = true; });
+            {
+                if (i.kind == K_TownHall && o.id == owner)
+                    other = true;
+            });
             if (!other)
                 defeat(owner, killer);
         }
@@ -141,7 +144,8 @@ void CombatSystem::defeat(int victim, int killer)
             world.pl[killer].res[r] += l;
             tot += l;
         }
-        world.say(killer, "You destroyed " + world.pl[victim].name + "'s Town Hall! Loot: " + std::to_string(int(tot)) + " resources.");
+        world.say(killer, "You destroyed " + world.pl[victim].name + "'s Town Hall! Loot: " + std::to_string(int(tot)) +
+                              " resources.");
     }
     if (s.clan.baseDefeat(victim))
         return; // clan members become homeless
@@ -162,7 +166,8 @@ void CombatSystem::fight(entt::entity e, Unit &u, Kind k, int ow, Pos &p, float 
     {
         tg = world.find(a->target);
         explicitOrder = true;
-        if (tg == entt::null || world.dying.count(a->target) || world.allied(ow, reg.get<Owner>(tg).id) || reg.all_of<Aboard>(tg))
+        if (tg == entt::null || world.dying.count(a->target) || world.allied(ow, reg.get<Owner>(tg).id) ||
+            reg.all_of<Aboard>(tg))
         {
             reg.remove<Attack>(e);
             tg = entt::null;
@@ -187,7 +192,10 @@ void CombatSystem::fight(entt::entity e, Unit &u, Kind k, int ow, Pos &p, float 
         u.path.clear();
         u.i = 0;
         u.state = US_Attack;
-        damage(tg, KINFO[k].dps * unitDmgMul(world.ulv(ow, k)) * damageVs(k, reg.get<Info>(tg).kind) * armorOf(reg.get<Info>(tg).kind) * dt, ow, reg.get<Uid>(e).id);
+        damage(tg,
+               KINFO[k].dps * unitDmgMul(world.ulv(ow, k)) * damageVs(k, reg.get<Info>(tg).kind) *
+                   armorOf(reg.get<Info>(tg).kind) * dt,
+               ow, reg.get<Uid>(e).id);
         if (k == K_Archer && u.cd <= 0)
         {
             u.cd = .8f;

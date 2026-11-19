@@ -89,7 +89,8 @@ void Input::update(float dt)
 
     hovered = ui || dragging ? 0 : pick(rm);
     hasFeat = !hovered && !ui && !dragging && !app.placement.active() && mode == M_None && pickFeature(rm, hoverFeat);
-    bool lp = IsMouseButtonPressed(MOUSE_BUTTON_LEFT), lr = IsMouseButtonReleased(MOUSE_BUTTON_LEFT), rp = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+    bool lp = IsMouseButtonPressed(MOUSE_BUTTON_LEFT), lr = IsMouseButtonReleased(MOUSE_BUTTON_LEFT),
+         rp = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
     bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
     if (app.shipPanel.input(m, lp, rp))
         return;
@@ -330,19 +331,28 @@ uint32_t Input::pick(Vector2 mouse, bool includeBuildings)
 
     auto &reg = app.world.reg;
     reg.view<RPos, Info, NetId>().each([&](const RPos &p, const Info &i, const NetId &n)
-                                       {
-        if (isBuilding(i.kind) || aboardUnit(i)) return;
+    {
+        if (isBuilding(i.kind) || aboardUnit(i))
+            return;
         float cy = p.y * TILE - (i.kind == K_Sheep ? 14.f : (i.kind == K_Ship ? 20.f : 28.f)), cx = p.x * TILE;
         float d = std::hypot(w.x - cx, w.y - cy);
-        if (d < (i.kind == K_Ship ? 54.f : 34.f) && d < bd) { bd = d; best = n.id; } });
+        if (d < (i.kind == K_Ship ? 54.f : 34.f) && d < bd)
+        {
+            bd = d;
+            best = n.id;
+        }
+    });
     if (best || !includeBuildings)
         return best;
     reg.view<RPos, Info, NetId>().each([&](const RPos &p, const Info &i, const NetId &n)
-                                       {
-        if (!isBuilding(i.kind)) return;
+    {
+        if (!isBuilding(i.kind))
+            return;
         float fw = float(KINFO[i.kind].fw) * TILE, fh = float(KINFO[i.kind].fh) * TILE;
         Rectangle r{p.x * TILE - fw / 2, p.y * TILE - fh / 2 - TILE * .9f, fw, fh + TILE * .9f};
-        if (CheckCollisionPointRec(w, r)) best = n.id; });
+        if (CheckCollisionPointRec(w, r))
+            best = n.id;
+    });
     return best;
 }
 
@@ -374,9 +384,12 @@ void Input::doSelect(Vector2 a, Vector2 b, bool add)
     {
         Rectangle R{std::min(a.x, b.x), std::min(a.y, b.y), std::abs(b.x - a.x), std::abs(b.y - a.y)};
         W.reg.view<RPos, Info, NetId>().each([&](const RPos &p, const Info &i, const NetId &n)
-                                             {
-            if (i.owner != W.me || isBuilding(i.kind) || aboardUnit(i)) return;
-            if (CheckCollisionPointRec(GetWorldToScreen2D({p.x * TILE, p.y * TILE - 24}, app.cam), R)) sel.insert(n.id); });
+        {
+            if (i.owner != W.me || isBuilding(i.kind) || aboardUnit(i))
+                return;
+            if (CheckCollisionPointRec(GetWorldToScreen2D({p.x * TILE, p.y * TILE - 24}, app.cam), R))
+                sel.insert(n.id);
+        });
     }
     else
     {

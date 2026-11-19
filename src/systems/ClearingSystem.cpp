@@ -13,16 +13,16 @@
 
 namespace
 {
-    struct WorldAdapter
-    { // adapter for the shared goldNear()
-        World &s;
-        int biome(int x, int y) { return s.biome(x, y); }
-        bool cleared(int x, int y) { return s.cleared.count(tkey(x, y)) > 0; }
-        uint32_t seedValue() { return s.seed; }
-    };
-    constexpr float WORK_REACH = 1.25f;       // a pawn works on a feature from this close (tiles from its centre)
-    constexpr double NO_PAWN_TIMEOUT = 180.0; // a job without any pawn for this long is cancelled and refunded
-    constexpr float AUTO_PICK_RANGE = 90.f;   // nearest free pawn search radius
+struct WorldAdapter
+{ // adapter for the shared goldNear()
+    World &s;
+    int biome(int x, int y) { return s.biome(x, y); }
+    bool cleared(int x, int y) { return s.cleared.count(tkey(x, y)) > 0; }
+    uint32_t seedValue() { return s.seed; }
+};
+constexpr float WORK_REACH = 1.25f;       // a pawn works on a feature from this close (tiles from its centre)
+constexpr double NO_PAWN_TIMEOUT = 180.0; // a job without any pawn for this long is cancelled and refunded
+constexpr float AUTO_PICK_RANGE = 90.f;   // nearest free pawn search radius
 } // namespace
 
 std::vector<IV> ClearingSystem::blockedTiles(Kind k, int tx, int ty)
@@ -51,7 +51,8 @@ bool ClearingSystem::worldBuildOk(int id, Kind k, int tx, int ty)
     if (rocks)
         s += (trees ? "," : "") + std::string(" ") + std::to_string(rocks) + " rock" + (rocks > 1 ? "s" : "");
     if (gold)
-        s += ((trees || rocks) ? "," : "") + std::string(" ") + std::to_string(gold) + " gold vein" + (gold > 1 ? "s" : "");
+        s += ((trees || rocks) ? "," : "") + std::string(" ") + std::to_string(gold) + " gold vein" +
+             (gold > 1 ? "s" : "");
     world.say(id, s + " first (right-click them to send a pawn).");
     return false;
 }
@@ -71,7 +72,8 @@ void ClearingSystem::queueBuild(int id, Kind k, int tx, int ty, const std::vecto
         }
     if (!world.afford(id, total))
     {
-        world.say(id, "Not enough resources (the building plus " + std::to_string(int(total[R_Wood] - pb.cost[R_Wood])) + " wood for clearing).");
+        world.say(id, "Not enough resources (the building plus " +
+                          std::to_string(int(total[R_Wood] - pb.cost[R_Wood])) + " wood for clearing).");
         return;
     }
     world.spend(id, total);
@@ -84,18 +86,26 @@ void ClearingSystem::queueBuild(int id, Kind k, int tx, int ty, const std::vecto
         clearJobs[tkey(t.x, t.y)] = j;
     }
     pending[nextPending++] = pb;
-    world.say(id, std::string("Pawns clear ") + std::to_string(blocked.size()) + " obstacle" + (blocked.size() > 1 ? "s" : "") + " first; the " + KINFO[k].name + " is placed when the site is clear.");
+    world.say(id, std::string("Pawns clear ") + std::to_string(blocked.size()) + " obstacle" +
+                      (blocked.size() > 1 ? "s" : "") + " first; the " + KINFO[k].name +
+                      " is placed when the site is clear.");
 }
 bool ClearingSystem::inClearReach(int id, int x, int y)
 { // clearing is allowed anywhere the player could place a building
     bool ok = false;
     reg.view<Info, Building, Owner>().each([&](const Info &i, const Building &b, const Owner &o)
-                                           {
-        if (ok || (i.kind != K_TownHall && i.kind != K_Outpost) || !world.allied(id, o.id) || b.progress < 1.f) return;
+    {
+        if (ok || (i.kind != K_TownHall && i.kind != K_Outpost) || !world.allied(id, o.id) || b.progress < 1.f)
+            return;
         Pos c = footCenter(i.kind, b.tx, b.ty);
         float reach = i.kind == K_TownHall ? 60.f : 34.f;
-        if (o.id != id) reach = std::max(reach, float(CLAN_TOWN_RADIUS) + 4.f);        // a homeless clan member may build (and so clear) anywhere around the clan halls
-        if (std::max(std::abs(c.x - float(x)), std::abs(c.y - float(y))) <= reach) ok = true; });
+        if (o.id != id)
+            reach = std::max(reach,
+                             float(CLAN_TOWN_RADIUS) +
+                                 4.f); // a homeless clan member may build (and so clear) anywhere around the clan halls
+        if (std::max(std::abs(c.x - float(x)), std::abs(c.y - float(y))) <= reach)
+            ok = true;
+    });
     return ok;
 }
 // C_Clear: u8 n, n x (i32 x, i32 y) [, u8 m, m x u32 pawn]  - the optional tail names the pawns to send
@@ -187,15 +197,19 @@ void ClearingSystem::onClear(int id, Reader &r)
         }
     }
     const char *what = ok.size() == 1 ? featName(world.featOf(ok[0].x, ok[0].y)) : "obstacles";
-    world.say(id, std::string("Clearing ") + (ok.size() == 1 ? "the " : std::to_string(ok.size()) + " ") + what + " (-" + std::to_string(int(cost[R_Wood])) + " wood)" + (want.empty() ? ": the nearest free pawn goes there." : "."));
+    world.say(id, std::string("Clearing ") + (ok.size() == 1 ? "the " : std::to_string(ok.size()) + " ") + what +
+                      " (-" + std::to_string(int(cost[R_Wood])) + " wood)" +
+                      (want.empty() ? ": the nearest free pawn goes there." : "."));
 }
 
 // pawns
 bool ClearingSystem::freePawn(entt::entity e, int owner, bool explicitPick)
 {
-    if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Info>(e).kind != K_Pawn || reg.get<Owner>(e).id != owner)
+    if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Info>(e).kind != K_Pawn ||
+        reg.get<Owner>(e).id != owner)
         return false;
-    if (reg.any_of<Convoy, Haul, Raider, Aboard, Boarding, Extinguish, BuildTask>(e) || world.dying.count(reg.get<Uid>(e).id))
+    if (reg.any_of<Convoy, Haul, Raider, Aboard, Boarding, Extinguish, BuildTask>(e) ||
+        world.dying.count(reg.get<Uid>(e).id))
         return false;
     if (explicitPick)
         return true;
@@ -226,11 +240,19 @@ entt::entity ClearingSystem::pickPawn(const ClearJob &j, Pos at)
     }
     if (best != entt::null || !j.want.empty())
         return best; // picked pawns are busy: wait for them
-    reg.view<Info, Owner, Unit, Pos>().each([&](entt::entity e, const Info &i, const Owner &o, const Unit &, const Pos &q)
-                                            {
-        if (i.kind != K_Pawn || o.id != j.owner || !freePawn(e, j.owner, false)) return;
-        float d = std::hypot(q.x - at.x, q.y - at.y) + (reg.all_of<Worker>(e) ? 12.f : 0.f);   // idle pawns before workers
-        if (d < bd && d <= AUTO_PICK_RANGE) { bd = d; best = e; } });
+    reg.view<Info, Owner, Unit, Pos>().each(
+        [&](entt::entity e, const Info &i, const Owner &o, const Unit &, const Pos &q)
+    {
+        if (i.kind != K_Pawn || o.id != j.owner || !freePawn(e, j.owner, false))
+            return;
+        float d =
+            std::hypot(q.x - at.x, q.y - at.y) + (reg.all_of<Worker>(e) ? 12.f : 0.f); // idle pawns before workers
+        if (d < bd && d <= AUTO_PICK_RANGE)
+        {
+            bd = d;
+            best = e;
+        }
+    });
     return best;
 }
 void ClearingSystem::assign(int64_t key, ClearJob &j, entt::entity e)
@@ -369,7 +391,8 @@ void ClearingSystem::finishJob(int64_t key)
     float bd = 12.f;
     for (auto &[k2, j2] : clearJobs)
     {
-        if (j2.owner != j.owner || j2.pawn || (!j2.want.empty() && std::find(j2.want.begin(), j2.want.end(), j.pawn) == j2.want.end()))
+        if (j2.owner != j.owner || j2.pawn ||
+            (!j2.want.empty() && std::find(j2.want.begin(), j2.want.end(), j.pawn) == j2.want.end()))
             continue;
         float d = std::hypot(float(keyCx(k2) - x), float(keyCy(k2) - y));
         if (d < bd)
@@ -408,14 +431,17 @@ void ClearingSystem::pendingTick()
             auto e = world.makeBuilding(pb.k, uint8_t(pb.owner), pb.tx, pb.ty, false);
             Pos c = world.posOf(e);
             world.fx(E_Dust, c.x, c.y);
-            world.say(pb.owner, std::string("The site is clear: construction of your ") + KINFO[pb.k].name + " begins.");
+            world.say(pb.owner,
+                      std::string("The site is clear: construction of your ") + KINFO[pb.k].name + " begins.");
         }
         else
         {
             if (world.pl[pb.owner].used)
                 for (int r = 0; r < R_Count; r++)
                     world.pl[pb.owner].res[r] += pb.cost[r];
-            world.say(pb.owner, std::string("Your ") + KINFO[pb.k].name + " could not be placed after clearing" + (err && err < P_Count ? std::string(" (") + PLACE_TEXT[err] + ")" : std::string()) + ". Cost refunded.");
+            world.say(pb.owner, std::string("Your ") + KINFO[pb.k].name + " could not be placed after clearing" +
+                                    (err && err < P_Count ? std::string(" (") + PLACE_TEXT[err] + ")" : std::string()) +
+                                    ". Cost refunded.");
         }
     }
     for (auto pid : done)
@@ -444,8 +470,8 @@ void ClearingSystem::clearTick(float dt)
     }
     for (auto &[key, j] : clearJobs)
     {
-        if (!j.pawn && (busy[uint8_t(j.owner)] || std::any_of(j.want.begin(), j.want.end(), [&](uint32_t w)
-                                                              { return world.find(w) != entt::null; })))
+        if (!j.pawn && (busy[uint8_t(j.owner)] || std::any_of(j.want.begin(), j.want.end(),
+                                                              [&](uint32_t w) { return world.find(w) != entt::null; })))
             j.since = world.clock;
         if (j.pawn && (j.state == 2 || j.total <= 0.f) && j.t >= j.total)
             done.push_back(key);
@@ -466,8 +492,7 @@ void ClearingSystem::clearTick(float dt)
             if (e != entt::null)
                 assign(key, j, e);
         }
-        std::erase_if(manualUntil, [&](auto &kv)
-                      { return kv.second < world.clock; });
+        std::erase_if(manualUntil, [&](auto &kv) { return kv.second < world.clock; });
     }
     if (world.tick % 20 == 5)
         pendingTick();
@@ -481,7 +506,8 @@ void ClearingSystem::clearTick(float dt)
     if (world.tick % 4 == 0 && (!clearJobs.empty() || !pending.empty() || jobsWereSent))
         sendJobs();
 }
-// S_ClearJobs: u16 n, n x (i32 x, i32 y, u8 pct, u8 state) + u16 m, m x (u8 kind, i32 tx, i32 ty) own buildings waiting for clearing
+// S_ClearJobs: u16 n, n x (i32 x, i32 y, u8 pct, u8 state) + u16 m, m x (u8 kind, i32 tx, i32 ty) own buildings waiting
+// for clearing
 void ClearingSystem::sendJobs()
 {
     jobsWereSent = !clearJobs.empty() || !pending.empty();
@@ -493,7 +519,10 @@ void ClearingSystem::sendJobs()
         if (n++ >= 400)
             break;
         float pct = j.total > 0 ? j.t / j.total : 1.f;
-        w.put<int32_t>(keyCx(key)).put<int32_t>(keyCy(key)).put<uint8_t>(uint8_t(std::clamp(pct, 0.f, 1.f) * 100.f)).put<uint8_t>(j.state);
+        w.put<int32_t>(keyCx(key))
+            .put<int32_t>(keyCy(key))
+            .put<uint8_t>(uint8_t(std::clamp(pct, 0.f, 1.f) * 100.f))
+            .put<uint8_t>(j.state);
     }
     for (int id = 1; id <= MAX_PLAYERS; id++)
     {
@@ -520,7 +549,11 @@ void ClearingSystem::sendJobs()
 void ClearingSystem::sendDrop(Pos p, int res, int amt, int credited)
 { // visible bouncing "+N" drop for everyone who can see the spot
     Writer w;
-    w.put<uint8_t>(S_Drop).put<float>(p.x).put<float>(p.y).put<uint8_t>(uint8_t(res)).put<uint16_t>(uint16_t(std::clamp(amt, 0, 65000)));
+    w.put<uint8_t>(S_Drop)
+        .put<float>(p.x)
+        .put<float>(p.y)
+        .put<uint8_t>(uint8_t(res))
+        .put<uint16_t>(uint16_t(std::clamp(amt, 0, 65000)));
     for (int id = 1; id <= MAX_PLAYERS; id++)
     {
         if (!world.pl[id].online)
@@ -550,7 +583,9 @@ void ClearingSystem::sendClearedList(int id, const std::vector<int64_t> &tiles, 
     { // batches keep packets small
         size_t n = std::min<size_t>(3000, tiles.size() - i);
         Writer w;
-        w.put<uint8_t>(S_Cleared).put<uint8_t>(full ? (i == 0 ? 0 : 2) : 1).put<uint32_t>(uint32_t(n)); // 0 = replace, 2 = append, 1 = delta
+        w.put<uint8_t>(S_Cleared)
+            .put<uint8_t>(full ? (i == 0 ? 0 : 2) : 1)
+            .put<uint32_t>(uint32_t(n)); // 0 = replace, 2 = append, 1 = delta
         for (size_t k = 0; k < n; k++)
             w.put<int32_t>(keyCx(tiles[i + k])).put<int32_t>(keyCy(tiles[i + k]));
         world.net.send(world.pl[id].conn, w);
@@ -586,6 +621,7 @@ float ClearingSystem::mineMul(entt::entity e, Kind k, Pos c)
     mineCache[uid] = {world.clearVer, m};
     static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr; // test hook
     if (logIt)
-        std::printf("[world] mine %u at %.1f,%.1f: %d gold deposits -> output x%.2f\n", uid, c.x, c.y, goldNear(wa, c), m);
+        std::printf("[world] mine %u at %.1f,%.1f: %d gold deposits -> output x%.2f\n", uid, c.x, c.y, goldNear(wa, c),
+                    m);
     return m;
 }

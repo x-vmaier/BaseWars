@@ -24,7 +24,8 @@ std::string ShipPanel::tooltip(const Info &in) const
     int tier = shipTier(in.aux ? in.aux : 1);
     std::string s = std::string(" - ") + SHIP_NAME[tier - 1] + " (tier " + std::to_string(tier) + ")";
     if (in.owner == W.me || W.alliedWith(in.owner))
-        s += TextFormat("  Troops %d/%d  Cargo %d/%d", int(in.prog), shipTroopCap(tier), int(in.stock), shipResCap(tier));
+        s += TextFormat("  Troops %d/%d  Cargo %d/%d", int(in.prog), shipTroopCap(tier), int(in.stock),
+                        shipResCap(tier));
     return s;
 }
 
@@ -46,7 +47,8 @@ bool ShipPanel::rightClick(uint32_t id)
         W.markers.push_back({w.x, w.y, GetTime()});
         int cap = shipTroopCap(in.aux ? in.aux : 1), free = cap - int(in.prog);
         if (int(tr.size()) > free)
-            app.msg(TextFormat("The %s only has room for %d more troop(s).", SHIP_NAME[shipTier(in.aux ? in.aux : 1) - 1], std::max(0, free)));
+            app.msg(TextFormat("The %s only has room for %d more troop(s).",
+                               SHIP_NAME[shipTier(in.aux ? in.aux : 1) - 1], std::max(0, free)));
         return true;
     }
     ship = id;
@@ -115,8 +117,7 @@ void ShipPanel::draw()
     Color ink = rgb(70, 45, 30);
     DrawText(TextFormat("%s  (tier %d)", SHIP_NAME[tier - 1], tier), int(r.x) + 16, int(r.y) + 12, 22, ink);
     DrawText(TextFormat("Health %d / %d", int(in.hp), int(in.maxhp)), int(r.x) + 16, int(r.y) + 40, 15, ink);
-    auto bar = [&](float y, float frac, Color c)
-    { barRect({r.x + 16, y, r.width - 32, 14}, frac, c); };
+    auto bar = [&](float y, float frac, Color c) { barRect({r.x + 16, y, r.width - 32, 14}, frac, c); };
     auto dit = W.shipDetails.find(ship);
     DrawText(TextFormat("Troops aboard: %d / %d", int(in.prog), tcap), int(r.x) + 16, int(r.y) + 64, 16, ink);
     bar(r.y + 84, float(in.prog) / float(tcap), in.prog >= tcap ? BAR_UPGRADE : BAR_TROOPS);
@@ -132,11 +133,17 @@ void ShipPanel::draw()
     DrawText(TextFormat("Cargo: %d / %d", int(in.stock), rcap), int(r.x) + 16, int(r.y) + 128, 16, ink);
     bar(r.y + 148, float(in.stock) / float(rcap), BAR_CARGO);
     if (dit != W.shipDetails.end() && in.stock > 0)
-        DrawText(TextFormat("Wood %d  Gold %d  Stone %d  Meat %d", dit->second.res[0], dit->second.res[1], dit->second.res[2], dit->second.res[3]), int(r.x) + 16, int(r.y) + 168, 14, rgb(100, 70, 50));
+        DrawText(TextFormat("Wood %d  Gold %d  Stone %d  Meat %d", dit->second.res[0], dit->second.res[1],
+                            dit->second.res[2], dit->second.res[3]),
+                 int(r.x) + 16, int(r.y) + 168, 14, rgb(100, 70, 50));
     bool coast = W.coastNearShip(rp), busy = dit != W.shipDetails.end() && dit->second.voyage;
-    const char *hint = busy ? "On a supply run for your haulers." : (in.prog > 0 && !coast ? "Sail next to a coastline to disembark." : "Select troops, then right-click the ship to embark.");
+    const char *hint = busy ? "On a supply run for your haulers."
+                            : (in.prog > 0 && !coast ? "Sail next to a coastline to disembark."
+                                                     : "Select troops, then right-click the ship to embark.");
     DrawText(hint, int(r.x) + 16, int(r.y) + 190, 13, (in.prog > 0 && !coast) ? rgb(170, 60, 40) : rgb(100, 70, 50));
     bool can = in.prog > 0 && coast;
-    ui::drawButton(btn(0), "Disembark all", can, false, CheckCollisionPointRec(m, btn(0)), CheckCollisionPointRec(m, btn(0)) && IsMouseButtonDown(MOUSE_BUTTON_LEFT));
-    ui::drawButton(btn(1), "Close", true, true, CheckCollisionPointRec(m, btn(1)), CheckCollisionPointRec(m, btn(1)) && IsMouseButtonDown(MOUSE_BUTTON_LEFT));
+    ui::drawButton(btn(0), "Disembark all", can, false, CheckCollisionPointRec(m, btn(0)),
+                   CheckCollisionPointRec(m, btn(0)) && IsMouseButtonDown(MOUSE_BUTTON_LEFT));
+    ui::drawButton(btn(1), "Close", true, true, CheckCollisionPointRec(m, btn(1)),
+                   CheckCollisionPointRec(m, btn(1)) && IsMouseButtonDown(MOUSE_BUTTON_LEFT));
 }

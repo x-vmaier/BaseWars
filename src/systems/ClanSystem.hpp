@@ -6,7 +6,7 @@ struct Systems;
 
 class ClanSystem
 {
-public:
+  public:
     ClanSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void breakAlliance(int a, int b);
@@ -16,7 +16,7 @@ public:
     void homelessSecond();
     void homelessBuild(int id, int tx, int ty); // C_Build K_TownHall
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

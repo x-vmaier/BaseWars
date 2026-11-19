@@ -11,14 +11,17 @@ class App;
 
 class WorldRenderer
 {
-public:
-    explicit WorldRenderer(App &app) : app(app), terrain(app), features(app), buildings(app), units(app), ships(app), effects(app) {}
+  public:
+    explicit WorldRenderer(App &app)
+        : app(app), terrain(app), features(app), buildings(app), units(app), ships(app), effects(app)
+    {
+    }
     void draw(float t); // inside BeginMode2D(cam)
 
-private:
+  private:
     App &app;
 
-public:
+  public:
     TerrainRenderer terrain;
     FeatureRenderer features;
     BuildingRenderer buildings;

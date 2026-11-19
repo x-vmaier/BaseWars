@@ -6,7 +6,7 @@ struct Systems;
 
 class Replication
 {
-public:
+  public:
     Replication(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void sendState(int id);
@@ -18,7 +18,7 @@ public:
     void sendShipInfo(int id);
     void sendPaths(int id); // path lines of the viewer's units and those of players sharing vision
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

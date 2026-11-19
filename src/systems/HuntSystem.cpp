@@ -21,7 +21,8 @@ void HuntSystem::spawnChunkNpcs(int cx, int cy)
     int n = int(float(hash2(cx, cy, world.seed + 901) % 4) * sd + .5f);
     for (int i = 0; i < n; i++)
     {
-        int x = cx * CH + int(hash2(cx, cy * 7 + i, world.seed + 5) % CH), y = cy * CH + int(hash2(cx * 5 + i, cy, world.seed + 6) % CH);
+        int x = cx * CH + int(hash2(cx, cy * 7 + i, world.seed + 5) % CH),
+            y = cy * CH + int(hash2(cx * 5 + i, cy, world.seed + 6) % CH);
         if (world.walkable(x, y, false, 0) && (b == world.biome(x, y)))
             world.makeUnit(K_Sheep, 0, float(x) + .5f, float(y) + .5f);
     }
@@ -32,15 +33,29 @@ entt::entity HuntSystem::nearestOwnStorage(int ow, Pos p, bool needRoom)
     entt::entity best = entt::null;
     float bd = 1e9f;
     reg.view<Info, Building, Owner>().each([&](entt::entity st, const Info &i, const Building &sb, const Owner &so)
-                                           {
-        if (!isStorage(i.kind) || sb.progress < 1.f || so.id != ow || (needRoom && world.capOf(st) - world.stockOf(st) < 1.f)) return;
+    {
+        if (!isStorage(i.kind) || sb.progress < 1.f || so.id != ow ||
+            (needRoom && world.capOf(st) - world.stockOf(st) < 1.f))
+            return;
         Pos c = footCenter(i.kind, sb.tx, sb.ty);
         float d = std::hypot(p.x - c.x, p.y - c.y);
-        if (d < bd) { bd = d; best = st; } });
+        if (d < bd)
+        {
+            bd = d;
+            best = st;
+        }
+    });
     return best;
 }
-void HuntSystem::huntPause(entt::entity e) { reg.get_or_emplace<Hunt>(e).pause = world.clock + 25; } // hook: the player gave this pawn an order
-bool HuntSystem::isFreePawn(entt::entity e) const { return !reg.all_of<Worker>(e) && !reg.all_of<ClearTask>(e) && !reg.all_of<Convoy>(e) && !reg.all_of<Haul>(e) && !reg.all_of<Raider>(e); }
+void HuntSystem::huntPause(entt::entity e)
+{
+    reg.get_or_emplace<Hunt>(e).pause = world.clock + 25;
+} // hook: the player gave this pawn an order
+bool HuntSystem::isFreePawn(entt::entity e) const
+{
+    return !reg.all_of<Worker>(e) && !reg.all_of<ClearTask>(e) && !reg.all_of<Convoy>(e) && !reg.all_of<Haul>(e) &&
+           !reg.all_of<Raider>(e);
+}
 uint8_t HuntSystem::worldAux(entt::entity e) const
 { // hook for sendState: show the meat a hunter carries
     const Hunt *h = reg.try_get<Hunt>(e);
@@ -144,12 +159,14 @@ void HuntSystem::sheepSecond()
     sheepList.clear();
     std::unordered_map<int64_t, int> perChunk;
     reg.view<Info, Pos, Uid>().each([&](const Info &i, const Pos &p, const Uid &u)
-                                    {
-        if (i.kind != K_Sheep) return;
+    {
+        if (i.kind != K_Sheep)
+            return;
         sheepList.push_back({u.id, p});
-        perChunk[chunkKey(chunkOf(int(std::floor(p.x))), chunkOf(int(std::floor(p.y))))]++; });
-    std::erase_if(sheepClaim, [&](auto &kv)
-                  { return world.find(kv.first) == entt::null || world.find(kv.second) == entt::null; });
+        perChunk[chunkKey(chunkOf(int(std::floor(p.x))), chunkOf(int(std::floor(p.y))))]++;
+    });
+    std::erase_if(sheepClaim,
+                  [&](auto &kv) { return world.find(kv.first) == entt::null || world.find(kv.second) == entt::null; });
     if (world.clock < nextRepop)
         return;
     nextRepop = world.clock + 8.0;
@@ -157,11 +174,15 @@ void HuntSystem::sheepSecond()
         return;
     std::unordered_set<int64_t> awake; // chunks around online players' things
     reg.view<Owner, Info>().each([&](entt::entity e, const Owner &o, const Info &)
-                                 {
-        if (!isPlayer(o.id) || !world.pl[o.id].online) return;
+    {
+        if (!isPlayer(o.id) || !world.pl[o.id].online)
+            return;
         Pos q = world.posOf(e);
         int cx = chunkOf(int(std::floor(q.x))), cy = chunkOf(int(std::floor(q.y)));
-        for (int y = cy - 2; y <= cy + 2; y++) for (int x = cx - 2; x <= cx + 2; x++) awake.insert(chunkKey(x, y)); });
+        for (int y = cy - 2; y <= cy + 2; y++)
+            for (int x = cx - 2; x <= cx + 2; x++)
+                awake.insert(chunkKey(x, y));
+    });
     for (auto k : awake)
     {
         if (!world.spawned.count(k))
@@ -173,7 +194,8 @@ void HuntSystem::sheepSecond()
         auto it = perChunk.find(k);
         if (it != perChunk.end() && it->second >= 4)
             continue;
-        if (world.rng() % 100 >= uint32_t(45.f * (b == B_Plains ? cfg().sheepDensityPlains : cfg().sheepDensityFlowers)))
+        if (world.rng() % 100 >=
+            uint32_t(45.f * (b == B_Plains ? cfg().sheepDensityPlains : cfg().sheepDensityFlowers)))
             continue;
         for (int tries = 0; tries < 6; tries++)
         {

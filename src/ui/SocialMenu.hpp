@@ -9,7 +9,7 @@ class App;
 
 class SocialMenu
 {
-public:
+  public:
     explicit SocialMenu(App &app) : app(app) {}
     void load();
 
@@ -25,7 +25,7 @@ public:
     void input(Vector2 m);
     void draw();
 
-private:
+  private:
     struct SBtn
     {
         std::string label;

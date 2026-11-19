@@ -64,37 +64,75 @@ void SaveSystem::saveGame()
         w.put<int64_t>(k);
     w.put<uint32_t>(uint32_t(world.towns.size()));
     for (auto &t : world.towns)
-        w.put<uint16_t>(t.id).put<uint8_t>(t.faction).put<int32_t>(t.cx).put<int32_t>(t.cy).put<uint32_t>(t.th).put<uint8_t>(t.alive ? 1 : 0).put<double>(t.respawnAt);
+        w.put<uint16_t>(t.id)
+            .put<uint8_t>(t.faction)
+            .put<int32_t>(t.cx)
+            .put<int32_t>(t.cy)
+            .put<uint32_t>(t.th)
+            .put<uint8_t>(t.alive ? 1 : 0)
+            .put<double>(t.respawnAt);
     w.put<uint32_t>(uint32_t(world.spawned.size()));
     for (auto k : world.spawned)
         w.put<int64_t>(k);
     uint32_t saved = 0;
     reg.view<Uid>().each([&](entt::entity e, const Uid &)
-                         { if (!world.ephemeral(e)) saved++; });
+    {
+        if (!world.ephemeral(e))
+            saved++;
+    });
     w.put<uint32_t>(saved);
-    reg.view<Uid, Owner, Info, Health>().each([&](entt::entity e, const Uid &uid, const Owner &o, const Info &in, const Health &h)
-                                              {
-        if (world.ephemeral(e)) return;
-        w.put<uint32_t>(uid.id).put<uint8_t>(in.kind).put<uint8_t>(o.id).put<uint8_t>(in.level).put<float>(h.hp).put<float>(h.maxhp);
+    reg.view<Uid, Owner, Info, Health>().each(
+        [&](entt::entity e, const Uid &uid, const Owner &o, const Info &in, const Health &h)
+    {
+        if (world.ephemeral(e))
+            return;
+        w.put<uint32_t>(uid.id)
+            .put<uint8_t>(in.kind)
+            .put<uint8_t>(o.id)
+            .put<uint8_t>(in.level)
+            .put<float>(h.hp)
+            .put<float>(h.maxhp);
         w.put<uint16_t>(reg.all_of<TownTag>(e) ? reg.get<TownTag>(e).town : uint16_t(0));
-        if (const Building* b = reg.try_get<Building>(e)) {
+        if (const Building *b = reg.try_get<Building>(e))
+        {
             w.put<uint8_t>(1).put<int32_t>(b->tx).put<int32_t>(b->ty).put<float>(b->progress);
-            for (float s : b->stock) w.put<float>(s);
+            for (float s : b->stock)
+                w.put<float>(s);
             w.put<float>(b->respawn);
             w.put<uint8_t>(b->haulPct);
-        } else {
+        }
+        else
+        {
             Pos p = reg.get<Pos>(e);
             w.put<uint8_t>(0).put<float>(p.x).put<float>(p.y);
-            const Worker* wk = reg.try_get<Worker>(e);
-            if (const ClearTask* ct = reg.try_get<ClearTask>(e); !wk && ct && ct->hadWorker) wk = &ct->worker;   // a clearing pawn keeps its job across saves
-            if (const BuildTask* bt = reg.try_get<BuildTask>(e); !wk && bt && bt->hadWorker) wk = &bt->worker;   // ... and so does a pawn on a building site
-            const Convoy* cv = reg.try_get<Convoy>(e);
-            const Haul* hl = reg.try_get<Haul>(e);
+            const Worker *wk = reg.try_get<Worker>(e);
+            if (const ClearTask *ct = reg.try_get<ClearTask>(e); !wk && ct && ct->hadWorker)
+                wk = &ct->worker; // a clearing pawn keeps its job across saves
+            if (const BuildTask *bt = reg.try_get<BuildTask>(e); !wk && bt && bt->hadWorker)
+                wk = &bt->worker; // ... and so does a pawn on a building site
+            const Convoy *cv = reg.try_get<Convoy>(e);
+            const Haul *hl = reg.try_get<Haul>(e);
             w.put<uint8_t>(uint8_t((wk ? 1 : 0) | (cv ? 2 : 0) | (hl ? 4 : 0)));
-            if (wk) { w.put<uint32_t>(wk->home).put<uint8_t>(wk->phase); for (float c : wk->cargo) w.put<float>(c); }
-            if (cv) { w.put<uint8_t>(cv->from).put<uint8_t>(cv->to); for (float c : cv->cargo) w.put<float>(c); }
-            if (hl) { w.put<uint32_t>(hl->storage).put<uint8_t>(hl->phase); for (float c : hl->cargo) w.put<float>(c); }
-        } });
+            if (wk)
+            {
+                w.put<uint32_t>(wk->home).put<uint8_t>(wk->phase);
+                for (float c : wk->cargo)
+                    w.put<float>(c);
+            }
+            if (cv)
+            {
+                w.put<uint8_t>(cv->from).put<uint8_t>(cv->to);
+                for (float c : cv->cargo)
+                    w.put<float>(c);
+            }
+            if (hl)
+            {
+                w.put<uint32_t>(hl->storage).put<uint8_t>(hl->phase);
+                for (float c : hl->cargo)
+                    w.put<float>(c);
+            }
+        }
+    });
     worldSave(w); // [world] appended section: cleared tiles
     shipsSave(w); // append-only ship passenger section
     saveBase(w);
@@ -284,7 +322,8 @@ bool SaveSystem::loadGame()
         std::puts("Savegame is truncated.");
         return false;
     }
-    // Optional appended sections (world, ships, base): a damaged or missing one is skipped instead of failing the whole load.
+    // Optional appended sections (world, ships, base): a damaged or missing one is skipped instead of failing the whole
+    // load.
     auto optional = [&](const char *name, auto &&load)
     {
         load();
@@ -295,12 +334,13 @@ bool SaveSystem::loadGame()
             r.p = r.e;
         }
     };
-    optional("world", [&]
-             { worldLoad(r); });
-    optional("ship", [&]
-             { shipsLoad(r); });
+    optional("world", [&] { worldLoad(r); });
+    optional("ship", [&] { shipsLoad(r); });
     optional("base", [&]
-             { if (r.p < r.e) loadBase(r); });
+    {
+        if (r.p < r.e)
+            loadBase(r);
+    });
     return true;
 }
 
@@ -324,7 +364,10 @@ void SaveSystem::shipsSave(Writer &w)
 {
     std::vector<entt::entity> ships;
     reg.view<Ship>().each([&](entt::entity e, const Ship &s)
-                          { if (!s.pax.empty()) ships.push_back(e); });
+    {
+        if (!s.pax.empty())
+            ships.push_back(e);
+    });
     w.put<uint32_t>(uint32_t(ships.size()));
     for (auto e : ships)
     {
@@ -340,7 +383,10 @@ void SaveSystem::shipsSave(Writer &w)
 void SaveSystem::shipsLoad(Reader &r)
 {
     reg.view<Info>().each([&](entt::entity e, const Info &in)
-                          { if (in.kind == K_Ship && !reg.all_of<Ship>(e)) reg.emplace<Ship>(e, Ship{{}, world.clock}); });
+    {
+        if (in.kind == K_Ship && !reg.all_of<Ship>(e))
+            reg.emplace<Ship>(e, Ship{{}, world.clock});
+    });
     if (r.p >= r.e)
         return; // older savegame without a ship section
     uint32_t n = r.get<uint32_t>();
@@ -385,7 +431,10 @@ void SaveSystem::saveBase(Writer &w)
     }
     std::vector<entt::entity> es;
     reg.view<Uid>().each([&](entt::entity e, const Uid &)
-                         { if (reg.any_of<BFlags, Moving, RelocNew, TrainQ, Support, SiteJob>(e)) es.push_back(e); });
+    {
+        if (reg.any_of<BFlags, Moving, RelocNew, TrainQ, Support, SiteJob>(e))
+            es.push_back(e);
+    });
     w.put<uint32_t>(uint32_t(es.size()));
     for (auto e : es)
     {
@@ -406,7 +455,13 @@ void SaveSystem::saveBase(Writer &w)
         const Support *sp = reg.try_get<Support>(e);
         w.put<uint8_t>(sp ? 1 : 0);
         if (sp)
-            w.put<float>(sp->dest.x).put<float>(sp->dest.y).put<float>(sp->home.x).put<float>(sp->home.y).put<uint8_t>(sp->victim).put<uint8_t>(sp->phase).put<uint8_t>(sp->defense ? 1 : 0);
+            w.put<float>(sp->dest.x)
+                .put<float>(sp->dest.y)
+                .put<float>(sp->home.x)
+                .put<float>(sp->home.y)
+                .put<uint8_t>(sp->victim)
+                .put<uint8_t>(sp->phase)
+                .put<uint8_t>(sp->defense ? 1 : 0);
         const SiteJob *sj = reg.try_get<SiteJob>(e); // site jobs (the pawn is re-assigned after loading)
         w.put<uint8_t>(sj ? 1 : 0);
         if (sj)

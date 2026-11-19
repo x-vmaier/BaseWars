@@ -1,0 +1,11 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 120
+BreakBeforeBraces: Allman
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+LambdaBodyIndentation: OuterScope
+PointerAlignment: Right
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve

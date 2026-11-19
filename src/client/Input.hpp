@@ -12,7 +12,7 @@ class App;
 
 class Input
 {
-public:
+  public:
     enum Mode
     {
         M_None,
@@ -43,7 +43,7 @@ public:
             hovered = 0;
     }
 
-private:
+  private:
     void camera(float dt, Vector2 rm, bool ui);
     bool hotkeys(); // true: stop processing this frame
     void doSelect(Vector2 a, Vector2 b, bool add);

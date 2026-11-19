@@ -74,7 +74,8 @@ void PostFx::runBloom()
     BeginTextureMode(bloomA);
     ClearBackground(BLACK);
     BeginShaderMode(shBright);
-    DrawTexturePro(rt.texture, {0, 0, float(rt.texture.width), -float(rt.texture.height)}, {0, 0, bw, bh}, {0, 0}, 0, WHITE);
+    DrawTexturePro(rt.texture, {0, 0, float(rt.texture.width), -float(rt.texture.height)}, {0, 0, bw, bh}, {0, 0}, 0,
+                   WHITE);
     EndShaderMode();
     EndTextureMode();
     float dh[2] = {1.f / bw, 0}, dv[2] = {0, 1.f / bh};
@@ -105,13 +106,23 @@ void PostFx::uniforms(float t)
     std::vector<float> lights;
     int lc = 0;
     W.reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
-                                  {
-        if (!isBuilding(i.kind) || i.prog < 100 || !W.alliedWith(i.owner)) return;
+    {
+        if (!isBuilding(i.kind) || i.prog < 100 || !W.alliedWith(i.owner))
+            return;
         bool fire = i.kind == K_Campfire;
-        if (!fire && i.kind != K_TownHall && i.kind != K_Outpost) return;
-        if (fire && std::hypot(g.x - cam.target.x / TILE, g.y - cam.target.y / TILE) < WARMTH_RADIUS) nearFire = true;
+        if (!fire && i.kind != K_TownHall && i.kind != K_Outpost)
+            return;
+        if (fire && std::hypot(g.x - cam.target.x / TILE, g.y - cam.target.y / TILE) < WARMTH_RADIUS)
+            nearFire = true;
         Vector2 s = GetWorldToScreen2D({g.x * TILE, g.y * TILE - (fire ? 20.f : 60.f)}, cam);
-        if (lc < 16 && s.x > -300 && s.y > -300 && s.x < sw + 300 && s.y < sh + 300) { lights.push_back(s.x); lights.push_back(s.y); lights.push_back((fire ? 190.f : 150.f) * cam.zoom); lc++; } });
+        if (lc < 16 && s.x > -300 && s.y > -300 && s.x < sw + 300 && s.y < sh + 300)
+        {
+            lights.push_back(s.x);
+            lights.push_back(s.y);
+            lights.push_back((fire ? 190.f : 150.f) * cam.zoom);
+            lc++;
+        }
+    });
     float dt = GetFrameTime();
     float targetCold = snow && !nearFire ? 1.f : 0.f, targetWarm = nearFire && snow ? 1.f : (nearFire ? .45f : 0.f);
     cold += (targetCold - cold) * std::min(1.f, 1.5f * dt);

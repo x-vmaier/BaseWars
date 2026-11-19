@@ -17,7 +17,7 @@ struct Info;
 
 class TownHallWindow
 {
-public:
+  public:
     enum Tab
     {
         T_Main,
@@ -57,7 +57,7 @@ public:
         disposeAt = GetTime();
     }
 
-private:
+  private:
     struct PanelXf
     {
         float ox, oy, sc;
@@ -83,7 +83,8 @@ private:
     void drawCapacityChart(Rectangle r, int level);
     void inputClan(Vector2 m);
     void drawClan(Vector2 m);
-    void card(Rectangle c, Kind k, bool selected, bool hover, bool dim, float phase); // Archery-style animated troop card
+    void card(Rectangle c, Kind k, bool selected, bool hover, bool dim,
+              float phase); // Archery-style animated troop card
     void sendQuotas();
 
     App &app;

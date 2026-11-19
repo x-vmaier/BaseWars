@@ -6,7 +6,7 @@ struct Systems;
 
 class ConvoyHaulSystem
 {
-public:
+  public:
     ConvoyHaulSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void runWorker(entt::entity e, Unit &u, Worker &w, float dt);
@@ -16,7 +16,7 @@ public:
     void spawnHauls();
     void runHaul(entt::entity e, Unit &u, Haul &h, float dt);
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;
@@ -30,5 +30,6 @@ private:
         double until;
         uint8_t by;
     };
-    std::unordered_map<uint8_t, std::unordered_map<uint32_t, Spot>> clanSpot; // clan -> convoys its members have spotted
+    std::unordered_map<uint8_t, std::unordered_map<uint32_t, Spot>>
+        clanSpot; // clan -> convoys its members have spotted
 };

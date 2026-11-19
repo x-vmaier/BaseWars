@@ -21,8 +21,10 @@ bool TownSystem::townSiteOk(int cx, int cy)
         }
     bool nearTh = false;
     reg.view<Info, Building>().each([&](const Info &i, const Building &b)
-                                    {
-        if (i.kind == K_TownHall && std::max(std::abs(b.tx - cx), std::abs(b.ty - cy)) < cfg().townMinDistance) nearTh = true; });
+    {
+        if (i.kind == K_TownHall && std::max(std::abs(b.tx - cx), std::abs(b.ty - cy)) < cfg().townMinDistance)
+            nearTh = true;
+    });
     return !nearTh;
 }
 bool TownSystem::footprintFree(Kind k, int tx, int ty)
@@ -41,7 +43,8 @@ void TownSystem::buildTown(Town &t)
         Kind k;
         int dx, dy;
     };
-    static const Piece pieces[] = {{K_TownHall, -2, -1}, {K_Storage, 3, -1}, {K_Outpost, -5, -3}, {K_Outpost, 3, 3}, {K_Lumber, -5, 1}, {K_Lumber, 0, 3}};
+    static const Piece pieces[] = {{K_TownHall, -2, -1}, {K_Storage, 3, -1}, {K_Outpost, -5, -3},
+                                   {K_Outpost, 3, 3},    {K_Lumber, -5, 1},  {K_Lumber, 0, 3}};
     for (const Piece &pc : pieces)
     {
         if (!footprintFree(pc.k, t.cx + pc.dx, t.cy + pc.dy))
@@ -81,10 +84,19 @@ void TownSystem::processRegion(int rx, int ry)
     int span = REGION_CHUNKS * CH, x0 = rx * span, y0 = ry * span;
     for (int n = 0; n < 40; n++)
     {
-        int x = x0 + 14 + int(hash2(rx * 40 + n, ry, world.seed + 21) % uint32_t(span - 28)), y = y0 + 14 + int(hash2(rx, ry * 40 + n, world.seed + 22) % uint32_t(span - 28));
+        int x = x0 + 14 + int(hash2(rx * 40 + n, ry, world.seed + 21) % uint32_t(span - 28)),
+            y = y0 + 14 + int(hash2(rx, ry * 40 + n, world.seed + 22) % uint32_t(span - 28));
         if (!townSiteOk(x, y))
             continue;
-        Town t{uint16_t(world.towns.size() + 1), uint8_t(hash2(x, y, world.seed + 33) % FACTION_COUNT), x, y, 0, true, 0, 0, -100};
+        Town t{uint16_t(world.towns.size() + 1),
+               uint8_t(hash2(x, y, world.seed + 33) % FACTION_COUNT),
+               x,
+               y,
+               0,
+               true,
+               0,
+               0,
+               -100};
         world.towns.push_back(t);
         buildTown(world.towns.back());
         std::printf("Town %d (%s) founded at %d,%d\n", t.id, FACTION_NAME[t.faction], x, y);
@@ -100,7 +112,10 @@ void TownSystem::townDestroyed(uint16_t town, int killer)
     t->respawnAt = world.clock + 600;
     std::vector<entt::entity> all;
     reg.view<TownTag>().each([&](entt::entity e, const TownTag &g)
-                             { if (g.town == town) all.push_back(e); });
+    {
+        if (g.town == town)
+            all.push_back(e);
+    });
     for (auto e : all)
     {
         if (isBuilding(reg.get<Info>(e).kind))
@@ -114,7 +129,8 @@ void TownSystem::townDestroyed(uint16_t town, int killer)
     {
         for (int r = 0; r < R_Count; r++)
             world.pl[killer].res[r] += 120;
-        world.say(killer, std::string("You razed a ") + FACTION_NAME[t->faction] + " town! Loot: 120 of every resource.");
+        world.say(killer,
+                  std::string("You razed a ") + FACTION_NAME[t->faction] + " town! Loot: 120 of every resource.");
     }
 }
 void TownSystem::townTick()
@@ -129,7 +145,10 @@ void TownSystem::townTick()
         }
         int army = 0;
         reg.view<TownTag, Info>().each([&](entt::entity pe, const TownTag &g, const Info &i)
-                                       { if (g.town == t.id && isArmy(i.kind) && !world.isPatrol(pe)) army++; });
+        {
+            if (g.town == t.id && isArmy(i.kind) && !world.isPatrol(pe))
+                army++;
+        });
         int desired = std::min(9, 5 + int(world.facDonated[t.faction] / 300.f));
         if (army < desired && world.clock >= t.nextSpawn)
         {
@@ -139,7 +158,10 @@ void TownSystem::townTick()
     }
     std::vector<entt::entity> hurt; // faction buildings and units mend themselves when left alone
     reg.view<Owner, Health>().each([&](entt::entity e, const Owner &o, const Health &h)
-                                   { if (isFactionOwner(o.id) && h.hp < h.maxhp) hurt.push_back(e); });
+    {
+        if (isFactionOwner(o.id) && h.hp < h.maxhp)
+            hurt.push_back(e);
+    });
     for (auto e : hurt)
     {
         auto *hit = reg.try_get<Hit>(e);

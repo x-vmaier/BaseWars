@@ -6,12 +6,12 @@ struct Systems;
 
 class PacketHandler
 {
-public:
+  public:
     PacketHandler(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void onPacket(uint64_t conn, const std::vector<uint8_t> &data);
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

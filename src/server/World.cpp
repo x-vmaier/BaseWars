@@ -10,7 +10,8 @@
 
 float baseTestSpeed()
 {
-    static const float v = std::getenv("BW_BASESPEED") ? std::max(1.f, float(std::atof(std::getenv("BW_BASESPEED")))) : 1.f;
+    static const float v =
+        std::getenv("BW_BASESPEED") ? std::max(1.f, float(std::atof(std::getenv("BW_BASESPEED")))) : 1.f;
     return v;
 }
 
@@ -59,7 +60,10 @@ int World::biome(int x, int y)
     }
     return it->second[size_t(localIdx(x, y))];
 }
-bool World::cliff(int x, int y) { return isCliffTile(biome(x, y), biome(x, y - 1)); }
+bool World::cliff(int x, int y)
+{
+    return isCliffTile(biome(x, y), biome(x, y - 1));
+}
 bool World::walkable(int x, int y, bool water, uint32_t ignore)
 {
     int b = biome(x, y);
@@ -71,10 +75,22 @@ bool World::walkable(int x, int y, bool water, uint32_t ignore)
     return it == occ.end() || it->second == ignore;
 }
 
-bool World::sameClan(int a, int b) const { return isPlayer(a) && isPlayer(b) && pl[a].clan && pl[a].clan == pl[b].clan; }
-bool World::shares(int a, int b) const { return a != b && isPlayer(a) && isPlayer(b) && (pl[a].allied[b] || sameClan(a, b)); } // shared vision
-bool World::allied(int a, int b) const { return a == b || shares(a, b); }
-float World::repOf(int player, int owner) const { return isPlayer(player) && isFactionOwner(owner) ? pl[player].rep[owner - FACTION_BASE] : 0.f; }
+bool World::sameClan(int a, int b) const
+{
+    return isPlayer(a) && isPlayer(b) && pl[a].clan && pl[a].clan == pl[b].clan;
+}
+bool World::shares(int a, int b) const
+{
+    return a != b && isPlayer(a) && isPlayer(b) && (pl[a].allied[b] || sameClan(a, b));
+} // shared vision
+bool World::allied(int a, int b) const
+{
+    return a == b || shares(a, b);
+}
+float World::repOf(int player, int owner) const
+{
+    return isPlayer(player) && isFactionOwner(owner) ? pl[player].rep[owner - FACTION_BASE] : 0.f;
+}
 bool World::hostile(int a, int b) const
 {
     if (a < 1 || b < 1 || a == b)
@@ -93,7 +109,10 @@ bool World::factionsAtWar(int fa, int fb) const
         return false;
     return hash2(std::min(fa, fb), std::max(fa, fb), seed + 515) % 100 < uint32_t(cfg().factionWarPercent);
 }
-int World::ulv(int owner, Kind k) const { return isPlayer(owner) ? std::max<int>(1, pl[owner].ulevel[k]) : 1; }
+int World::ulv(int owner, Kind k) const
+{
+    return isPlayer(owner) ? std::max<int>(1, pl[owner].ulevel[k]) : 1;
+}
 float World::totalRes(int id) const
 {
     float t = 0;
@@ -177,9 +196,13 @@ void World::noteDiscard(int id, int r, float lost)
     if (!isPlayer(id) || clock < bp[id].allocNote)
         return;
     bp[id].allocNote = clock + 60.0;
-    say(id, std::string(RES_NAME[r]) + " storage share is full: " + std::to_string(int(std::ceil(lost))) + " " + RES_NAME[r] + " discarded (Town Hall > Storage).");
+    say(id, std::string(RES_NAME[r]) + " storage share is full: " + std::to_string(int(std::ceil(lost))) + " " +
+                RES_NAME[r] + " discarded (Town Hall > Storage).");
 }
-std::string World::ownerName(int o) const { return isFactionOwner(o) ? FACTION_NAME[o - FACTION_BASE] : (isPlayer(o) ? pl[o].name : std::string("Wildlife")); }
+std::string World::ownerName(int o) const
+{
+    return isFactionOwner(o) ? FACTION_NAME[o - FACTION_BASE] : (isPlayer(o) ? pl[o].name : std::string("Wildlife"));
+}
 
 void World::say(int id, const std::string &s)
 {
@@ -190,7 +213,10 @@ void World::say(int id, const std::string &s)
     w.str(s);
     net.send(pl[id].conn, w);
 }
-void World::fx(EffectType t, float x, float y, float x2, float y2) { effects.push_back({t, x, y, x2, y2}); }
+void World::fx(EffectType t, float x, float y, float x2, float y2)
+{
+    effects.push_back({t, x, y, x2, y2});
+}
 
 entt::entity World::find(uint32_t uid) const
 {
@@ -220,7 +246,10 @@ float World::rectDist(Pos p, entt::entity e) const
     float dy = std::max({float(b.ty) - p.y, 0.f, p.y - float(b.ty + KINFO[i.kind].fh)});
     return std::hypot(dx, dy);
 }
-bool World::complete(entt::entity e) const { return !reg.all_of<Building>(e) || reg.get<Building>(e).progress >= 1.f; }
+bool World::complete(entt::entity e) const
+{
+    return !reg.all_of<Building>(e) || reg.get<Building>(e).progress >= 1.f;
+}
 
 // pooled resources: own first, then allies ("shared economy")
 bool World::afford(int id, const float *cost) const
@@ -322,7 +351,8 @@ entt::entity World::makeBuilding(Kind k, uint8_t owner, int tx, int ty, bool don
             occ[tkey(x, y)] = reg.get<Uid>(e).id;
     markFootprint(k, tx, ty); // [world] a footprint never needs clearing again
     if (done)
-        reveal(owner, int(std::floor(footCenter(k, tx, ty).x)), int(std::floor(footCenter(k, tx, ty).y)), KINFO[k].vision);
+        reveal(owner, int(std::floor(footCenter(k, tx, ty).x)), int(std::floor(footCenter(k, tx, ty).y)),
+               KINFO[k].vision);
     return e;
 }
 void World::destroyNow(entt::entity e)
@@ -447,7 +477,8 @@ bool World::order(entt::entity e, Pos goal, uint32_t ignore, int maxNodes)
     Pos p = reg.get<Pos>(e);
     bool water = reg.get<Info>(e).kind == K_Ship;
     std::vector<Pos> path;
-    if (!findPath({int(std::floor(p.x)), int(std::floor(p.y))}, {int(std::floor(goal.x)), int(std::floor(goal.y))}, water, ignore, path, maxNodes))
+    if (!findPath({int(std::floor(p.x)), int(std::floor(p.y))}, {int(std::floor(goal.x)), int(std::floor(goal.y))},
+                  water, ignore, path, maxNodes))
         return false;
     u.path = std::move(path);
     u.i = 0;
@@ -466,7 +497,10 @@ void World::removeOwner(int id)
 {
     std::vector<entt::entity> v;
     reg.view<Owner>().each([&](entt::entity e, const Owner &o)
-                           { if (o.id == id) v.push_back(e); });
+    {
+        if (o.id == id)
+            v.push_back(e);
+    });
     for (auto e : v)
     {
         if (!reg.valid(e))
@@ -485,10 +519,17 @@ entt::entity World::nearestHostile(Pos p, int owner, float range, bool buildings
     entt::entity best = entt::null;
     float bd = range;
     reg.view<Owner, Info>().each([&](entt::entity e, const Owner &o, const Info &i)
-                                 {
-        if (!hostile(owner, o.id) || (isBuilding(i.kind) && !buildings) || dying.count(reg.get<Uid>(e).id) || reg.all_of<Aboard>(e)) return;
+    {
+        if (!hostile(owner, o.id) || (isBuilding(i.kind) && !buildings) || dying.count(reg.get<Uid>(e).id) ||
+            reg.all_of<Aboard>(e))
+            return;
         float d = rectDist(p, e);
-        if (d < bd) { bd = d; best = e; } });
+        if (d < bd)
+        {
+            bd = d;
+            best = e;
+        }
+    });
     return best;
 }
 
@@ -496,14 +537,20 @@ int World::unitCount(int id)
 {
     int n = 0;
     reg.view<Owner, Unit>().each([&](const Owner &o, const Unit &)
-                                 { if (o.id == id) n++; });
+    {
+        if (o.id == id)
+            n++;
+    });
     return n;
 }
 int World::workersOf(uint32_t home)
 {
     int n = 0;
     reg.view<Worker>().each([&](const Worker &w)
-                            { if (w.home == home) n++; });
+    {
+        if (w.home == home)
+            n++;
+    });
     return n;
 }
 
@@ -538,7 +585,10 @@ entt::entity World::townHallOf(int id)
 {
     entt::entity th = entt::null;
     reg.view<Info, Building, Owner>().each([&](entt::entity b, const Info &i, const Building &bb, const Owner &o)
-                                           { if (th == entt::null && i.kind == K_TownHall && o.id == id && bb.progress >= 1.f) th = b; });
+    {
+        if (th == entt::null && i.kind == K_TownHall && o.id == id && bb.progress >= 1.f)
+            th = b;
+    });
     return th;
 }
 
@@ -546,10 +596,13 @@ std::vector<Source> World::sourcesFor(int id)
 {
     std::vector<Source> s;
     reg.view<Owner, Info>().each([&](entt::entity e, const Owner &o, const Info &i)
-                                 {
-        if (o.id == 0 || !allied(id, o.id) || !complete(e)) return;
+    {
+        if (o.id == 0 || !allied(id, o.id) || !complete(e))
+            return;
         Pos p = posOf(e);
-        s.push_back({p.x, p.y, float(KINFO[i.kind].vision) + (isBuilding(i.kind) ? float(KINFO[i.kind].fw) * .5f : 0.f)}); });
+        s.push_back(
+            {p.x, p.y, float(KINFO[i.kind].vision) + (isBuilding(i.kind) ? float(KINFO[i.kind].fw) * .5f : 0.f)});
+    });
     return s;
 }
 
@@ -560,7 +613,10 @@ uint8_t World::featOf(int x, int y)
         return F_None;
     return featureAt(x, y, b, seed);
 }
-bool World::isCleared(int x, int y) const { return cleared.count(tkey(x, y)) > 0; }
+bool World::isCleared(int x, int y) const
+{
+    return cleared.count(tkey(x, y)) > 0;
+}
 void World::markCleared(int x, int y)
 {
     if (cleared.insert(tkey(x, y)).second)
@@ -602,7 +658,10 @@ bool World::outOfTerritory(entt::entity e) const
     auto *b = reg.try_get<BFlags>(e);
     return b && b->dis;
 }
-bool World::inactive(entt::entity e) const { return outOfTerritory(e) || crippled(e); } // non-functional building
+bool World::inactive(entt::entity e) const
+{
+    return outOfTerritory(e) || crippled(e);
+} // non-functional building
 bool World::crippled(entt::entity e) const
 {
     const auto *b = reg.try_get<Building>(e);
@@ -632,7 +691,10 @@ int World::countKind(int id, Kind k)
 {
     int n = 0;
     reg.view<Info, Owner, Building>().each([&](entt::entity e, const Info &i, const Owner &o, const Building &)
-                                           { if (o.id == id && i.kind == k && !reg.all_of<Moving>(e)) n++; });
+    {
+        if (o.id == id && i.kind == k && !reg.all_of<Moving>(e))
+            n++;
+    });
     return n;
 }
 uint8_t World::bflagsOf(entt::entity e) const
@@ -663,7 +725,10 @@ bool World::townMoveActive(int id)
 {
     bool a = false;
     reg.view<RelocNew, Owner>().each([&](const RelocNew &rn, const Owner &o)
-                                     { if (rn.town && o.id == id) a = true; });
+    {
+        if (rn.town && o.id == id)
+            a = true;
+    });
     return a;
 }
 

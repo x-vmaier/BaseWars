@@ -8,7 +8,7 @@ class App;
 
 class BuildMenu
 {
-public:
+  public:
     static constexpr int COUNT = 7;
     static constexpr float LEFT = 48; // open menu x (right of the social tab button)
     static constexpr Kind LIST[COUNT] = {K_Outpost, K_Harbour, K_Storage, K_Archery, K_Mine, K_Lumber, K_Campfire};
@@ -26,7 +26,7 @@ public:
     bool click(Vector2 m); // left click; true when consumed
     void draw(float dt);
 
-private:
+  private:
     static ui::CostStyle rowStyle(float maxW, const float *cost);
     void tooltip(Kind k, Rectangle item, int gate);
     App &app;

@@ -6,7 +6,7 @@ struct Systems;
 
 class TerritorySystem
 {
-public:
+  public:
     TerritorySystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     void evalFunctional();
@@ -14,7 +14,7 @@ public:
     void doRelocate(int id, uint32_t uid, int tx, int ty);
     void relocSecond();
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;

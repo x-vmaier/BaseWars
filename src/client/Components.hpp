@@ -42,4 +42,7 @@ struct Remembered
 }; // NPC faction building outside vision: last known state, drawn dimmed
 
 // Units aboard a ship arrive with prog == UNIT_ABOARD_PROG and are not drawn / picked / selected.
-inline bool aboardUnit(const Info &i) { return !isBuilding(i.kind) && i.prog == UNIT_ABOARD_PROG; }
+inline bool aboardUnit(const Info &i)
+{
+    return !isBuilding(i.kind) && i.prog == UNIT_ABOARD_PROG;
+}

@@ -12,14 +12,16 @@
 
 void DefenseSystem::baseOnDamage(entt::entity e, int owner, int attacker)
 { // from damage(): cheap gate, real work is deferred to baseTail()
-    if (!isPlayer(owner) || attacker < 1 || attacker == owner || world.clock < world.bp[owner].alertNext || !world.hostile(attacker, owner))
+    if (!isPlayer(owner) || attacker < 1 || attacker == owner || world.clock < world.bp[owner].alertNext ||
+        !world.hostile(attacker, owner))
         return;
     world.bp[owner].alertNext = world.clock + 12.0;
     pendingAlerts.push_back({owner, world.posOf(e), attacker});
 }
 
 DefRoute DefenseSystem::planDefenseRoute(int /*member*/, Pos from, Pos to)
-{ // bounded search: unreachable victims must not stall a tick                     // land route from a member's home to the fight; the single place to extend with boats
+{ // bounded search: unreachable victims must not stall a tick                     // land route from a member's home to
+  // the fight; the single place to extend with boats
     DefRoute r;
     std::vector<Pos> path;
     float straight = std::hypot(to.x - from.x, to.y - from.y);
@@ -29,7 +31,8 @@ DefRoute DefenseSystem::planDefenseRoute(int /*member*/, Pos from, Pos to)
         r.eta = straight / 2.7f;
         return r;
     }
-    if (!world.findPath({int(std::floor(from.x)), int(std::floor(from.y))}, {int(std::floor(to.x)), int(std::floor(to.y))}, false, 0, path, 15000))
+    if (!world.findPath({int(std::floor(from.x)), int(std::floor(from.y))},
+                        {int(std::floor(to.x)), int(std::floor(to.y))}, false, 0, path, 15000))
         return r;
     float len = 0;
     Pos prev = from;
@@ -62,11 +65,13 @@ std::vector<entt::entity> DefenseSystem::pickIdleArmy(int owner, Pos near2, int 
     std::vector<std::pair<float, entt::entity>> c;
     if (n <= 0)
         return {};
-    reg.view<Owner, Unit, Info, Pos>().each([&](entt::entity e, const Owner &o, const Unit &, const Info &, const Pos &p)
-                                            {
-        if (o.id == owner && idleArmy(e, only)) c.push_back({std::hypot(p.x - near2.x, p.y - near2.y), e}); });
-    std::sort(c.begin(), c.end(), [](auto &a, auto &b)
-              { return a.first < b.first; });
+    reg.view<Owner, Unit, Info, Pos>().each(
+        [&](entt::entity e, const Owner &o, const Unit &, const Info &, const Pos &p)
+    {
+        if (o.id == owner && idleArmy(e, only))
+            c.push_back({std::hypot(p.x - near2.x, p.y - near2.y), e});
+    });
+    std::sort(c.begin(), c.end(), [](auto &a, auto &b) { return a.first < b.first; });
     std::vector<entt::entity> out;
     for (auto &[d, e] : c)
     {
@@ -106,16 +111,21 @@ void DefenseSystem::dispatchDefense(int victim, Pos at, int attacker)
     int total = 0;
     for (int m = 1; m <= MAX_PLAYERS && total < 60; m++)
     {
-        if (m == victim || !world.pl[m].used || world.pl[m].clan != c || world.bp[m].quotaTotal() == 0 || world.bp[m].homeless)
+        if (m == victim || !world.pl[m].used || world.pl[m].clan != c || world.bp[m].quotaTotal() == 0 ||
+            world.bp[m].homeless)
             continue;
         auto th = world.townHallOf(m);
         if (th == entt::null)
             continue;
         int existing[QUOTA_TYPES]{}, need = 0; // per troop type: quota minus those already on the way
         reg.view<Support, Owner, Info>().each([&](const Support &s, const Owner &o, const Info &i)
-                                              {
-            if (o.id != m || !s.defense || s.victim != victim) return;
-            for (int t = 0; t < QUOTA_TYPES; t++) if (QUOTA_KINDS[t] == i.kind) existing[t]++; });
+        {
+            if (o.id != m || !s.defense || s.victim != victim)
+                return;
+            for (int t = 0; t < QUOTA_TYPES; t++)
+                if (QUOTA_KINDS[t] == i.kind)
+                    existing[t]++;
+        });
         std::vector<entt::entity> us;
         for (int t = 0; t < QUOTA_TYPES; t++)
         {
@@ -130,7 +140,8 @@ void DefenseSystem::dispatchDefense(int victim, Pos at, int attacker)
         world.spawnSpot(th, false, from); // a free tile beside the hall (its centre is blocked)
         DefRoute rt = planDefenseRoute(m, from, at);
         if (std::getenv("BW_BASEDEBUG"))
-            std::printf("[defense] %s -> victim %s: route ok=%d eta=%.0f need=%d\n", world.pl[m].name.c_str(), world.pl[victim].name.c_str(), int(rt.ok), rt.eta, need);
+            std::printf("[defense] %s -> victim %s: route ok=%d eta=%.0f need=%d\n", world.pl[m].name.c_str(),
+                        world.pl[victim].name.c_str(), int(rt.ok), rt.eta, need);
         // [ships] cross the water by boat when that is clearly faster than marching around (FerryPlanner)
         TransportPlan plan = s.ferry.planTransport(m, us, at);
         bool boat = plan.useBoat && !plan.deferred && s.ferry.startTransport(plan, us, at);
@@ -138,11 +149,15 @@ void DefenseSystem::dispatchDefense(int victim, Pos at, int attacker)
             continue; // neither a land route nor a free ship: cannot help
         float eta = boat ? plan.etaBoat : rt.eta;
         for (auto e : us)
-            sendPatrol(e, at, victim, true, false); // the first path order comes from supportSecond() under its search budget
+            sendPatrol(e, at, victim, true,
+                       false); // the first path order comes from supportSecond() under its search budget
         total += int(us.size());
         std::string how = boat ? " by ship" : "";
-        world.say(m, "Defending " + world.pl[victim].name + " against " + world.ownerName(attacker) + ": " + std::to_string(us.size()) + " troops dispatched" + how + " (ETA " + std::to_string(int(eta)) + " s).");
-        world.say(victim, world.pl[m].name + " sends " + std::to_string(us.size()) + " troops to defend you" + how + " (ETA " + std::to_string(int(eta)) + " s).");
+        world.say(m, "Defending " + world.pl[victim].name + " against " + world.ownerName(attacker) + ": " +
+                         std::to_string(us.size()) + " troops dispatched" + how + " (ETA " + std::to_string(int(eta)) +
+                         " s).");
+        world.say(victim, world.pl[m].name + " sends " + std::to_string(us.size()) + " troops to defend you" + how +
+                              " (ETA " + std::to_string(int(eta)) + " s).");
     }
 }
 void DefenseSystem::alertFriends(int victim, Pos at, int attacker)
@@ -188,10 +203,13 @@ void DefenseSystem::doSupport(int id, Pos dest, int n)
     }
     bool ok = false;
     reg.view<Info, Building, Owner>().each([&](const Info &i, const Building &b, const Owner &o)
-                                           {
-        if ((i.kind != K_TownHall && i.kind != K_Outpost) || o.id == id || !isPlayer(o.id) || !world.allied(id, o.id)) return;
+    {
+        if ((i.kind != K_TownHall && i.kind != K_Outpost) || o.id == id || !isPlayer(o.id) || !world.allied(id, o.id))
+            return;
         Pos c = footCenter(i.kind, b.tx, b.ty);
-        if (std::max(std::abs(c.x - dest.x), std::abs(c.y - dest.y)) <= 12.f) ok = true; });
+        if (std::max(std::abs(c.x - dest.x), std::abs(c.y - dest.y)) <= 12.f)
+            ok = true;
+    });
     if (!ok)
     {
         world.say(id, "Support patrols can only go to allied or clan towns and outposts.");
@@ -206,13 +224,14 @@ void DefenseSystem::doSupport(int id, Pos dest, int n)
     for (auto e : us)
         sendPatrol(e, dest, 0, false, false);
     world.bp[id].supNext = world.clock + 6.0;
-    world.say(id, "Support patrol of " + std::to_string(us.size()) + " troops sets out. They help fight, then return home.");
+    world.say(id, "Support patrol of " + std::to_string(us.size()) +
+                      " troops sets out. They help fight, then return home.");
 }
 void DefenseSystem::supportSecond()
 {
     std::vector<entt::entity> v;
-    reg.view<Support, Unit, Pos, Owner>().each([&](entt::entity e, const Support &, const Unit &, const Pos &, const Owner &)
-                                               { v.push_back(e); });
+    reg.view<Support, Unit, Pos, Owner>().each(
+        [&](entt::entity e, const Support &, const Unit &, const Pos &, const Owner &) { v.push_back(e); });
     int budget = 8; // path searches per second
     for (auto e : v)
     {

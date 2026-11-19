@@ -6,13 +6,15 @@ struct Systems;
 
 class NavalSystem
 {
-public:
+  public:
     NavalSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
     float cargoTotal(entt::entity e) const;
-    void paxStats(entt::entity ship, int &troops, float &res, int *kinds = nullptr);         // passengers aboard (stale uids are purged)
-    void shipFree(entt::entity ship, int &troopsFree, float &resFree, bool reserved = true); // free capacity incl. units walking to embark
-    void initShip(entt::entity ship, int harbourLevel);                                      // empty boat, tier = harbour level
+    void paxStats(entt::entity ship, int &troops, float &res,
+                  int *kinds = nullptr); // passengers aboard (stale uids are purged)
+    void shipFree(entt::entity ship, int &troopsFree, float &resFree,
+                  bool reserved = true);                // free capacity incl. units walking to embark
+    void initShip(entt::entity ship, int harbourLevel); // empty boat, tier = harbour level
     void embark(entt::entity e, entt::entity ship);
     std::vector<IV> freeLandTiles(Pos center, int rmax);
     std::vector<entt::entity> landUnits(entt::entity ship, const std::vector<entt::entity> &us, Pos center, int rmax);
@@ -22,9 +24,10 @@ public:
     void shipsTick(float dt);
     bool shipPacket(int id, uint8_t type, Reader &r);
     // Called from sendState for every record: false hides it. Fills the ship/boarded fields.
-    bool shipStateHook(int viewer, entt::entity e, int ownerId, const Info &in, uint8_t &aux, uint8_t &prog, uint16_t &stock);
+    bool shipStateHook(int viewer, entt::entity e, int ownerId, const Info &in, uint8_t &aux, uint8_t &prog,
+                       uint16_t &stock);
 
-private:
+  private:
     World &world;
     entt::registry &reg;
     Systems &s;
