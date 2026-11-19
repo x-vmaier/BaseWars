@@ -1,6 +1,7 @@
 #include "rendering/ShipRenderer.hpp"
 
 #include "client/App.hpp"
+#include "rendering/Bars.hpp"
 #include "rendering/Palette.hpp"
 #include "rendering/Sprites.hpp"
 #include "rendering/Text.hpp"
@@ -88,4 +89,7 @@ void ShipRenderer::drawLabel(float px, float py, const Info& i, bool selected, b
     float s = tier == 1 ? 1.f : (tier == 2 ? 1.3f : 1.6f);
     std::string t = TextFormat("%d/%d", int(i.prog), shipTroopCap(tier));
     textShadow(t, int(px) - MeasureText(t.c_str(), 14) / 2, int(py - 78 * s), 14, i.prog >= shipTroopCap(tier) ? rgb(255, 170, 120) : rgb(235, 245, 255));
+    float y = py - 78 * s + 18;                                                 // troops aboard, then cargo (when carrying any)
+    drawBar({px, y}, 56, float(i.prog) / float(std::max(1, shipTroopCap(tier))), BAR_TROOPS);
+    if (i.stock > 0) drawBar({px, y + 10}, 56, float(i.stock) / float(std::max(1, shipResCap(tier))), BAR_CARGO);
 }

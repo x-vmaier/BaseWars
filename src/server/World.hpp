@@ -52,9 +52,11 @@ struct Profile {
 struct Demand { uint8_t res = 0; double until = 0; float filled = 0; };   // what a faction's towns want right now
 
 struct BaseProf {                                                    // per-player base mechanics state (saved in the "base" section)
-    uint8_t quota = 5;                                               // defense quota: troops sent to every attacked clan mate
+    uint8_t quota[QUOTA_TYPES]{3, 2, 0, 0};                          // defense quota per QUOTA_KINDS type: troops sent to every attacked clan mate
+    uint8_t alloc[R_Count]{100, 100, 100, 100};                      // Town Hall storage share per resource (% of the hall's capacity)
     bool homeless = false, testDone = false;
-    double alertNext = 0, defNext = 0, supNext = 0, donateNote = 0;
+    double alertNext = 0, defNext = 0, supNext = 0, donateNote = 0, allocNote = 0;
+    int quotaTotal() const { int t = 0; for (uint8_t q : quota) t += q; return t; }
     std::vector<uint64_t> friends;                                   // Steam friends reported at login (used when respawning)
 };
 
@@ -137,7 +139,10 @@ public:
     float totalRes(int id) const;
     float stockOf(entt::entity e) const;
     float capOf(entt::entity e) const;
-    float storeCargo(entt::entity st, float* cargo);                  // returns the amount stored
+    float storeCargo(entt::entity st, float* cargo);                  // returns the amount stored (the hall discards cargo beyond a resource's share)
+    float allocRoom(int id, int r);                                   // room left under resource r's storage share (huge without a Town Hall)
+    float creditRes(int id, int r, float amt);                        // adds income within the storage share; returns the amount kept
+    void noteDiscard(int id, int r, float lost);                      // throttled "storage share full" message
     bool afford(int id, const float* cost) const;                     // pooled resources: own first, then allies
     void spend(int id, const float* cost);
     void resetProfile(int id);

@@ -24,6 +24,7 @@ private:
     static Color channelColor(int ch);
     Rectangle bar() const;
     Rectangle tab(int i) const;
+    bool channelOk(int ch) const;       // the clan channel is disabled outside a clan
 
     App& app;
     int ch = 0;

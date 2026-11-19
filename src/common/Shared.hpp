@@ -39,12 +39,14 @@ enum Msg : uint8_t { C_Hello, C_Build, C_Train, C_Move, C_Attack, C_AttackMove, 
                      C_Board, C_Disembark,   // [ships] embark troops / disembark all
                      C_SetQuota, C_Support, C_MoveTown, C_Relocate, C_Dequeue,   // [base] defense quota, support patrol, town move, relocation, queue cancel
                      C_Repair,   // [sites] u32 building, u8 mode (0 start a repair, 1 cancel the running upgrade / repair)
+                     C_SetQuotas, C_SetAlloc, C_Dispose,   // [town hall] u8 x4 defense quota per troop type (Warrior, Archer, Lancer, Monk); u8 res, u8 storage share %; u8 res (discard it)
                      S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map, S_Chat,
                      S_Cleared, S_ClearJobs, S_Drop,   // [world] cleared-tile list/delta, clearing progress, resource drop effect
                      S_Paths, S_ShipInfo,              // [ships] path lines, ship passenger/cargo breakdown
                      S_Queue, S_Alert, S_BaseInfo,     // [base] training queues, clan alerts, own base info
                      S_Jobs,                           // [sites] construction / upgrade / repair jobs of own and allied buildings
                      S_Econ };                         // [economy] donation cooldown, faction demands and gift multipliers
+// S_BaseInfo: u8 quota (total), u8 homeless, u8 moving, u8 move %, then u8 x4 quota per QUOTA_KINDS type and u8 x R_Count storage shares %.
 enum EffectType : uint8_t { E_Explosion, E_Dust, E_Splash, E_Arrow, E_Heal, E_Fire, E_FireArrow, E_Extinguish };
 enum UnitState : uint8_t { US_Idle, US_Move, US_Attack, US_Work, US_Heal, US_Extinguish, US_Build };   // US_Build: pawn hammering at a building site
 // Bit registry for the `state` byte of a state record (units: low 3 bits are the UnitState; buildings: only the flags below).
@@ -104,8 +106,12 @@ inline bool isBuilding(Kind k) { return KINFO[k].building; }
 inline bool isResourceBuilding(Kind k) { return k == K_Mine || k == K_Lumber || k == K_Harbour; }
 inline bool isStorage(Kind k) { return k == K_TownHall || k == K_Outpost || k == K_Storage; }
 inline bool isArmy(Kind k) { return k == K_Warrior || k == K_Archer || k == K_Lancer; }
-// Troops are trained only in the Archery; the Harbour builds ships.
+// Troop types with a per-type clan defense quota (C_SetQuotas / S_BaseInfo order).
+inline constexpr int QUOTA_TYPES = 4;
+inline constexpr Kind QUOTA_KINDS[QUOTA_TYPES] = {K_Warrior, K_Archer, K_Lancer, K_Monk};
+// Troops are trained in the Archery, pawns also in the Town Hall; the Harbour builds ships.
 inline bool canTrain(Kind building, Kind unit) {
+    if (building == K_TownHall) return unit == K_Pawn;
     if (building == K_Archery) return unit == K_Pawn || unit == K_Warrior || unit == K_Archer || unit == K_Lancer || unit == K_Monk;
     return building == K_Harbour && unit == K_Ship;
 }

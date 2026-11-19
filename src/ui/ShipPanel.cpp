@@ -1,6 +1,7 @@
 #include "ui/ShipPanel.hpp"
 
 #include "client/App.hpp"
+#include "rendering/Bars.hpp"
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
 
@@ -74,15 +75,10 @@ void ShipPanel::draw() {
     Color ink = rgb(70, 45, 30);
     DrawText(TextFormat("%s  (tier %d)", SHIP_NAME[tier - 1], tier), int(r.x) + 16, int(r.y) + 12, 22, ink);
     DrawText(TextFormat("Health %d / %d", int(in.hp), int(in.maxhp)), int(r.x) + 16, int(r.y) + 40, 15, ink);
-    auto bar = [&](float y, float frac, Color c) {
-        Rectangle b{r.x + 16, y, r.width - 32, 14};
-        DrawRectangleRec(b, rgb(200, 180, 140));
-        DrawRectangleRec({b.x, b.y, b.width * std::clamp(frac, 0.f, 1.f), b.height}, c);
-        DrawRectangleLinesEx(b, 1.5f, rgb(120, 90, 60));
-    };
+    auto bar = [&](float y, float frac, Color c) { barRect({r.x + 16, y, r.width - 32, 14}, frac, c); };
     auto dit = W.shipDetails.find(ship);
     DrawText(TextFormat("Troops aboard: %d / %d", int(in.prog), tcap), int(r.x) + 16, int(r.y) + 64, 16, ink);
-    bar(r.y + 84, float(in.prog) / float(tcap), in.prog >= tcap ? rgb(220, 120, 70) : rgb(90, 160, 220));
+    bar(r.y + 84, float(in.prog) / float(tcap), in.prog >= tcap ? BAR_UPGRADE : BAR_TROOPS);
     std::string comp;
     if (dit != W.shipDetails.end()) {
         static const char* nm[5] = {"Pawn", "Warrior", "Archer", "Lancer", "Monk"};
@@ -90,7 +86,7 @@ void ShipPanel::draw() {
     }
     DrawText(comp.empty() ? "Empty hold" : comp.c_str(), int(r.x) + 16, int(r.y) + 104, 14, rgb(100, 70, 50));
     DrawText(TextFormat("Cargo: %d / %d", int(in.stock), rcap), int(r.x) + 16, int(r.y) + 128, 16, ink);
-    bar(r.y + 148, float(in.stock) / float(rcap), rgb(220, 180, 70));
+    bar(r.y + 148, float(in.stock) / float(rcap), BAR_CARGO);
     if (dit != W.shipDetails.end() && in.stock > 0)
         DrawText(TextFormat("Wood %d  Gold %d  Stone %d  Meat %d", dit->second.res[0], dit->second.res[1], dit->second.res[2], dit->second.res[3]), int(r.x) + 16, int(r.y) + 168, 14, rgb(100, 70, 50));
     bool coast = W.coastNearShip(rp), busy = dit != W.shipDetails.end() && dit->second.voyage;

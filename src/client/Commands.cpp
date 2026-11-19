@@ -74,7 +74,14 @@ void Commands::board(uint32_t ship, const std::vector<uint32_t>& us) {
     app.session.send(w);
 }
 void Commands::disembark(uint32_t ship) { Writer w; w.put<uint8_t>(C_Disembark).put<uint32_t>(ship); app.session.send(w); }
-void Commands::quota(int q) { Writer w; w.put<uint8_t>(C_SetQuota).put<uint8_t>(uint8_t(q)); app.session.send(w); }
+void Commands::quotas(const int* q) {
+    Writer w;
+    w.put<uint8_t>(C_SetQuotas);
+    for (int t = 0; t < QUOTA_TYPES; t++) w.put<uint8_t>(uint8_t(std::clamp(q[t], 0, 255)));
+    app.session.send(w);
+}
+void Commands::setAlloc(int res, int pct) { Writer w; w.put<uint8_t>(C_SetAlloc).put<uint8_t>(uint8_t(res)).put<uint8_t>(uint8_t(std::clamp(pct, 0, 100))); app.session.send(w); }
+void Commands::dispose(int res) { Writer w; w.put<uint8_t>(C_Dispose).put<uint8_t>(uint8_t(res)); app.session.send(w); }
 void Commands::support(float x, float y, int n) { Writer w; w.put<uint8_t>(C_Support).put<float>(x).put<float>(y).put<uint8_t>(uint8_t(n)); app.session.send(w); }
 void Commands::moveTown(IV t) { Writer w; w.put<uint8_t>(C_MoveTown).put<int32_t>(t.x).put<int32_t>(t.y); app.session.send(w); }
 void Commands::relocate(uint32_t b, IV t) { Writer w; w.put<uint8_t>(C_Relocate).put<uint32_t>(b).put<int32_t>(t.x).put<int32_t>(t.y); app.session.send(w); }

@@ -9,7 +9,7 @@
 App::App()
     : session(*this), packets(*this), cmd(*this), placement(*this), input(*this), hooks(*this),
       water(*this), post(*this), worldRenderer(*this), minimap(*this), mapOverlay(*this), backdrop(*this),
-      hud(*this), buildMenu(*this), context(*this), training(*this), social(*this), chat(*this), pause(*this),
+      hud(*this), buildMenu(*this), context(*this), training(*this), townHall(*this), social(*this), chat(*this), pause(*this),
       mainMenu(*this), bigMap(*this), shipPanel(*this), baseMenus(*this) {
     ui::bindScale(&settings.uiScale);
 }
@@ -17,7 +17,7 @@ App::App()
 bool App::overUI(Vector2 m) {
     if (hud.over(m) || CheckCollisionPointRec(m, minimap.frame())) return true;
     if (buildMenu.over(m)) return true;
-    if (social.isOpen || bigMap.isOpen || training.isOpen || chat.isOpen) return true;
+    if (social.isOpen || bigMap.isOpen || training.isOpen || townHall.isOpen || chat.isOpen) return true;
     if (baseMenus.over(m)) return true;
     if (context.over(m)) return true;
     if (shipPanel.over(m)) return true;
@@ -31,6 +31,7 @@ void App::resetWorld() {
     input.mode = Input::M_None;
     chat.lines.clear();
     hud.clearLog();
+    townHall.close();
     context.isOpen = training.isOpen = social.isOpen = bigMap.isOpen = chat.isOpen = false;
     placement.buildKind = -1;
     session.resetFlags();
@@ -48,21 +49,23 @@ void App::loadGfx() {
     water.load();
     post.load();
     ui::loadWidgets();
-    hud.load(); buildMenu.load(); minimap.load(); context.load(); social.load(); bigMap.load(); training.load(); mainMenu.load(); pause.load();
+    hud.load(); buildMenu.load(); minimap.load(); context.load(); social.load(); bigMap.load(); training.load(); townHall.load(); mainMenu.load(); pause.load();
 }
 
 // Order matters: later panels draw over earlier ones.
 void App::drawUI(float dt) {
     hud.drawTop();
-    buildMenu.draw(dt);
+    if (!social.isOpen) buildMenu.draw(dt);
     hud.drawLog();
     minimap.draw();
     hud.drawCoords();
     hud.drawSocialTab();
     if (bigMap.isOpen) bigMap.draw();
-    if (social.isOpen) social.draw();
+    if (social.isOpen) { social.draw(); buildMenu.draw(dt); }      // both can be open: the build menu stays above the dimming
     if (training.isOpen) training.draw();
+    if (townHall.isOpen) townHall.draw();
     chat.draw();
+    hud.drawBiome();
     baseMenus.draw();
     context.draw();
     hud.drawDragRect();

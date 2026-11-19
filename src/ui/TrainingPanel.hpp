@@ -34,6 +34,7 @@ private:
     bool queueClick(Vector2 m);         // click a queued unit to cancel it (refund)
     std::string lockReason(Kind k, int archeryLevel) const;   // "Town Hall Lv4" / "Archery Lv3" / "" when trainable
     void drawQueueStrip(Vector2 m);
+    void sideCosts(Rectangle button, const float* cost, const std::string& reason);
 
     App& app;
     TMap mTrain;

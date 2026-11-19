@@ -20,7 +20,16 @@ void Input::update(float dt) {
     if (app.baseMenus.input(m)) return;
     if (app.bigMap.isOpen) { app.bigMap.input(m); return; }
     if (app.training.isOpen) { app.training.input(m); return; }
-    if (app.social.isOpen) { app.social.input(m); return; }
+    if (app.townHall.isOpen) { app.townHall.input(m); return; }
+    if (app.social.isOpen) {                                       // the build menu stays usable beside the social menu
+        bool lp = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+        if (lp && app.buildMenu.over(m)) { app.buildMenu.click(m); return; }
+        if (lp && CheckCollisionPointRec(m, Hud::socialTabBtn())) { app.social.isOpen = false; app.social.textFocus = false; return; }
+        if (!app.social.textFocus && IsKeyPressed(KEY_B)) { app.buildMenu.isOpen = !app.buildMenu.isOpen; return; }
+        if (!app.social.textFocus && app.buildMenu.isOpen) app.buildMenu.hotkeys();
+        app.social.input(m);
+        return;
+    }
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) { app.chat.open(); return; }
     if (IsKeyPressed(KEY_N)) { app.bigMap.open(); return; }
     if (IsKeyPressed(KEY_P)) { app.social.open(); return; }
@@ -115,6 +124,7 @@ void Input::worldRightClick(Vector2 rm, Vector2 m, Vector2 w) {
     if (it != W.ents.end() && isBuilding(W.reg.get<Info>(it->second).kind)) {
         const Info& bi = W.reg.get<Info>(it->second);
         if (bi.kind == K_Archery && bi.owner == W.me && bi.prog >= 100 && !(bi.state & (BLD_DISABLED | BLD_MOVING))) { app.training.openFor(id); app.context.close(); }
+        else if (app.townHall.openFor(id)) app.context.close();          // own completed Town Hall only
         else app.context.open(id, m);
         return;
     }
@@ -177,6 +187,7 @@ void Input::doSelect(Vector2 a, Vector2 b, bool add) {
         uint32_t id = pick(b);
         auto it = W.ents.find(id);
         if (id && it != W.ents.end() && W.reg.get<Info>(it->second).owner == W.me) sel.insert(id);
+        if (id && !add && app.townHall.openFor(id)) app.context.close();   // selecting our Town Hall opens its window
     }
 }
 

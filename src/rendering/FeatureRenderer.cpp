@@ -5,6 +5,7 @@
 #include "rendering/Sprites.hpp"
 #include "rendering/Text.hpp"
 #include "rendering/TerrainRenderer.hpp"
+#include "ui/CostRow.hpp"
 #include "ui/UiScale.hpp"
 
 #include <cmath>
@@ -84,29 +85,48 @@ void FeatureRenderer::queue(const TerrainView& v, int x0, int y0, int x1, int y1
         }
 }
 
-// name, cost, work time and yield of the hovered obstacle (+ the state of its clear job)
+// name, cost, work time and yield of the hovered obstacle (+ the state of its clear job). Cost and yield are drawn as
+// [icon][value] items after their label, sized with the zoom-compensated font.
 void FeatureRenderer::queueTooltip(uint8_t f, int x, int y, float cx, float by, DrawList& items) {
     const ClientWorld& W = app.world;
-    std::vector<std::string> lines{featName(f)};
-    std::string state;
+    struct TLine { std::string text; int res = -1; float amt = 0; bool cost = false; };
+    std::vector<TLine> lines{{featName(f)}};
     if (auto it = W.cjobs.find(chunkKey(x, y)); it != W.cjobs.end())
-        state = it->second.state == 2 ? TextFormat("Being cleared: %d%%", int(it->second.pct * 100.f)) : (it->second.state == 1 ? "A pawn is on the way" : "Waiting for a free pawn");
+        lines.push_back({it->second.state == 2 ? TextFormat("Being cleared: %d%%", int(it->second.pct * 100.f)) : (it->second.state == 1 ? "A pawn is on the way" : "Waiting for a free pawn")});
     else {
-        lines.push_back(TextFormat("Clear: %d wood, ~%.1f s of pawn work", clearCostWood(f), double(clearBaseSeconds(f))));
-        lines.push_back(TextFormat("Yields +%d %s", dropAmount(f), RES_NAME[dropRes(f)]));
-        lines.push_back(featureBlocks(f) ? "Blocks building" : "Does not block building");
-        lines.push_back("Right-click: selected pawns (or the nearest free pawn) clear it");
+        lines.push_back({"Cost:", R_Wood, float(clearCostWood(f)), true});
+        lines.push_back({TextFormat("~%.1f s of pawn work", double(clearBaseSeconds(f)))});
+        lines.push_back({"Yields:", dropRes(f), float(dropAmount(f)), false});
+        lines.push_back({featureBlocks(f) ? "Blocks building" : "Does not block building"});
+        lines.push_back({"Right-click: selected pawns (or the nearest free pawn) clear it"});
     }
-    if (!state.empty()) lines.push_back(state);
     float zoom = std::max(.2f, app.cam.zoom);
-    int sz = std::clamp(int(16.f / zoom), 10, 64), lh = sz + sz / 3;
+    int sz = std::clamp(int(16.f / zoom), 10, 64), lh = sz + sz / 2;
+    float have[R_Count];
+    for (int r = 0; r < R_Count; r++) have[r] = W.res[r];
     items.push_back({1e9f - 1.f, [=]() {
-        int w = 0;
-        for (auto& l : lines) w = std::max(w, MeasureText(l.c_str(), sz));
-        int h = lh * int(lines.size()) + sz / 2, x0 = int(cx) - w / 2 - sz / 2, y0 = int(by) - 100 - h - int(40.f / zoom);
-        DrawRectangle(x0, y0, w + sz, h, rgb(18, 16, 24, 205));
-        DrawRectangleLines(x0, y0, w + sz, h, rgb(255, 235, 170, 200));
-        for (size_t i = 0; i < lines.size(); i++)
-            textShadow(lines[i], x0 + sz / 2, y0 + sz / 4 + lh * int(i), sz, i == 0 ? rgb(255, 230, 140) : rgb(235, 235, 240));
+        ui::CostStyle st = ui::darkCost(float(sz) / 14.f);
+        st.fs = sz;
+        auto lineW = [&](const TLine& l) {
+            float w = float(MeasureText(l.text.c_str(), sz));
+            if (l.res >= 0) { float c[R_Count]{}; c[l.res] = l.amt; w += float(sz) / 2 + ui::measureCosts(c, 1e9f, st).x; }
+            return w;
+        };
+        float w = 0;
+        for (auto& l : lines) w = std::max(w, lineW(l));
+        int h = lh * int(lines.size()) + sz / 2, x0 = int(cx - w / 2) - sz / 2, y0 = int(by) - 100 - h - int(40.f / zoom);
+        DrawRectangle(x0, y0, int(w) + sz, h, rgb(18, 16, 24, 215));
+        DrawRectangleLines(x0, y0, int(w) + sz, h, rgb(255, 235, 170, 200));
+        for (size_t i = 0; i < lines.size(); i++) {
+            const TLine& l = lines[i];
+            int ty = y0 + sz / 4 + lh * int(i);
+            textShadow(l.text, x0 + sz / 2, ty, sz, i == 0 ? rgb(255, 230, 140) : rgb(235, 235, 240));
+            if (l.res < 0) continue;
+            float c[R_Count]{};
+            c[l.res] = l.amt;
+            ui::CostStyle ls = st;
+            if (!l.cost) ls.ok = rgb(160, 255, 160);                       // a yield, not a price
+            ui::drawCosts(c, float(x0 + sz / 2 + MeasureText(l.text.c_str(), sz)) + float(sz) / 2, float(ty) - (std::max(ls.icon, float(sz)) - float(sz)) / 2, 1e9f, l.cost ? have : nullptr, ls);
+        }
     }});
 }

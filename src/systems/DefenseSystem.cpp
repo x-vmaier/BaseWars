@@ -33,15 +33,17 @@ DefRoute DefenseSystem::planDefenseRoute(int /*member*/, Pos from, Pos to) {   /
     r.path = std::move(path);
     return r;
 }
-bool DefenseSystem::idleArmy(entt::entity e) {
+bool DefenseSystem::idleArmy(entt::entity e, Kind only) {
     Kind k = reg.get<Info>(e).kind;
-    if (!isArmy(k) || reg.any_of<Attack, AMove, Convoy, Haul, Raider, Support, Extinguish, Worker, Aboard, Boarding>(e)) return false;
+    if (only != K_Count ? k != only : !isArmy(k)) return false;
+    if ( reg.any_of<Attack, AMove, Convoy, Haul, Raider, Support, Extinguish, Worker, Aboard, Boarding>(e)) return false;
     return reg.get<Unit>(e).path.empty();
 }
-std::vector<entt::entity> DefenseSystem::pickIdleArmy(int owner, Pos near2, int n) {
+std::vector<entt::entity> DefenseSystem::pickIdleArmy(int owner, Pos near2, int n, Kind only) {
     std::vector<std::pair<float, entt::entity>> c;
+    if (n <= 0) return {};
     reg.view<Owner, Unit, Info, Pos>().each([&](entt::entity e, const Owner& o, const Unit&, const Info&, const Pos& p) {
-        if (o.id == owner && idleArmy(e)) c.push_back({std::hypot(p.x - near2.x, p.y - near2.y), e});
+        if (o.id == owner && idleArmy(e, only)) c.push_back({std::hypot(p.x - near2.x, p.y - near2.y), e});
     });
     std::sort(c.begin(), c.end(), [](auto& a, auto& b) { return a.first < b.first; });
     std::vector<entt::entity> out;
@@ -69,14 +71,20 @@ void DefenseSystem::dispatchDefense(int victim, Pos at, int attacker) {
     world.bp[victim].defNext = world.clock + 20.0;
     int total = 0;
     for (int m = 1; m <= MAX_PLAYERS && total < 60; m++) {
-        if (m == victim || !world.pl[m].used || world.pl[m].clan != c || world.bp[m].quota == 0 || world.bp[m].homeless) continue;
+        if (m == victim || !world.pl[m].used || world.pl[m].clan != c || world.bp[m].quotaTotal() == 0 || world.bp[m].homeless) continue;
         auto th = world.townHallOf(m);
         if (th == entt::null) continue;
-        int existing = 0;
-        reg.view<Support, Owner>().each([&](const Support& s, const Owner& o) { if (o.id == m && s.defense && s.victim == victim) existing++; });
-        int need = int(world.bp[m].quota) - existing;
-        if (need <= 0) continue;
-        auto us = pickIdleArmy(m, at, need);
+        int existing[QUOTA_TYPES]{}, need = 0;                                   // per troop type: quota minus those already on the way
+        reg.view<Support, Owner, Info>().each([&](const Support& s, const Owner& o, const Info& i) {
+            if (o.id != m || !s.defense || s.victim != victim) return;
+            for (int t = 0; t < QUOTA_TYPES; t++) if (QUOTA_KINDS[t] == i.kind) existing[t]++;
+        });
+        std::vector<entt::entity> us;
+        for (int t = 0; t < QUOTA_TYPES; t++) {
+            int want = int(world.bp[m].quota[t]) - existing[t];
+            need += std::max(0, want);
+            for (auto e : pickIdleArmy(m, at, want, QUOTA_KINDS[t])) us.push_back(e);
+        }
         if (us.empty()) continue;                                                // nothing to send: skip the route search entirely
         Pos from = world.posOf(th);
         world.spawnSpot(th, false, from);                                              // a free tile beside the hall (its centre is blocked)

@@ -17,6 +17,7 @@ public:
 private:
     void drawPlaceExtras();             // clan-radius hints while placing a homeless Town Hall
     void mineGhost(IV t, float cx, float bottom);   // gold bonus radius while placing a mine
+    void ghostLabel(Kind k, IV t, int err, float cx, float bottom);   // reason / cost row / clearing cost under the ghost
     void siteOverlay(Kind k, float cx, float bottom, BJob job, bool hasJob, uint32_t id, double t);   // scaffold + tool icon
     App& app;
 };

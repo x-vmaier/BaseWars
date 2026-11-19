@@ -173,7 +173,10 @@ void Replication::sendBaseInfo(int id) {
         if (rn.town && o.id == id) { moving = 1; pct = uint8_t(std::min(1.f, b.progress) * 100.f); }
     });
     Writer w;
-    w.put<uint8_t>(S_BaseInfo).put<uint8_t>(world.bp[id].quota).put<uint8_t>(world.bp[id].homeless ? 1 : 0).put<uint8_t>(moving).put<uint8_t>(pct);
+    const BaseProf& b = world.bp[id];
+    w.put<uint8_t>(S_BaseInfo).put<uint8_t>(uint8_t(std::min(255, b.quotaTotal()))).put<uint8_t>(b.homeless ? 1 : 0).put<uint8_t>(moving).put<uint8_t>(pct);
+    for (uint8_t q : b.quota) w.put<uint8_t>(q);
+    for (uint8_t a : b.alloc) w.put<uint8_t>(a);
     world.net.send(world.pl[id].conn, w);
 }
 

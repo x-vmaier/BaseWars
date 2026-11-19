@@ -3,6 +3,7 @@
 #include "client/App.hpp"
 #include "rendering/Sprites.hpp"
 #include "rendering/UnitAnims.hpp"
+#include "ui/CostRow.hpp"
 #include "ui/GameText.hpp"
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
@@ -25,7 +26,6 @@ void ContextPanel::rebuild() {
     next.clear();
     nextUnits.clear();
     slider = false;
-    quota = false;
     auto it = W.ents.find(target);
     if (it == W.ents.end()) { isOpen = false; return; }
     const Info& in = W.reg.get<Info>(it->second);
@@ -78,19 +78,21 @@ void ContextPanel::rebuild() {
             float c[R_Count];
             unitCost(Kind(u), c);
             bool locked = th < unitThLevel(Kind(u));
-            acts.push_back({locked ? TextFormat("%s: requires Town Hall Lv%d", KINFO[u].name, unitThLevel(Kind(u))) : std::string("Build ") + KINFO[u].name + "  " + costText(c), 1, target, uint32_t(u), !locked && W.affordable(c), false});
+            if (locked) addAct({TextFormat("%s: requires Town Hall Lv%d", KINFO[u].name, unitThLevel(Kind(u))), 1, target, uint32_t(u), false, false});
+            else addAct({std::string(u == K_Ship ? "Build " : "Train ") + KINFO[u].name, 1, target, uint32_t(u), W.affordable(c), false}, c);
         }
         if (k != K_Campfire) {
             float c[R_Count];
             upgradeCost(k, in.aux, c);
             std::string why = upgradeBlock(k, in.aux, th);
             const BJob* j = W.jobOf(target);
-            if (j && j->kind != SJ_Build) acts.push_back({j->kind == SJ_Upgrade ? "Cancel upgrade (partial refund)" : "Cancel repair (partial refund)", 8, target, 1, true, true});
-            else acts.push_back({!why.empty() ? why : "Upgrade to Lv" + std::to_string(in.aux + 1) + "  " + costText(c), 2, target, 0, why.empty() && W.affordable(c), false});
+            if (j && j->kind != SJ_Build) addAct({j->kind == SJ_Upgrade ? "Cancel upgrade (partial refund)" : "Cancel repair (partial refund)", 8, target, 1, true, true});
+            else if (!why.empty()) addAct({why, 2, target, 0, false, false});
+            else addAct({"Upgrade to Lv" + std::to_string(in.aux + 1), 2, target, 0, W.affordable(c), false}, c, timeText(upgradeSeconds(k, in.aux)));
             if (!j && in.hp < in.maxhp - .5f) {
                 float rc[R_Count];
                 repairCost(k, in.aux, 1.f - in.hp / std::max(1.f, in.maxhp), rc);
-                acts.push_back({"Repair  " + costText(rc), 7, target, 0, W.affordable(rc), false});
+                addAct({"Repair", 7, target, 0, W.affordable(rc), false}, rc);
             }
             if (!j && why.empty()) nextLevelInfo(in, next, nextUnits);
         }
@@ -100,8 +102,10 @@ void ContextPanel::rebuild() {
             float wait = W.donateWait();
             for (int r = 0; r < R_Count; r++) {
                 int mul = W.demand[f].mul[r];
-                std::string lbl = wait > 0 ? TextFormat("Give 50 %s (wait %d s)", RES_NAME[r], int(std::ceil(wait))) : TextFormat("Give 50 %s  (rep x%.1f)%s", RES_NAME[r], float(mul) / 100.f, W.demand[f].res == r ? " WANTED" : "");
-                acts.push_back({lbl, 6, uint32_t(f), uint32_t(r), W.res[r] >= 50.f && wait <= 0, false});
+                float gift[R_Count]{};
+                gift[r] = 50.f;
+                std::string note = wait > 0 ? TextFormat("wait %d s", int(std::ceil(wait))) : TextFormat("rep x%.1f%s", float(mul) / 100.f, W.demand[f].res == r ? " WANTED" : "");
+                addAct({"Give", 6, uint32_t(f), uint32_t(r), W.res[r] >= 50.f && wait <= 0, false}, gift, note);
             }
         }
         acts.push_back({"Attack this target", 3, target, 0, true, true});
@@ -115,6 +119,13 @@ void ContextPanel::rebuild() {
         }
     }
     baseContext(in, mine, done);
+    layout();
+}
+
+void ContextPanel::addAct(MenuAct a, const float* cost, const std::string& note) {
+    if (cost) { a.hasCost = true; for (int r = 0; r < R_Count; r++) a.cost[r] = cost[r]; }
+    a.note = note;
+    acts.push_back(std::move(a));
 }
 
 // fire / disabled / moving lines, training queue, defense quota slider, move town, relocate
@@ -134,16 +145,9 @@ void ContextPanel::baseContext(const Info& in, bool mine, bool done) {
         for (size_t i = 0; i < q->second.kinds.size(); i++) s += std::string(i ? ", " : " ") + KINFO[q->second.kinds[i]].name + (i == 0 ? TextFormat(" %d%%", q->second.pct) : "");
         lines.push_back({s, ink});
     }
-    if (in.kind == K_TownHall && !mov) {
-        slider = true;
-        quota = true;
-        if (!sliderDrag) pct = W.myQuota;
-        bool can = !W.townMoving && W.affordable(TOWN_MOVE_COST);
-        acts.push_back({"Move town  " + costText(TOWN_MOVE_COST), 20, target, 0, can, false});
-    }
     if (dis && !mov && in.kind != K_TownHall && in.kind != K_Campfire) {
         bool can = W.affordable(KINFO[in.kind].cost) && !W.townMoving;
-        acts.push_back({"Relocate  " + costText(KINFO[in.kind].cost), 21, target, 0, can, false});
+        addAct({"Relocate", 21, target, 0, can, false}, KINFO[in.kind].cost);
     }
     if (dis || mov || (in.state & BLD_CRIPPLED)) for (auto& a : acts) if (a.act == 1 || a.act == 2) a.enabled = false;
 }
@@ -183,35 +187,78 @@ void ContextPanel::run(const MenuAct& a) {
 bool ContextPanel::baseRun(const MenuAct& a) {
     auto it = app.world.ents.find(a.a);
     switch (a.act) {
-    case 20: app.placement.begin(Placement::MoveTown, K_TownHall, 0); return true;
     case 21: if (it != app.world.ents.end()) app.placement.begin(Placement::Relocate, app.world.reg.get<Info>(it->second).kind, a.a); return true;
     default: return false;
     }
 }
 
 // ---------------------------------------------------------------- layout and input
+// Rows: [button: label only][cost row, wrapping][note]. A row is as tall as its wrapped cost row (at least a button).
+namespace {
+constexpr float BTN_H = 30, ROW_GAP = 6, COST_GAP = 10, NOTE_FS = 12;
+float btnWidth(const ContextPanel::MenuAct& a, float inner) {
+    if (!a.hasCost) return inner;
+    return std::clamp(float(MeasureText(a.label.c_str(), 14)) + 28.f, 76.f, inner * .5f);
+}
+}  // namespace
+
+float ContextPanel::innerW() const { return mCtx.size().x - 2 * float(mCtx.padding) - 12; }
+void ContextPanel::layout() {
+    rowY.assign(acts.size(), 0);
+    rowH.assign(acts.size(), BTN_H);
+    float y = 0, inner = innerW();
+    ui::CostStyle st = ui::paperCost();
+    for (size_t i = 0; i < acts.size(); i++) {
+        const MenuAct& a = acts[i];
+        float h = BTN_H;
+        if (a.hasCost) {
+            float cw = inner - btnWidth(a, inner) - COST_GAP;
+            Vector2 cs = ui::measureCosts(a.cost, cw, st);
+            float nh = 0;
+            if (!a.note.empty()) nh = cs.x + 8 + float(MeasureText(a.note.c_str(), int(NOTE_FS))) <= cw ? 0.f : NOTE_FS + 3;   // the note wraps below
+            h = std::max(BTN_H, cs.y + nh);
+        }
+        rowY[i] = y;
+        rowH[i] = h;
+        y += h + ROW_GAP;
+    }
+    float nextH = next.empty() ? 0.f : 22.f + 16.f * float(next.size()) + 6.f;
+    float content = 20.f + 19.f * float(lines.size()) + (slider ? 50.f : 4.f) + y + nextH;
+    panelH = std::clamp(content + 2 * float(mCtx.padding) + 8, 160.f, std::max(160.f, float(ui::screenH()) - 64));
+}
 Rectangle ContextPanel::rect() const {
     Vector2 s = mCtx.size();
-    return {std::clamp(pos.x, 8.f, float(ui::screenW()) - s.x - 8), std::clamp(pos.y, 56.f, float(ui::screenH()) - s.y - 8), s.x, s.y};
+    float h = panelH > 0 ? panelH : s.y;
+    return {std::clamp(pos.x, 8.f, float(ui::screenW()) - s.x - 8), std::clamp(pos.y, 56.f, std::max(56.f, float(ui::screenH()) - h - 8)), s.x, h};
 }
 float ContextPanel::topY() const { Rectangle r = rect(); return r.y + float(mCtx.padding) + 20; }
 Rectangle ContextPanel::sliderRect() const { Rectangle r = rect(); float pad = float(mCtx.padding); return {r.x + pad + 12, topY() + 19.f * float(lines.size()) + 22, r.width - 2 * pad - 24, 14}; }
 Rectangle ContextPanel::button(int i) const {
     Rectangle r = rect();
-    float pad = float(mCtx.padding);
-    return {r.x + pad + 6, topY() + 19.f * float(lines.size()) + (slider ? 50.f : 4.f) + 34.f * float(i), r.width - 2 * pad - 12, 30};
+    float pad = float(mCtx.padding), y0 = topY() + 19.f * float(lines.size()) + (slider ? 50.f : 4.f);
+    if (i >= int(acts.size()) || i >= int(rowY.size())) {
+        float end = rowY.empty() ? 0.f : rowY.back() + rowH.back() + ROW_GAP;
+        return {r.x + pad + 6, y0 + end, innerW(), BTN_H};
+    }
+    const MenuAct& a = acts[size_t(i)];
+    return {r.x + pad + 6, y0 + rowY[size_t(i)] + (rowH[size_t(i)] - BTN_H) / 2, btnWidth(a, innerW()), BTN_H};
 }
-int ContextPanel::quotaFromMouse(float mx, const Rectangle& sr) { return std::clamp(int(std::lround(float(MAX_QUOTA_UI) * (mx - sr.x) / sr.width)), 0, MAX_QUOTA_UI); }
+Rectangle ContextPanel::costArea(int i) const {
+    Rectangle b = button(i);
+    float x = b.x + b.width + COST_GAP, w = innerW() - b.width - COST_GAP;
+    float y0 = topY() + 19.f * float(lines.size()) + (slider ? 50.f : 4.f) + rowY[size_t(i)];
+    return {x, y0, w, rowH[size_t(i)]};
+}
 
-// auto-haul threshold (outposts / storage) or defense quota (Town Hall)
+// auto-haul threshold of an outpost / storage
 bool ContextPanel::sliderInput(Vector2 m, bool lp, bool lr) {
     if (!isOpen || !slider) return false;
     Rectangle sr = sliderRect();
     Rectangle hit{sr.x - 12, sr.y - 10, sr.width + 24, sr.height + 20};
     if (lp && CheckCollisionPointRec(m, hit)) sliderDrag = true;
     if (sliderDrag && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-        int v = quota ? quotaFromMouse(m.x, sr) : std::clamp(int(std::lround((10.f + 90.f * (m.x - sr.x) / sr.width) / 5.f)) * 5, 10, 100);
-        if (v != pct) { pct = v; if (quota) { app.world.myQuota = v; app.cmd.quota(v); } else app.cmd.setHaul(target, v); }
+        int v = std::clamp(int(std::lround((10.f + 90.f * (m.x - sr.x) / sr.width) / 5.f)) * 5, 10, 100);
+        if (v != pct) { pct = v; app.cmd.setHaul(target, v); }
     }
     if (sliderDrag && lr) sliderDrag = false;
     return sliderDrag || (lp && CheckCollisionPointRec(m, hit));
@@ -241,18 +288,31 @@ void ContextPanel::draw() {
     Color ink = rgb(70, 45, 30);
     for (auto& l : lines) { DrawText(l.first.c_str(), int(x), int(y), 15, l.second); y += 19; }
     if (slider) {
-        if (quota) DrawText(TextFormat("Defense quota: %d troops per attacked clan mate", pct), int(x), int(y) + 2, 13, ink);
-        else DrawText(TextFormat("Auto-haul to Town Hall at %d%% full", pct), int(x), int(y) + 2, 13, ink);
+        DrawText(TextFormat("Auto-haul to Town Hall at %d%% full", pct), int(x), int(y) + 2, 13, ink);
         Rectangle sr = sliderRect();
+        float k = (float(pct) - 10.f) / 90.f;
         DrawRectangleRounded(sr, .5f, 6, rgb(60, 40, 28, 220));
-        float k = quota ? float(pct) / float(MAX_QUOTA_UI) : (float(pct) - 10.f) / 90.f;
         DrawRectangleRounded({sr.x, sr.y, std::max(8.f, sr.width * k), sr.height}, .5f, 6, rgb(80, 170, 220));
         DrawCircleV({sr.x + sr.width * k, sr.y + sr.height / 2}, 10, rgb(250, 235, 200));
         DrawCircleLines(int(sr.x + sr.width * k), int(sr.y + sr.height / 2), 10, rgb(60, 40, 28));
     }
+    ui::CostStyle st = ui::paperCost();
     for (size_t i = 0; i < acts.size(); i++) {
+        const MenuAct& a = acts[i];
         Rectangle b = button(int(i));
-        ui::drawButton(b, acts[i].label, acts[i].enabled, acts[i].red, CheckCollisionPointRec(m, b), IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(m, b));
+        ui::drawButton(b, a.label, a.enabled, a.red, CheckCollisionPointRec(m, b), IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(m, b));
+        if (!a.hasCost) continue;
+        Rectangle ca = costArea(int(i));
+        float noteH = a.note.empty() ? 0.f : NOTE_FS + 3;
+        Vector2 cs = ui::measureCosts(a.cost, ca.width, st);
+        bool inlineNote = !a.note.empty() && cs.x + 8 + float(MeasureText(a.note.c_str(), int(NOTE_FS))) <= ca.width;
+        float blockH = cs.y + (inlineNote || a.note.empty() ? 0.f : noteH);
+        float cy = ca.y + (ca.height - blockH) / 2;
+        cs = ui::drawCosts(a.cost, ca.x, cy, ca.width, W.res, st);
+        if (a.note.empty()) continue;
+        Color nc = a.note.find("WANTED") != std::string::npos ? rgb(30, 120, 40) : rgb(120, 90, 60);
+        if (inlineNote) DrawText(a.note.c_str(), int(ca.x + cs.x + 8), int(cy + (cs.y - NOTE_FS) / 2 + 1), int(NOTE_FS), nc);
+        else DrawText(a.note.c_str(), int(ca.x), int(cy + cs.y + 3), int(NOTE_FS), nc);
     }
     if (!next.empty()) {                                            // what the next level will change
         float ny = button(int(acts.size())).y + 4;

@@ -31,7 +31,9 @@ public:
     void clear(const std::vector<IV>& tiles, const std::vector<uint32_t>& pawns = {});   // pawns: who should go (empty = nearest free pawn)
     void board(uint32_t ship, const std::vector<uint32_t>& units);
     void disembark(uint32_t ship);
-    void quota(int q);
+    void quotas(const int* perType);                // QUOTA_TYPES values (Warrior, Archer, Lancer, Monk)
+    void setAlloc(int res, int pct);                // Town Hall storage share of a resource
+    void dispose(int res);                          // discard all of a resource
     void support(float x, float y, int n);
     void moveTown(IV t);
     void relocate(uint32_t building, IV t);

@@ -315,9 +315,15 @@ bool PacketHandler::basePacket(uint8_t type, Reader& r) {
         return true;
     }
     case S_BaseInfo: {
-        int q = r.get<uint8_t>(), hl = r.get<uint8_t>(), mv = r.get<uint8_t>(), pct = r.get<uint8_t>();
+        r.get<uint8_t>();                                                    // total quota (the per-type values follow)
+        int hl = r.get<uint8_t>(), mv = r.get<uint8_t>(), pct = r.get<uint8_t>(), q[QUOTA_TYPES], al[R_Count];
+        for (int& v : q) v = r.get<uint8_t>();
+        for (int& v : al) v = r.get<uint8_t>();
         if (!r.ok) return true;
-        if (!app.context.sliderDrag) w.myQuota = q;
+        if (GetTime() - w.baseEditAt > 1.5) {
+            for (int t = 0; t < QUOTA_TYPES; t++) w.quota[t] = q[t];
+            for (int k = 0; k < R_Count; k++) w.alloc[k] = al[k];
+        }
         w.homeless = hl != 0;
         w.townMoving = mv != 0;
         w.movePct = pct;

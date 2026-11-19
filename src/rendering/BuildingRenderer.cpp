@@ -5,6 +5,7 @@
 #include "rendering/Palette.hpp"
 #include "rendering/Sprites.hpp"
 #include "rendering/Text.hpp"
+#include "ui/CostRow.hpp"
 #include "rendering/UnitAnims.hpp"
 #include "ui/GameText.hpp"
 #include "ui/UiScale.hpp"
@@ -101,15 +102,15 @@ void BuildingRenderer::queue(const RPos& p, const Info& i, uint32_t id, bool sel
         Rectangle fr{float(tx) * TILE, float(ty) * TILE - 40, float(ki.fw) * TILE, float(ki.fh) * TILE + 40};
         if (selected) brackets(fr, rgb(255, 235, 90));
         if (prog < 1.f) {
-            drawBar({cx, bottom + 4}, 70, prog, rgb(90, 160, 255));
+            drawBar({cx, bottom + 4}, 70, prog, hasJob && job.phase == SP_Waiting ? BAR_IDLE : BAR_BUILD);
             std::string s = hasJob && job.phase == SP_Waiting ? "Waiting for a pawn" : TextFormat("Building %d%%", int(prog * 100.f));
             textShadow(s, int(cx) - MeasureText(s.c_str(), 14) / 2, int(bottom) + 18, 14, hasJob && job.phase == SP_Waiting ? rgb(255, 170, 120) : rgb(200, 225, 255));
         } else if (hasJob && job.kind != SJ_Build) {
-            drawBar({cx, bottom + 4}, 76, float(job.pct) / 100.f, job.kind == SJ_Upgrade ? rgb(240, 170, 50) : rgb(90, 220, 120));
+            drawBar({cx, bottom + 4}, 76, float(job.pct) / 100.f, job.phase == SP_Waiting ? BAR_IDLE : (job.kind == SJ_Upgrade ? BAR_UPGRADE : BAR_REPAIR));
             std::string s = job.phase == SP_Waiting ? "Waiting for a pawn" : TextFormat("%s %d%%", job.kind == SJ_Upgrade ? "Upgrading" : "Repairing", job.pct);
             textShadow(s, int(cx) - MeasureText(s.c_str(), 14) / 2, int(bottom) + 18, 14, job.phase == SP_Waiting ? rgb(255, 170, 120) : rgb(255, 225, 150));
         }
-        if (prog >= 1.f && !(hasJob && job.kind != SJ_Build) && (hpFrac < .995f || selected || hover)) drawBar({cx, bottom + 4}, 76, hpFrac, hpFrac > .5f ? rgb(90, 220, 90) : (hpFrac > .25f ? rgb(240, 190, 50) : rgb(235, 70, 60)));
+        if (prog >= 1.f && !(hasJob && job.kind != SJ_Build) && (hpFrac < .995f || selected || hover)) drawBar({cx, bottom + 4}, 76, hpFrac, healthColor(hpFrac));
         if (i.kind == K_Campfire && (hover || selected)) DrawCircleLinesV({cx, bottom - 16}, WARMTH_RADIUS * TILE, rgb(255, 170, 70, 160));
     }});
 }
@@ -195,9 +196,7 @@ void BuildingRenderer::queuePlacementGhost(DrawList& items) {
             float dw = s.artW * s.scale, dh = s.artH * s.scale;
             DrawTexturePro(bt, {0, 0, s.artW, s.artH}, {cx - dw / 2, bottom - 6 - s.artBottom * s.scale, dw, dh}, {0, 0}, 0, rgb(255, 255, 255, 150));
         }
-        std::string label = err ? PLACE_TEXT[err] : (ok ? costText(app.placement.placeCost(k)) : "Not enough resources");
-        if (!err) { std::string wl = app.placement.ghostLabel(k, tt); if (!wl.empty()) label = wl; }
-        textShadow(label, int(cx) - MeasureText(label.c_str(), 18) / 2, int(bottom) + 10, 18, ok ? rgb(160, 255, 160) : rgb(255, 150, 130));
+        ghostLabel(k, tt, err, cx, bottom);
         if (k == K_Campfire) DrawCircleLinesV({cx, bottom - 30}, WARMTH_RADIUS * TILE, rgb(255, 170, 70, 160));
         if (k == K_Mine) mineGhost(tt, cx, bottom);
     }});
@@ -220,4 +219,26 @@ void BuildingRenderer::queuePendingSites(DrawList& items) {
             textShadow(lbl, int(cx) - MeasureText(lbl, 16) / 2, int(bottom) + 8, 16, rgb(255, 220, 150));
         }});
     }
+}
+
+// under the placement ghost: the reason it cannot go here, or its cost row (red values = missing) and the clearing cost
+void BuildingRenderer::ghostLabel(Kind k, IV tt, int err, float cx, float bottom) {
+    const ClientWorld& W = app.world;
+    float y = bottom + 10;
+    if (err) { std::string s = PLACE_TEXT[err]; textShadow(s, int(cx) - MeasureText(s.c_str(), 18) / 2, int(y), 18, rgb(255, 150, 130)); return; }
+    ui::CostStyle st = ui::darkCost(1.3f);
+    st.fs = 18;
+    const float* cost = app.placement.placeCost(k);
+    Vector2 cs = ui::measureCosts(cost, 1e9f, st);
+    ui::drawCosts(cost, cx - cs.x / 2, y, 1e9f, W.res, st);
+    y += cs.y + 6;
+    if (!W.affordable(cost)) { const char* s = "Not enough resources"; textShadow(s, int(cx) - MeasureText(s, 16) / 2, int(y), 16, rgb(255, 150, 130)); y += 22; }
+    std::string wl = app.placement.ghostLabel(k, tt);
+    if (wl.empty()) return;
+    float wood[R_Count]{};
+    wood[R_Wood] = float(W.clearWoodCost(W.blockedUnder(k, tt)));
+    Vector2 ws = ui::measureCosts(wood, 1e9f, st);
+    float tw = float(MeasureText(wl.c_str(), 18)), x0 = cx - (tw + 8 + ws.x) / 2;
+    textShadow(wl, int(x0), int(y + (ws.y - 18) / 2), 18, rgb(255, 210, 140));
+    ui::drawCosts(wood, x0 + tw + 8, y, 1e9f, W.res, st);
 }

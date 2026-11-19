@@ -4,6 +4,7 @@
 #include "systems/Systems.hpp"
 
 #include <algorithm>
+#include <array>
 #include <climits>
 #include <cmath>
 #include <cstdio>
@@ -253,7 +254,30 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t>& data) {
 
 void PacketHandler::baseCommand(int id, uint8_t type, Reader& r) {
     switch (type) {
-    case C_SetQuota: { int q = r.get<uint8_t>(); if (r.ok) world.bp[id].quota = uint8_t(std::min(q, MAX_QUOTA)); break; }
+    case C_SetQuota: {                                                              // legacy single number: all warriors
+        int q = r.get<uint8_t>();
+        if (r.ok) { std::fill(std::begin(world.bp[id].quota), std::end(world.bp[id].quota), uint8_t(0)); world.bp[id].quota[0] = uint8_t(std::min(q, MAX_QUOTA)); }
+        break;
+    }
+    case C_SetQuotas: {
+        std::array<int, QUOTA_TYPES> q{};
+        for (int t = 0; t < QUOTA_TYPES; t++) q[size_t(t)] = r.get<uint8_t>();
+        if (r.ok) for (int t = 0; t < QUOTA_TYPES; t++) world.bp[id].quota[t] = uint8_t(std::min(q[size_t(t)], MAX_QUOTA));
+        break;
+    }
+    case C_SetAlloc: {
+        int res = r.get<uint8_t>(), pct = r.get<uint8_t>();
+        if (r.ok && res < R_Count) world.bp[id].alloc[res] = uint8_t(std::clamp(pct / ALLOC_STEP * ALLOC_STEP, 0, 100));
+        break;
+    }
+    case C_Dispose: {
+        int res = r.get<uint8_t>();
+        if (!r.ok || res >= R_Count) break;
+        int n = int(world.pl[id].res[res]);
+        world.pl[id].res[res] = 0;
+        world.say(id, "Disposed of " + std::to_string(n) + " " + RES_NAME[res] + ".");
+        break;
+    }
     case C_Support: {
         float x = r.get<float>(), y = r.get<float>();
         int n = r.get<uint8_t>();

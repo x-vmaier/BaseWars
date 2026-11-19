@@ -34,7 +34,7 @@ void UnitRenderer::queue(const RPos& p, Info& i, Face& fc, uint32_t id, bool sel
         if ((i.state & 7) == US_Extinguish) extinguishSplash(px, py, fc.left, t, id);
         if (i.kind == K_Monk && (i.state & 7) == US_Heal) { Anim h = mkAnim(std::string("Units/") + COLOR_NAME[colorIdx(i.owner)] + " Units/Monk/Heal_Effect.png", 192, 192, 10, 96, 135); drawAnim(h, frameFor(h, t), px, py + 6, false, 1.f); }
         float fr = i.hp / std::max(1.f, i.maxhp);
-        if ((fr < .995f || selected || hover) && i.kind != K_Sheep) drawBar({px, py - 56}, 48, fr, fr > .5f ? rgb(90, 220, 90) : (fr > .25f ? rgb(240, 190, 50) : rgb(235, 70, 60)));
+        if ((fr < .995f || selected || hover) && i.kind != K_Sheep) drawBar({px, py - 56}, 48, fr, healthColor(fr));
     }});
     if (i.kind == K_Ship && moving)
         items.push_back({py - 1, [=]() { Anim s = mkAnim("Particle FX/Water Splash.png", 192, 192, 8, 96, 150); drawAnim(s, frameFor(s, t, float(id % 3)), px - (fc.left ? -30.f : 30.f), py + 6, false, .45f, rgb(255, 255, 255, 140)); }});

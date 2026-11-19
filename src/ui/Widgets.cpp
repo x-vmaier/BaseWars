@@ -1,6 +1,7 @@
 #include "ui/Widgets.hpp"
 
 #include "common/Shared.hpp"
+#include "rendering/Bars.hpp"
 #include "rendering/Text.hpp"
 
 namespace ui {
@@ -30,8 +31,7 @@ void drawResourceIcon(int r, float x, float y, float s) {
 }
 void statBar(float x, float y, float w, float frac, Color c, const std::string& label, const std::string& value, const std::string& bonus) {
     DrawText(label.c_str(), int(x), int(y), 12, rgb(70, 45, 30));
-    DrawRectangleRounded({x + 56, y + 2, w, 10}, .5f, 4, rgb(60, 40, 28, 200));
-    DrawRectangleRounded({x + 56, y + 2, std::max(4.f, w * std::clamp(frac, 0.f, 1.f)), 10}, .5f, 4, c);
+    barRect({x + 56, y + 2, w, 9}, std::max(.04f, frac), c);
     DrawText(value.c_str(), int(x + 62 + w), int(y), 12, rgb(70, 45, 30));
     if (!bonus.empty()) DrawText(bonus.c_str(), int(x + 62 + w + MeasureText(value.c_str(), 12) + 4), int(y), 11, rgb(30, 130, 50));
 }
@@ -46,6 +46,28 @@ void textBox(Rectangle r, const std::string& text, const std::string& hint, bool
     DrawRectangleRoundedLinesEx(r, .3f, 6, 2, focus ? rgb(60, 120, 200) : rgb(120, 90, 60));
     std::string shown = text.empty() && !focus ? hint : text + (focus && int(GetTime() * 2) % 2 == 0 ? "|" : "");
     DrawText(shown.c_str(), int(r.x) + 8, int(r.y) + 5, 15, text.empty() && !focus ? rgb(150, 130, 110) : rgb(70, 45, 30));
+}
+void arrowButton(Rectangle a, int dir, bool enabled, bool hover) {
+    drawButton(a, "", enabled, false, hover && enabled, false, 14);
+    float cx = a.x + a.width / 2, cy = a.y + a.height / 2, k = std::min(a.width, a.height) / 30.f;
+    Color c = enabled ? rgb(255, 245, 210) : rgb(170, 170, 170);
+    if (dir < 0) DrawTriangle({cx + 5 * k, cy - 8 * k}, {cx - 7 * k, cy}, {cx + 5 * k, cy + 8 * k}, c);
+    else DrawTriangle({cx - 5 * k, cy - 8 * k}, {cx - 5 * k, cy + 8 * k}, {cx + 7 * k, cy}, c);
+}
+void tabStrip(const Rectangle* tabs, const char* const* labels, int n, int active, const bool* enabled, Vector2 m, int fs) {
+    for (int i = 0; i < n; i++) {
+        bool en = !enabled || enabled[i], hov = CheckCollisionPointRec(m, tabs[i]);
+        drawButton(tabs[i], labels[i], en, false, hov && en, i == active, fs);
+        if (i == active) DrawRectangleRec({tabs[i].x + 10, tabs[i].y + tabs[i].height - 3, tabs[i].width - 20, 3}, rgb(255, 225, 120));
+    }
+}
+void sliderTrack(Rectangle sl, float k, bool hover) {
+    k = std::clamp(k, 0.f, 1.f);
+    DrawRectangleRounded(sl, .5f, 6, rgb(60, 40, 28, 220));
+    DrawRectangleRounded({sl.x, sl.y, std::max(sl.height, sl.width * k), sl.height}, .5f, 6, rgb(80, 170, 220));
+    float r = sl.height * .8f;
+    DrawCircleV({sl.x + sl.width * k, sl.y + sl.height / 2}, r, hover ? rgb(255, 245, 215) : rgb(250, 235, 200));
+    DrawCircleLines(int(sl.x + sl.width * k), int(sl.y + sl.height / 2), r, rgb(60, 40, 28));
 }
 void panelTitle(Rectangle panel, const std::string& title, int fs, float rise, int textDy) {
     Vector2 ts = mTitle.size();

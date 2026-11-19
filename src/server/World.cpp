@@ -82,15 +82,21 @@ float World::capOf(entt::entity e) const {                                  // n
     const auto& i = reg.get<Info>(e);
     return inactive(e) ? 0.f : storageCap(i.kind, i.level) * efficiency(e);
 }
-// puts as much of `cargo` as fits into storage building `st`; returns the amount stored
+// puts as much of `cargo` as fits into storage building `st`; returns the amount stored. At a player's Town Hall each
+// resource is also limited to its storage share (BaseProf::alloc): the part beyond it is discarded, not carried back.
 float World::storeCargo(entt::entity st, float* cargo) {
     int o = reg.get<Owner>(st).id;
+    bool th = reg.get<Info>(st).kind == K_TownHall;
+    if (th && isPlayer(o))
+        for (int r = 0; r < R_Count; r++) {
+            float over = cargo[r] - std::max(0.f, allocRoom(o, r));
+            if (over > .01f) { cargo[r] -= over; noteDiscard(o, r, over); }
+        }
     float tot = 0;
     for (int r = 0; r < R_Count; r++) tot += cargo[r];
     float room = capOf(st) - stockOf(st);
     if (tot <= 0 || room <= 0) return 0;
     float f = std::min(1.f, room / tot), stored = 0;
-    bool th = reg.get<Info>(st).kind == K_TownHall;
     for (int r = 0; r < R_Count; r++) {
         float add = cargo[r] * f;
         if (th) pl[o].res[r] += add; else reg.get<Building>(st).stock[r] += add;
@@ -98,6 +104,25 @@ float World::storeCargo(entt::entity st, float* cargo) {
         stored += add;
     }
     return stored;
+}
+float World::allocRoom(int id, int r) {
+    if (!isPlayer(id)) return 1e9f;
+    auto th = townHallOf(id);
+    float cap = th == entt::null ? 0.f : capOf(th);
+    if (cap <= 0.f) return 1e9f;                                                // no working hall: shares are not enforced
+    return allocCap(cap, bp[id].alloc[r]) - pl[id].res[r];
+}
+float World::creditRes(int id, int r, float amt) {
+    if (!isPlayer(id) || !pl[id].used || amt <= 0) return 0;
+    float keep = std::clamp(allocRoom(id, r), 0.f, amt);
+    pl[id].res[r] += keep;
+    if (amt - keep > .01f) noteDiscard(id, r, amt - keep);
+    return keep;
+}
+void World::noteDiscard(int id, int r, float lost) {
+    if (!isPlayer(id) || clock < bp[id].allocNote) return;
+    bp[id].allocNote = clock + 60.0;
+    say(id, std::string(RES_NAME[r]) + " storage share is full: " + std::to_string(int(std::ceil(lost))) + " " + RES_NAME[r] + " discarded (Town Hall > Storage).");
 }
 std::string World::ownerName(int o) const { return isFactionOwner(o) ? FACTION_NAME[o - FACTION_BASE] : (isPlayer(o) ? pl[o].name : std::string("Wildlife")); }
 

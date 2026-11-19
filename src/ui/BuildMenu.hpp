@@ -1,13 +1,15 @@
 #pragma once
-// Slide-out build menu (left edge): building list with costs, hotkeys 1..7.
+// Slide-out build menu (left edge): building list with cost rows and hover tooltips, hotkeys 1..7.
 #include "common/Shared.hpp"
 #include "rendering/Assets.hpp"
+#include "ui/CostRow.hpp"
 
 class App;
 
 class BuildMenu {
 public:
     static constexpr int COUNT = 7;
+    static constexpr float LEFT = 48;   // open menu x (right of the social tab button)
     static constexpr Kind LIST[COUNT] = {K_Outpost, K_Harbour, K_Storage, K_Archery, K_Mine, K_Lumber, K_Campfire};
     explicit BuildMenu(App& app) : app(app) {}
     void load();
@@ -24,6 +26,8 @@ public:
     void draw(float dt);
 
 private:
+    static ui::CostStyle rowStyle(float maxW, const float* cost);
+    void tooltip(Kind k, Rectangle item, int gate);
     App& app;
     TMap mBuild;
 };

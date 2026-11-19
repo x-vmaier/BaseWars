@@ -4,12 +4,6 @@
 
 #include <cmath>
 
-std::string costText(const float* c) {
-    std::string s;
-    static const char* ab[R_Count] = {"W", "G", "S", "M"};
-    for (int r = 0; r < R_Count; r++) if (c[r] > 0) s += std::string(ab[r]) + std::to_string(int(c[r])) + " ";
-    return s.empty() ? "free" : s;
-}
 int mapUpgradeCost(const Info& in, int r) { float c[R_Count]; upgradeCost(in.kind, in.aux, c); return int(c[r]); }
 std::string timeText(float s) {
     int t = int(std::ceil(s));
@@ -37,6 +31,23 @@ void nextLevelInfo(const Info& in, std::vector<std::string>& out, std::vector<Ki
         for (int t = 2; t <= MAX_UNIT_LEVEL; t++) if (troopUpgradeNeedsArchery(t) <= N) maxLv = t;
         out.push_back(TextFormat("Troops upgradable to Lv%d", maxLv));
     }
+}
+
+void townHallUnlocks(int level, std::vector<std::string>& out) {
+    if (level < 2 || level > MAX_LEVEL) return;
+    std::string fresh, more;
+    for (int k = K_Outpost; k <= K_Archery; k++) {
+        Kind kk = Kind(k);
+        if (thUnlock(kk) == level) fresh += (fresh.empty() ? "" : ", ") + std::string(KINFO[k].name);
+        else if (thUnlock(kk) < level && maxCount(kk, level) > maxCount(kk, level - 1))
+            more += (more.empty() ? "" : ", ") + std::string(KINFO[k].name) + TextFormat(" %d->%d", maxCount(kk, level - 1), maxCount(kk, level));
+    }
+    std::string troops;
+    for (int u = K_Pawn; u <= K_Monk; u++) if (unitThLevel(Kind(u)) == level) troops += (troops.empty() ? "" : ", ") + std::string(KINFO[u].name);
+    if (!fresh.empty()) out.push_back("Unlocks: " + fresh);
+    if (!more.empty()) out.push_back("More allowed: " + more);
+    if (!troops.empty()) out.push_back("Troops: " + troops);
+    out.push_back(TextFormat("Other buildings may reach Lv%d", level));
 }
 
 TroopText troopText(Kind k) {

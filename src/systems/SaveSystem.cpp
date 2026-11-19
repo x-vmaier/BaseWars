@@ -244,13 +244,15 @@ void SaveSystem::shipsLoad(Reader& r) {
 }
 
 void SaveSystem::saveBase(Writer& w) {
-    w.put<uint32_t>(0x31455342u);                                                   // "BSE1"
+    w.put<uint32_t>(0x32455342u);                                                   // "BSE2": per-type quotas + storage shares
     uint8_t np = 0;
     for (int i = 1; i <= MAX_PLAYERS; i++) if (world.pl[i].used) np++;
     w.put<uint8_t>(np);
     for (int i = 1; i <= MAX_PLAYERS; i++) {
         if (!world.pl[i].used) continue;
-        w.put<uint8_t>(uint8_t(i)).put<uint8_t>(world.bp[i].quota).put<uint8_t>(world.bp[i].homeless ? 1 : 0);
+        w.put<uint8_t>(uint8_t(i)).put<uint8_t>(world.bp[i].homeless ? 1 : 0);
+        for (uint8_t q : world.bp[i].quota) w.put<uint8_t>(q);
+        for (uint8_t a : world.bp[i].alloc) w.put<uint8_t>(a);
         w.put<uint16_t>(uint16_t(std::min<size_t>(world.bp[i].friends.size(), 200)));
         for (size_t f = 0; f < world.bp[i].friends.size() && f < 200; f++) w.put<uint64_t>(world.bp[i].friends[f]);
     }
@@ -278,16 +280,19 @@ void SaveSystem::saveBase(Writer& w) {
     }
 }
 void SaveSystem::loadBase(Reader& r) {
-    if (r.get<uint32_t>() != 0x31455342u) { r.ok = false; return; }
+    if (r.get<uint32_t>() != 0x32455342u) { r.ok = false; return; }
     int np = r.get<uint8_t>();
     for (int n = 0; n < np && r.ok; n++) {
         int id = r.get<uint8_t>();
-        uint8_t q = r.get<uint8_t>(), hl = r.get<uint8_t>();
+        uint8_t hl = r.get<uint8_t>(), q[QUOTA_TYPES], al[R_Count];
+        for (auto& v : q) v = r.get<uint8_t>();
+        for (auto& v : al) v = r.get<uint8_t>();
         int nf = r.get<uint16_t>();
         std::vector<uint64_t> fr;
         for (int f = 0; f < nf && r.ok; f++) fr.push_back(r.get<uint64_t>());
         if (id < 1 || id > MAX_PLAYERS) continue;
-        world.bp[id].quota = std::min<uint8_t>(q, MAX_QUOTA);
+        for (int t = 0; t < QUOTA_TYPES; t++) world.bp[id].quota[t] = std::min<uint8_t>(q[t], MAX_QUOTA);
+        for (int k = 0; k < R_Count; k++) world.bp[id].alloc[k] = std::min<uint8_t>(al[k], 100);
         world.bp[id].homeless = hl != 0;
         world.bp[id].friends = fr;
     }

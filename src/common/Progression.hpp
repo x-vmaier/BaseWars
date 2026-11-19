@@ -99,6 +99,9 @@ inline float storageCap(Kind k, int level) {
     float base = k == K_TownHall ? 3000.f : (k == K_Outpost ? 300.f : (k == K_Storage ? 800.f : 0.f));
     return std::round(base * std::pow(1.6f, float(std::clamp(level, 1, MAX_LEVEL) - 1)));
 }
+// Town Hall storage shares: each resource may fill at most `share` % of the hall's total capacity (C_SetAlloc).
+inline constexpr int ALLOC_STEP = 5;
+inline float allocCap(float hallCap, int sharePct) { return std::floor(hallCap * float(std::clamp(sharePct, 0, 100)) / 100.f); }
 inline float productionMul(int level) { return levelMul(level) * cfg().productionScale; }
 
 // ---------------------------------------------------------------- damage efficiency

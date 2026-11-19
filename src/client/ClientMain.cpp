@@ -4,6 +4,7 @@
 #include <raylib.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <string>
@@ -47,6 +48,7 @@ int main(int argc, char** argv) {
     app.mainMenu.directAddr = app.settings.lastServer;
     if (const char* sc = std::getenv("BW_SCALE")) app.settings.uiScale = std::clamp(float(std::atof(sc)), 0.6f, 2.0f);       // test hook
     InitWindow(1280, 720, "Base Wars");
+    if (const char* ws = std::getenv("BW_WIN")) { int w = 0, h = 0; if (std::sscanf(ws, "%dx%d", &w, &h) == 2 && w > 0 && h > 0) SetWindowSize(w, h); }   // test hook
     SetTargetFPS(60);
     SetExitKey(KEY_NULL);
     PauseMenu::applyWindowMode(app.settings.windowMode);

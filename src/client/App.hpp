@@ -5,7 +5,7 @@
 //   client/     Session (connection), PacketHandler (S_*), Commands (C_*), Input, Placement, TestHooks
 //   rendering/  WaterRenderer, WorldRenderer (terrain, features, buildings, units, ships, effects), PostFx,
 //               Minimap, MapOverlay, MenuBackdrop
-//   ui/         Hud, BuildMenu, ContextPanel, TrainingPanel, SocialMenu, Chat, PauseMenu, MainMenu, BigMap,
+//   ui/         Hud, BuildMenu, ContextPanel, TrainingPanel, TownHallWindow (+ TownHallTabs), CostRow, SocialMenu, Chat, PauseMenu, MainMenu, BigMap,
 //               ShipPanel, BaseMenus (+ UiScale, Widgets)
 #include "client/ClientWorld.hpp"
 #include "client/Commands.hpp"
@@ -31,6 +31,7 @@
 #include "ui/PauseMenu.hpp"
 #include "ui/ShipPanel.hpp"
 #include "ui/SocialMenu.hpp"
+#include "ui/TownHallWindow.hpp"
 #include "ui/TrainingPanel.hpp"
 
 #include <entt/entt.hpp>
@@ -72,6 +73,7 @@ public:
     BuildMenu buildMenu;
     ContextPanel context;
     TrainingPanel training;
+    TownHallWindow townHall;
     SocialMenu social;
     Chat chat;
     PauseMenu pause;

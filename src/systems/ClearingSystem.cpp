@@ -350,7 +350,7 @@ void ClearingSystem::sendDrop(Pos p, int res, int amt, int credited) {         /
     }
 }
 void ClearingSystem::creditDrop(int player, Pos p, int res, int amt) {
-    if (isPlayer(player) && world.pl[player].used) world.pl[player].res[res] += float(amt);
+    world.creditRes(player, res, float(amt));                                    // within the resource's storage share
     sendDrop(p, res, amt, player);
 }
 void ClearingSystem::sendClearedList(int id, const std::vector<int64_t>& tiles, bool full) {

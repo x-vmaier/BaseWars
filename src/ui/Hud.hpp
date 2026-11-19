@@ -1,6 +1,6 @@
 #pragma once
 // HUD: resource ribbon, name banner, message log, help line, command-mode banner, camera coordinates, the social
-// menu tab, drag-selection rectangle, hover label and the cursor.
+// menu tab, hovered biome (bottom right), drag-selection rectangle, hover label and the cursor.
 #include "client/ClientState.hpp"
 #include "rendering/Assets.hpp"
 
@@ -25,6 +25,7 @@ public:
     void drawTop();                     // resource ribbon + name banner
     void drawLog();                     // message log, help line, command-mode banner
     void drawCoords();
+    void drawBiome();                   // hovered biome name, bottom right
     void drawSocialTab();
     void drawDragRect();
     void drawHoverLabel();

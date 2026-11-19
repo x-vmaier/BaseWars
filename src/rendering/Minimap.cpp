@@ -25,7 +25,15 @@ void Minimap::update() {
     for (int j = 0; j < MM; j++)
         for (int i = 0; i < MM; i++) {
             int x = cx + i, y = cy + j;
-            pix[size_t(j * MM + i)] = W.exploredAt(x, y) ? biomeColor(W.biomeAt(x, y)) : rgb(16, 20, 30);
+            bool ex = W.exploredAt(x, y);
+            Color c = ex ? biomeColor(W.biomeAt(x, y)) : rgb(16, 20, 30);
+            // sparse tree dots: one sample in TREE_EVERY tiles (stable world hash), drawn before units / buildings so
+            // those always paint over them
+            if (ex && (uint32_t(x) * 73856093u ^ uint32_t(y) * 19349663u) % TREE_EVERY == 0) {
+                uint8_t f = W.featVisible(x, y);
+                if (f == F_Pine || f == F_Oak) c = rgb(10, 40, 16);
+            }
+            pix[size_t(j * MM + i)] = c;
         }
     W.reg.view<Info, Goal>().each([&](const Info& in, const Goal& g) {
         int i = int(std::floor(g.x)) - cx, j = int(std::floor(g.y)) - cy;

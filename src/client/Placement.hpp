@@ -28,7 +28,7 @@ public:
     void begin(int mode, Kind k, uint32_t target);
     void selectBuildKind(Kind k);       // build menu entry / hotkey (toggles)
     void click(Vector2 world, bool shift);          // left click in the world while placing
-    std::string ghostLabel(Kind k, IV t) const;     // "click to clear N tiles first" or ""
+    std::string ghostLabel(Kind k, IV t) const;     // "click to clear N tiles first:" or "" (the wood cost is drawn as a cost row)
 
 private:
     void place(Kind k, IV t);

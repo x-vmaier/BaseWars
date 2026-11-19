@@ -11,8 +11,8 @@ public:
 
     void baseOnDamage(entt::entity e, int owner, int attacker);   // from damage(): cheap gate, real work is deferred to flushAlerts()
     DefRoute planDefenseRoute(int member, Pos from, Pos to);
-    bool idleArmy(entt::entity e);
-    std::vector<entt::entity> pickIdleArmy(int owner, Pos near2, int n);
+    bool idleArmy(entt::entity e, Kind only = K_Count);      // only: restrict to one troop type (monks count then too)
+    std::vector<entt::entity> pickIdleArmy(int owner, Pos near2, int n, Kind only = K_Count);
     Pos homeOf(int id, Pos fallback);
     void sendPatrol(entt::entity e, Pos dest, int victim, bool defense, bool route = true);
     void dispatchDefense(int victim, Pos at, int attacker);

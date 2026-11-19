@@ -1,9 +1,11 @@
 #include "ui/TrainingPanel.hpp"
 
 #include "client/App.hpp"
+#include "rendering/Bars.hpp"
 #include "rendering/Sprites.hpp"
 #include "rendering/Text.hpp"
 #include "rendering/UnitAnims.hpp"
+#include "ui/CostRow.hpp"
 #include "ui/GameText.hpp"
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
@@ -22,15 +24,16 @@ TrainingPanel::PanelXf TrainingPanel::xf() const {
 Vector2 TrainingPanel::toPanel(Vector2 m) const { PanelXf x = xf(); return {(m.x - x.ox) / x.sc, (m.y - x.oy) / x.sc}; }
 int TrainingPanel::troopLevel(Kind k) const { return app.world.unitLvl[std::clamp(int(k) - int(K_Pawn), 0, 4)]; }
 Rectangle TrainingPanel::card(int i) const { return {30.f + float(i % 3) * 108.f, 66.f + float(i / 3) * 128.f, 100, 118}; }
-Rectangle TrainingPanel::detail() const { return {30.f + 3 * 108.f + 8, 66, mTrain.size().x - (30.f + 3 * 108.f + 8) - 30, 246}; }
-Rectangle TrainingPanel::btnTrain() const { Rectangle d = detail(); return {d.x + 8, d.y + d.height - 66, d.width - 16, 28}; }
-Rectangle TrainingPanel::btnTroopUp() const { Rectangle d = detail(); return {d.x + 8, d.y + d.height - 34, d.width - 16, 28}; }
-Rectangle TrainingPanel::block() const { return {30, 66 + 2 * 128 + 6, mTrain.size().x - 60, mTrain.size().y - (66 + 2 * 128 + 6) - 30}; }
-Rectangle TrainingPanel::btnBuildingUp() const { Rectangle b = block(); return {b.x + 8, b.y + 26, 220, 28}; }
+// Buttons carry a label only; each cost row sits right of (troops) or below (building upgrade) its button.
+Rectangle TrainingPanel::detail() const { return {30.f + 3 * 108.f + 8, 66, mTrain.size().x - (30.f + 3 * 108.f + 8) - 30, 270}; }
+Rectangle TrainingPanel::btnTrain() const { Rectangle d = detail(); return {d.x + 8, d.y + d.height - 84, 128, 30}; }
+Rectangle TrainingPanel::btnTroopUp() const { Rectangle d = detail(); return {d.x + 8, d.y + d.height - 42, 128, 30}; }
+Rectangle TrainingPanel::block() const { float y = 66 + 270 + 8; return {30, y, mTrain.size().x - 60, mTrain.size().y - y - 30}; }
+Rectangle TrainingPanel::btnBuildingUp() const { Rectangle b = block(); return {b.x + 8, b.y + 24, 210, 28}; }
 Rectangle TrainingPanel::closeBtn() const { return {mTrain.size().x - 52, 20, 26, 20}; }
 Rectangle TrainingPanel::queueSlot(int i) const {
     Rectangle bb = block();
-    float x0 = bb.x + 236, w = std::min(54.f, (bb.width - 246) / 5.f);
+    float x0 = bb.x + 246, w = std::min(54.f, (bb.width - 256) / 5.f);
     return {x0 + float(i) * (w + 2), bb.y + 22, w, 62};
 }
 
@@ -140,20 +143,25 @@ void TrainingPanel::draw() {
     else ui::statBar(x0, d.y + 66, w, dps / 30.f, rgb(240, 160, 50), "Damage", TextFormat("%.0f/s", dps), nxt(dps, dpsN));
     ui::statBar(x0, d.y + 84, w, KINFO[k].range / 8.f, rgb(110, 160, 230), "Range", TextFormat("%.1f", KINFO[k].range), "");
     ui::statBar(x0, d.y + 102, w, spd / 5.f, rgb(170, 130, 230), "Speed", TextFormat("%.1f", spd), "");
-    float ty = d.y + 126;
-    for (auto& ln : wrapText(tt.desc, int(d.width) - 18, 12)) { DrawText(ln.c_str(), int(d.x) + 9, int(ty), 12, ink); ty += 14; }
+    float ty = d.y + 122;
+    for (auto& ln : wrapText(tt.desc, int(d.width) - 18, 12)) {
+        if (ty + 13 > btnTrain().y - 6) break;                      // never run into the buttons
+        DrawText(ln.c_str(), int(d.x) + 9, int(ty), 12, ink);
+        ty += 14;
+    }
     int bl = bin.aux;
     std::string lock = lockReason(k, bl);
     float tc[R_Count];
     unitCost(k, tc);
     Rectangle bt = btnTrain();
-    ui::drawButton(bt, lock.empty() ? std::string("Train  ") + costText(tc) : "Locked: " + lock, lock.empty() && W.affordable(tc), false, CheckCollisionPointRec(m, bt), false, 13);
+    ui::drawButton(bt, lock.empty() ? "Train" : "Locked", lock.empty() && W.affordable(tc), false, CheckCollisionPointRec(m, bt), false, 14);
+    sideCosts(bt, lock.empty() ? tc : nullptr, lock.empty() ? "" : "Needs " + lock);
     Rectangle bu = btnTroopUp();
     float uc[R_Count];
     troopCost(k, lv + 1, uc);
     bool maxed = lv >= MAX_UNIT_LEVEL, needB = !maxed && bl < troopUpgradeNeedsArchery(lv + 1);
-    ui::drawButton(bu, maxed ? "Max troop level" : (needB ? TextFormat("Upgrade: Archery Lv%d needed", troopUpgradeNeedsArchery(lv + 1)) : std::string("Upgrade to Lv") + std::to_string(lv + 1) + "  " + costText(uc)),
-                   !maxed && !needB && W.affordable(uc), false, CheckCollisionPointRec(m, bu), false, 12);
+    ui::drawButton(bu, maxed ? "Max level" : TextFormat("Upgrade to Lv%d", lv + 1), !maxed && !needB && W.affordable(uc), false, CheckCollisionPointRec(m, bu), false, 13);
+    sideCosts(bu, maxed || needB ? nullptr : uc, maxed ? "" : (needB ? TextFormat("Needs Archery Lv%d", troopUpgradeNeedsArchery(lv + 1)) : ""));
     // building block: level, upgrade and a preview of the next level
     Rectangle bb = block();
     DrawText(TextFormat("Building health %d / %d", int(bin.hp), int(bin.maxhp)), int(bb.x) + 4, int(bb.y) + 4, 14, ink);
@@ -163,16 +171,27 @@ void TrainingPanel::draw() {
     std::string why = upgradeBlock(bin.kind, bin.aux, W.thLevel());
     const BJob* job = W.jobOf(target);
     std::string ul = job ? (job->kind == SJ_Upgrade ? TextFormat("Upgrading... %d%%", job->pct) : (job->kind == SJ_Repair ? TextFormat("Repairing... %d%%", job->pct) : "Under construction"))
-                         : (!why.empty() ? why : std::string("Upgrade Archery to Lv") + std::to_string(bin.aux + 1) + "  " + costText(bc));
-    ui::drawButton(bub, ul, !job && why.empty() && W.affordable(bc), false, CheckCollisionPointRec(m, bub), false, 12);
+                         : (!why.empty() ? std::string("Upgrade locked") : TextFormat("Upgrade to Lv%d", bin.aux + 1));
+    ui::drawButton(bub, ul, !job && why.empty() && W.affordable(bc), false, CheckCollisionPointRec(m, bub), false, 13);
+    float iy = bub.y + bub.height + 6;
     if (job) {
         static const char* phase[3] = {"Waiting for a pawn - training paused", "A pawn is on the way - training paused", "A pawn is at work - training paused"};
-        DrawText(phase[std::min<int>(job->phase, 2)], int(bub.x), int(bub.y + bub.height) + 2, 12, rgb(170, 60, 30));
+        DrawText(phase[std::min<int>(job->phase, 2)], int(bub.x), int(iy), 12, rgb(170, 60, 30));
+        iy += 16;
+    } else if (!why.empty()) {
+        DrawText(why.c_str(), int(bub.x), int(iy), 12, rgb(170, 60, 30));
+        iy += 16;
+    } else {                                                        // cost row below the button, then the work time
+        Vector2 cs = ui::drawCosts(bc, bub.x, iy, 228, W.res, ui::paperCost());
+        iy += cs.y + 4;
+        std::string tt2 = "Takes " + timeText(upgradeSeconds(bin.kind, bin.aux)) + " of pawn work";
+        DrawText(tt2.c_str(), int(bub.x), int(iy), 12, rgb(110, 80, 50));
+        iy += 16;
     }
     std::vector<std::string> info;
     std::vector<Kind> units;
     if (!job && why.empty()) nextLevelInfo(bin, info, units);
-    float iy = bub.y + bub.height + 6;
+    iy = std::max(iy, bb.y + 104);                                  // below the queue strip
     if (!info.empty()) {
         DrawText("Next level:", int(bb.x) + 6, int(iy), 14, rgb(30, 90, 40));
         iy += 17;
@@ -192,7 +211,7 @@ void TrainingPanel::drawQueueStrip(Vector2 m) {
     auto q = W.queues.find(target);
     size_t n = q == W.queues.end() ? 0 : q->second.kinds.size();
     Color ink = rgb(70, 45, 30);
-    DrawText(TextFormat("Training queue %d/5%s", int(n), n ? "  (click to cancel)" : ""), int(bb.x) + 236, int(bb.y) + 4, 13, ink);
+    DrawText(TextFormat("Training queue %d/5%s", int(n), n ? "  (click to cancel)" : ""), int(bb.x) + 246, int(bb.y) + 4, 13, ink);
     double now = GetTime();
     for (int i = 0; i < 5; i++) {
         Rectangle r = queueSlot(i);
@@ -204,8 +223,24 @@ void TrainingPanel::drawQueueStrip(Vector2 m) {
         Anim a = unitAnim(k, W.me, US_Idle, 0, 0, false, 1, now);
         drawAnim(a, frameFor(a, now, float(i) * .6f), r.x + r.width / 2, r.y + 44, false, a.fw > 200 ? .26f : .42f, i == 0 ? WHITE : rgb(200, 200, 215));
         if (i == 0) {
-            DrawRectangle(int(r.x) + 3, int(r.y + r.height) - 9, int(r.width) - 6, 6, rgb(60, 40, 28, 220));
-            DrawRectangle(int(r.x) + 3, int(r.y + r.height) - 9, int((r.width - 6) * float(q->second.pct) / 100.f), 6, rgb(90, 200, 110));
+            barRect({r.x + 4, r.y + r.height - 10, r.width - 8, 6}, float(q->second.pct) / 100.f, BAR_TRAIN);
         }
     }
+}
+
+// cost row (or a lock reason) right of a troop button, vertically centred on it, wrapping inside the detail panel
+void TrainingPanel::sideCosts(Rectangle b, const float* cost, const std::string& reason) {
+    Rectangle d = detail();
+    float x = b.x + b.width + 10, w = d.x + d.width - 8 - x;
+    if (!reason.empty()) {
+        auto ls = wrapText(reason, int(w), 12);
+        float y = b.y + b.height / 2 - 7.f * float(ls.size());
+        for (auto& l : ls) { DrawText(l.c_str(), int(x), int(y), 12, rgb(170, 60, 30)); y += 14; }
+        return;
+    }
+    if (!cost) return;
+    ui::CostStyle st = ui::paperCost();
+    st.icon = 16; st.fs = 13; st.margin = 8;
+    Vector2 cs = ui::measureCosts(cost, w, st);
+    ui::drawCosts(cost, x, b.y + b.height / 2 - cs.y / 2, w, app.world.res, st);
 }

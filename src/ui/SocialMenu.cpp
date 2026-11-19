@@ -2,6 +2,7 @@
 
 #include "client/App.hpp"
 #include "rendering/Palette.hpp"
+#include "ui/CostRow.hpp"
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
 
@@ -60,10 +61,9 @@ std::vector<SocialMenu::SRow> SocialMenu::rows() {
                 r.btns.push_back({"Travel", 1, p.lx, p.ly, 0, p.hasLoc, false, 56});
                 if (p.id != W.me) {
                     if (leader == W.me) r.btns.push_back({"Lead", 8, 0, 0, p.id, true, false, 38});
-                    static const char* ab[R_Count] = {"W", "G", "S", "M"};
                     float wait = W.donateWait();                              // shared donation / transfer cooldown
-                    for (int k = 0; k < R_Count; k++) r.btns.push_back({std::string("50") + ab[k], 5, float(k), 50.f, p.id, W.res[k] >= 50.f && wait <= 0, false, 34});
-                    if (wait > 0) r.sub += TextFormat("  - send again in %d s", int(std::ceil(wait)));
+                    for (int k = 0; k < R_Count; k++) r.btns.push_back({"", 5, float(k), 50.f, p.id, W.res[k] >= 50.f && wait <= 0, false, 30, k});
+                    r.sub += wait > 0 ? TextFormat("  - send again in %d s", int(std::ceil(wait))) : "  - send 50:";
                 }
                 rows.push_back(r);
             }
@@ -106,10 +106,18 @@ bool SocialMenu::bottomBtn(SBtn& out) {
 }
 
 // ---------------------------------------------------------------- layout: natural size, shrunk to fit small windows
+// Centred; while the build menu is out it moves (and if needed narrows) to stay right of it, so both can be open.
 Rectangle SocialMenu::rect() const {
     Vector2 s = mSocial.size();
-    float w = std::min(s.x, float(ui::screenW()) - 16), h = std::min(s.y, float(ui::screenH()) - 16);
-    return {(float(ui::screenW()) - w) / 2, (float(ui::screenH()) - h) / 2, w, h};
+    float sw = float(ui::screenW()), left = 8;
+    if (app.buildMenu.slide > .02f) { Rectangle t = app.buildMenu.tab(); left = t.x + t.width + 8; }
+    float w = std::min(s.x, sw - 8 - left), h = std::min(s.y, float(ui::screenH()) - 16);
+    w = std::max(w, std::min(s.x, 240.f));
+    float x = std::max((sw - w) / 2, left);
+    if (x + w > sw - 4) x = std::max(4.f, sw - 4 - w);
+    float k = std::min(w / s.x, 1.f);                                   // keep the paper's aspect when narrowed
+    h = std::min(h, std::max(s.y * k, 260.f));
+    return {x, (float(ui::screenH()) - h) / 2, w, h};
 }
 float SocialMenu::scale() const { Rectangle r = rect(); return std::min(r.width / mSocial.size().x, r.height / mSocial.size().y); }
 Rectangle SocialMenu::tabRect(int i) const {
@@ -174,6 +182,7 @@ void SocialMenu::draw() {
     auto rs = rows();
     Rectangle ls = list();
     int vis = int(ls.height / SROW);
+    std::string tip;
     scroll = std::clamp(scroll, 0, std::max(0, int(rs.size()) - vis));
     if (rs.empty()) DrawText(tab == 1 ? "No friends yet. Add players from the Players tab." : "Nothing to show.", int(ls.x) + 6, int(ls.y) + 8, 14, rgb(120, 90, 60));
     for (int i = 0; i < vis && i + scroll < int(rs.size()); i++) {
@@ -184,7 +193,12 @@ void SocialMenu::draw() {
         DrawText(row.sub.c_str(), int(rr.x) + 6, int(rr.y) + 17, 10, rgb(110, 85, 60));
         for (size_t k = 0; k < row.btns.size(); k++) {
             Rectangle b = rowBtnRect(rr, row.btns, k);
-            ui::drawButton(b, row.btns[k].label, row.btns[k].enabled, row.btns[k].red, CheckCollisionPointRec(m, b), false, 11);
+            const SBtn& bt = row.btns[k];
+            bool hov = CheckCollisionPointRec(m, b);
+            ui::drawButton(b, bt.label, bt.enabled, bt.red, hov, false, 11);
+            if (bt.icon < 0) continue;                                   // resource transfer: icon only, the amount is in the tooltip / sub line
+            ui::resourceIcon(bt.icon, {b.x + b.width / 2 - 8, b.y + b.height / 2 - 9, 16, 16}, bt.enabled ? WHITE : rgb(150, 150, 150));
+            if (hov) tip = TextFormat("Send %d %s by convoy (can be raided)", int(bt.b), RES_NAME[bt.icon]);
         }
     }
     if (int(rs.size()) > vis) DrawText(TextFormat("%d-%d of %d  (mouse wheel)", scroll + 1, std::min(int(rs.size()), scroll + vis), int(rs.size())), int(ls.x) + 6, int(ls.y + ls.height) + 2, 10, ink);
@@ -193,4 +207,10 @@ void SocialMenu::draw() {
     int mc = app.world.myClan();
     if (tab == 3 && mc) DrawText("Resources travel by convoy and can be raided.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28), 11, ink);
     if (tab == 2 && mc == 0) DrawText("Type a name above, then press Create.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28), 11, ink);
+    if (!tip.empty()) {
+        int w = MeasureText(tip.c_str(), 13);
+        float tx = std::min(m.x + 14, float(ui::screenW()) - float(w) - 20);
+        DrawRectangleRounded({tx, m.y + 18, float(w) + 12, 20}, .3f, 4, rgb(30, 22, 16, 235));
+        DrawText(tip.c_str(), int(tx) + 6, int(m.y) + 22, 13, WHITE);
+    }
 }

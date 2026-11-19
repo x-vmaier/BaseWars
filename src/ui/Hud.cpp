@@ -52,19 +52,49 @@ void Hud::drawTop() {
     textShadow(TextFormat("Units %d/%d  Buildings %d  FPS %d", units, UNIT_CAP, bld, GetFPS()), int(nr.x) + 76, int(nr.y) + 34, 12, rgb(235, 235, 235));
 }
 
+// Bottom left: message log above the help line. Both wrap at the chat column (bottom right) so nothing overlaps it.
 void Hud::drawLog() {
     int sw = ui::screenW(), sh = ui::screenH();
     double now = GetTime();
-    int ly = sh - 30;
+    float chatW = std::min(388.f, float(sw) - 16);
+    int maxW = std::max(160, int(float(sw) - chatW - 8 - 14 - 16));
+    auto help = wrapText("LMB select/attack  RMB command/menu  M move  A attack  B build  P players  H home  Arrows/MMB pan  Wheel zoom", maxW, 11);
+    for (size_t i = 0; i < help.size(); i++) textShadow(help[i], 14, sh - 14 - 13 * int(help.size() - 1 - i), 11, rgb(210, 214, 225, 200));
+    int ly = sh - 30 - 13 * int(help.size() - 1);
     for (int i = int(logs.size()) - 1; i >= 0; i--) {
         double age = now - logs[i].t;
         if (age > 9) continue;
-        textShadow(logs[i].text, 14, ly, 16, rgb(255, 255, 255, int(255 * std::min(1.0, (9 - age) / 2))));
-        ly -= 20;
+        auto ls = wrapText(logs[i].text, maxW, 16);
+        Color c = rgb(255, 255, 255, int(255 * std::min(1.0, (9 - age) / 2)));
+        for (size_t k = ls.size(); k-- > 0;) { textShadow(ls[k], 14, ly, 16, c); ly -= 20; }
     }
-    textShadow("LMB select/attack  RMB command/menu  M move  A attack  B build  P players  H home  Arrows/MMB pan  Wheel zoom", 14, sh - 14, 11, rgb(210, 214, 225, 200));
     Input::Mode mode = app.input.mode;
     if (mode != Input::M_None) textShadow(mode == Input::M_Move ? "MOVE: click a destination" : "ATTACK: click a target or ground (attack-move)", sw / 2 - 150, 16, 20, rgb(255, 230, 120));
+}
+
+// Bottom right, under the chat bar: name of the biome under the mouse (skipped while the open chat's help line would touch it).
+void Hud::drawBiome() {
+    const ClientWorld& W = app.world;
+    Vector2 m = ui::mouse();
+    if (app.overUI(m)) return;
+    Vector2 w = GetScreenToWorld2D(::GetMousePosition(), app.cam);
+    int tx = int(std::floor(w.x / TILE)), ty = int(std::floor(w.y / TILE));
+    if (!W.exploredAt(tx, ty)) return;
+    int b = W.biomeAt(tx, ty);
+    if (b < 0 || b >= B_Count) return;
+    const char* name = BIOME_NAME[b];
+    int fs = 14, tw = MeasureText(name, fs);
+    float h = 20, wdt = float(tw) + 34;
+    Rectangle r{float(ui::screenW()) - wdt - 8, float(ui::screenH()) - h - 4, wdt, h};
+    if (app.chat.isOpen) {                                          // the chat help line runs along the bottom: keep clear of it
+        float helpEnd = float(ui::screenW()) - std::min(388.f, float(ui::screenW()) - 16) - 8 + float(MeasureText("Tab: channel   Enter: send   Esc: cancel", 10)) + 8;
+        if (r.x < helpEnd) return;
+    }
+    DrawRectangleRounded(r, .4f, 6, rgb(30, 22, 16, 215));
+    DrawRectangleRoundedLinesEx(r, .4f, 6, 1.5f, rgb(255, 225, 160, 160));
+    DrawRectangleRec({r.x + 8, r.y + 5, 10, 10}, biomeColor(b));
+    DrawRectangleLinesEx({r.x + 8, r.y + 5, 10, 10}, 1, rgb(255, 255, 255, 200));
+    textShadow(name, int(r.x) + 24, int(r.y) + 3, fs, rgb(240, 235, 220));
 }
 
 // camera coordinates (so players can tell each other where they are)

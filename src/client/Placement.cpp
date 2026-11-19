@@ -93,6 +93,6 @@ bool Placement::clearClick(Kind k, IV t) {
 std::string Placement::ghostLabel(Kind k, IV t) const {
     auto v = app.world.blockedUnder(k, t);
     if (v.empty()) return "";
-    if (effMode() == Normal) return "Pawns clear " + std::to_string(v.size()) + " obstacle" + (v.size() > 1 ? "s" : "") + " first (+" + std::to_string(app.world.clearWoodCost(v)) + " wood)";
-    return "Click to clear " + std::to_string(v.size()) + " tile" + (v.size() > 1 ? "s" : "") + " first (" + std::to_string(app.world.clearWoodCost(v)) + " wood)";
+    if (effMode() == Normal) return "Pawns clear " + std::to_string(v.size()) + " obstacle" + (v.size() > 1 ? "s" : "") + " first:";
+    return "Click to clear " + std::to_string(v.size()) + " tile" + (v.size() > 1 ? "s" : "") + " first:";
 }

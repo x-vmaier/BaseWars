@@ -5,6 +5,7 @@
 
 #include <rlgl.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -36,10 +37,12 @@ void TestHooks::update() {
     if (ui.find("social") != std::string::npos && shotFrames == 20) { app.social.isOpen = true; if (const char* tb = std::getenv("BW_TAB")) app.social.tab = std::atoi(tb); if (const char* se = std::getenv("BW_SEARCH")) app.social.searchText = se; }
     if (ui.find("map") != std::string::npos && shotFrames == 20) { app.bigMap.open(); if (const char* z = std::getenv("BW_MAPZ")) app.bigMap.zoom = std::atoi(z); }
     if (ui.find("pause") != std::string::npos) app.pause.isOpen = true;
+    if (ui.find("chatbox") != std::string::npos && shotFrames == 20) app.chat.open();
     TrainingPanel& tp = app.training;
     ContextPanel& cp = app.context;
     if (ui.find("train") != std::string::npos && !tp.isOpen)
         W.reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!tp.isOpen && i.owner == W.me && i.kind == K_Archery) { tp.isOpen = true; tp.target = n.id; if (const char* ts = std::getenv("BW_TSEL")) tp.sel = std::atoi(ts); } });
+    if (ui.find("townhall") != std::string::npos) townHallHook();
     float sw = float(ui::screenW()), sh = float(ui::screenH());
     if (ui.find("ctxop") != std::string::npos && !cp.isOpen)
         W.reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!cp.isOpen && i.owner == W.me && i.kind == K_Outpost) cp.open(n.id, {sw * .5f, sh * .15f}); });
@@ -47,6 +50,31 @@ void TestHooks::update() {
         W.reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!cp.isOpen && isFactionOwner(i.owner) && i.kind == K_TownHall) cp.open(n.id, {sw * .55f, sh * .2f}); });
     else if (ui.find("ctx") != std::string::npos && ui.find("ctxfac") == std::string::npos && !cp.isOpen)
         W.reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (i.owner == W.me && i.kind == K_TownHall) cp.open(n.id, {sw * .6f, sh * .25f}); });
+}
+
+// BW_UI=townhall opens the own Town Hall window; BW_THTAB=0|1|2 picks the tab; BW_THHOVER=<control> moves the mouse onto
+// a control for hover states (train, upgrade, tab<i>, slider<r>, dispose<r>, arrow<t>l / arrow<t>r); BW_THCLICK=1 with
+// dispose<r> shows its confirm state.
+void TestHooks::townHallHook() {
+    ClientWorld& W = app.world;
+    TownHallWindow& th = app.townHall;
+    if (!th.isOpen) {
+        W.reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!th.isOpen && i.owner == W.me && i.kind == K_TownHall) th.openFor(n.id); });
+        if (const char* t = std::getenv("BW_THTAB")) th.tab = std::clamp(std::atoi(t), 0, int(TownHallWindow::T_Count) - 1);
+    }
+    const char* hv = std::getenv("BW_THHOVER");
+    if (!th.isOpen || !hv) return;
+    std::string h = hv;
+    Rectangle r{0, 0, 0, 0};
+    if (h == "train") r = th.trainBtn();
+    else if (h == "upgrade") r = th.upgradeBtn();
+    else if (h.rfind("slider", 0) == 0) r = th.allocSlider(std::atoi(h.c_str() + 6));
+    else if (h.rfind("dispose", 0) == 0) r = th.disposeBtn(std::atoi(h.c_str() + 7));
+    else if (h.rfind("arrow", 0) == 0 && h.size() >= 7) r = th.quotaArrow(h[5] - '0', h[6] == 'l' ? -1 : 1);
+    else if (h.rfind("tab", 0) == 0) r = th.tabRect(std::atoi(h.c_str() + 3));
+    Vector2 p = th.toScreen({r.x + r.width / 2, r.y + r.height / 2});
+    SetMousePosition(int(p.x * ui::scale()), int(p.y * ui::scale()));
+    if (std::getenv("BW_THCLICK") && h.rfind("dispose", 0) == 0) th.armDisposeForTest(std::atoi(h.c_str() + 7));
 }
 
 void TestHooks::siteCommands() {
@@ -71,6 +99,13 @@ void TestHooks::siteCommands() {
         if (verb == "build" && std::sscanf(args.c_str(), "%d:%d,%d", &kind, &dx, &dy) == 3) {
             Pos th = W.myTH(app.cam.target);
             app.cmd.build(Kind(kind), {int(std::floor(th.x)) + dx, int(std::floor(th.y)) + dy});
+        } else if (verb == "alloc" && std::sscanf(args.c_str(), "%d:%d", &dx, &dy) == 2) {
+            app.cmd.setAlloc(dx, dy);
+        } else if (verb == "dispose") {
+            app.cmd.dispose(kind);
+        } else if (verb == "quota") {
+            int q[QUOTA_TYPES]{};
+            if (std::sscanf(args.c_str(), "%d,%d,%d,%d", &q[0], &q[1], &q[2], &q[3]) == 4) app.cmd.quotas(q);
         } else if (verb == "donate" && std::sscanf(args.c_str(), "%d:%d", &dx, &dy) == 2) {
             app.cmd.donate(dx, dy, 50.f);
         } else if (uint32_t id = firstOf(kind); id) {

@@ -21,7 +21,7 @@ public:
     void draw();
 
 private:
-    struct SBtn { std::string label; int act; float a, b; int c; bool enabled, red; float w; };
+    struct SBtn { std::string label; int act; float a, b; int c; bool enabled, red; float w; int icon = -1; };   // icon: resource drawn instead of a label
     struct SRow { std::string text, sub; Color col; std::vector<SBtn> btns; };
     static constexpr float SROW = 30.f;
     std::vector<SRow> rows();
