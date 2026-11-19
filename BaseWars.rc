@@ -1,0 +1,63 @@
+#include <winver.h>
+
+GLFW_ICON ICON "BaseWars.ico"
+
+// Version macros (supplied by CMake)
+#ifndef VER_MAJOR
+#define VER_MAJOR   0
+#endif
+#ifndef VER_MINOR
+#define VER_MINOR   1
+#endif
+#ifndef VER_PATCH
+#define VER_PATCH   0
+#endif
+#ifndef VER_BUILD
+#define VER_BUILD   0
+#endif
+
+#define VER_FILEVERSION     VER_MAJOR,VER_MINOR,VER_PATCH,VER_BUILD
+#define VER_PRODUCTVERSION  VER_MAJOR,VER_MINOR,VER_PATCH,VER_BUILD
+
+#define STRINGIFY_HELPER(x) #x
+#define STRINGIFY(x) STRINGIFY_HELPER(x)
+
+#define VER_VERSION_STR \
+    STRINGIFY(VER_MAJOR) "." STRINGIFY(VER_MINOR) "." \
+    STRINGIFY(VER_PATCH) "." STRINGIFY(VER_BUILD)
+
+#ifdef _DEBUG
+#define VER_DEBUG_FLAG  VS_FF_DEBUG
+#else
+#define VER_DEBUG_FLAG  0
+#endif
+
+1 VERSIONINFO
+    FILEVERSION     VER_FILEVERSION
+    PRODUCTVERSION  VER_PRODUCTVERSION
+    FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+    FILEFLAGS       VER_DEBUG_FLAG
+    FILEOS          VOS_NT_WINDOWS32
+    FILETYPE        VFT_APP
+    FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0" // U.S. English, Unicode
+        BEGIN
+            VALUE "CompanyName",      "Valentin Maier"
+            VALUE "FileDescription",  "BaseWars"
+            VALUE "FileVersion",      VER_VERSION_STR
+            VALUE "InternalName",     "client.exe"
+            VALUE "LegalCopyright",   "(c) 2026 Valentin Maier. All Rights Reserved."
+            VALUE "OriginalFilename", "client.exe"
+            VALUE "ProductName",      "BaseWars"
+            VALUE "ProductVersion",   VER_VERSION_STR
+        END
+    END
+
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04B0 // English (U.S.), Unicode
+    END
+END
