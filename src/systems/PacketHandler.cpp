@@ -1,5 +1,6 @@
 #include "systems/PacketHandler.hpp"
 
+#include "common/Progression.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -24,6 +25,7 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t>& data) {
         for (int i = 0; i < n; i++) {
             auto e = world.find(r.get<uint32_t>());
             if (e != entt::null && reg.all_of<ClearTask>(e) && reg.get<Owner>(e).id == id) s.clearing.releasePawn(e, true);   // the player takes a clearing pawn over
+            if (e != entt::null && reg.all_of<BuildTask>(e) && reg.get<Owner>(e).id == id) s.construction.releasePawn(e, true);   // ... or a pawn on a building site
             if (e == entt::null || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Owner>(e).id != id || reg.all_of<Worker>(e) || reg.all_of<Convoy>(e) || reg.all_of<Haul>(e) || reg.all_of<Raider>(e) || reg.all_of<Aboard>(e)) continue;   // units aboard a ship cannot be commanded
             Kind k = reg.get<Info>(e).kind;
             if (combatOnly && (k == K_Ship || k == K_Monk)) continue;
@@ -45,10 +47,14 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t>& data) {
         if (k != K_Campfire && world.townMoveActive(id)) { world.say(id, "Wait until the town move is finished before building."); return; }
         PlaceWorld w{world, id};
         int err = checkPlace(w, k, tx, ty);
+        int th = world.thLevel(id);
+        if (int g = buildGate(k, th, world.countKind(id, k) + s.clearing.pendingOf(id, k))) { world.say(id, "Cannot build " + aName(k) + ": " + gateText(g, k, th) + "."); return; }
         if (err) { world.say(id, std::string("Cannot build here: ") + PLACE_TEXT[err] + "."); return; }
         if (auto blocked = s.clearing.blockedTiles(k, tx, ty); !blocked.empty()) { s.clearing.queueBuild(id, k, tx, ty, blocked); return; }   // pawns clear the site first
-        if (!world.afford(id, KINFO[k].cost)) { world.say(id, "Not enough resources."); return; }
-        world.spend(id, KINFO[k].cost);
+        float cost[R_Count];
+        buildCost(k, cost);
+        if (!world.afford(id, cost)) { world.say(id, cost[R_Meat] > p.res[R_Meat] ? "Not enough food: hunt sheep or build a Harbour." : "Not enough resources."); return; }
+        world.spend(id, cost);
         auto e = world.makeBuilding(k, uint8_t(id), tx, ty, false);
         Pos c = world.posOf(e);
         world.fx(E_Dust, c.x, c.y);
@@ -150,6 +156,7 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t>& data) {
         for (float& a : amt) { a = r.get<float>(); if (!std::isfinite(a) || a < 0 || a > 500) return; tot += a; }
         if (!r.ok || tot <= 0 || !isPlayer(to) || to == id || !world.pl[to].used || !world.sameClan(id, to)) { world.say(id, "You can only send resources to members of your clan."); return; }
         for (int i = 0; i < R_Count; i++) if (p.res[i] + 1e-3f < amt[i]) { world.say(id, "Not enough resources."); return; }
+        if (!s.faction.donationReady(id)) return;
         entt::entity src = entt::null;
         reg.view<Info, Building, Owner>().each([&](entt::entity b, const Info& i, const Building& bb, const Owner& o) { if (src == entt::null && i.kind == K_TownHall && o.id == id && bb.progress >= 1.f) src = b; });
         Pos at;
@@ -161,38 +168,19 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t>& data) {
         world.fx(E_Dust, at.x, at.y);
         world.say(id, "A convoy with " + std::to_string(int(tot)) + " resources set out for " + world.pl[to].name + ". Other players can see and raid it!");
         world.say(to, "A convoy from " + p.name + " is on its way.");
+        s.faction.donated(id);
         break;
     }
     case C_Donate: {
         int f = r.get<uint8_t>(), res = r.get<uint8_t>();
         float amount = r.get<float>();
         if (!r.ok || f < 0 || f >= FACTION_COUNT || res >= R_Count || !std::isfinite(amount) || amount <= 0 || amount > 500) return;
-        if (p.res[res] + 1e-3f < amount) { world.say(id, "Not enough resources."); return; }
-        static const float worth[R_Count] = {1.f, 2.f, 1.5f, 1.f};
-        p.res[res] -= amount;
-        world.facDonated[f] += amount * worth[res];
-        s.faction.addRep(id, f, amount * worth[res] * .08f);
-        world.say(id, std::string("You gave ") + std::to_string(int(amount)) + " " + RES_NAME[res] + " to the " + FACTION_NAME[f] + ". They now see you as " + repTier(int(std::lround(p.rep[f]))) + ".");
+        s.faction.donate(id, f, res, amount);                                  // cooldown, demand bonus, diminishing returns
         break;
     }
     case C_Upgrade: {
         auto be = world.find(r.get<uint32_t>());
-        if (!r.ok || be == entt::null || !reg.all_of<Building>(be) || reg.get<Owner>(be).id != id || !world.complete(be)) return;
-        auto& in = reg.get<Info>(be);
-        if (world.inactive(be)) { world.say(id, "This building is not functional."); return; }
-        if (in.level >= MAX_LEVEL) { world.say(id, "Already at the maximum level."); return; }
-        float cost[R_Count];
-        for (int i = 0; i < R_Count; i++) cost[i] = std::ceil(KINFO[in.kind].cost[i] * upgradeCostMul(in.level) * .7f);
-        if (in.kind == K_Campfire || !world.afford(id, cost)) { world.say(id, in.kind == K_Campfire ? "Campfires cannot be upgraded." : "Not enough resources."); return; }
-        world.spend(id, cost);
-        auto& h = reg.get<Health>(be);
-        float old = h.maxhp;
-        in.level++;
-        h.maxhp = KINFO[in.kind].hp * levelHp(in.level);
-        h.hp += h.maxhp - old;
-        Pos c = world.posOf(be);
-        world.fx(E_Dust, c.x, c.y);
-        world.say(id, std::string(KINFO[in.kind].name) + " upgraded to level " + std::to_string(in.level) + ".");
+        if (r.ok) s.construction.upgrade(id, be);                              // timed site job worked by a pawn
         break;
     }
     case C_Move: {
@@ -274,6 +262,7 @@ void PacketHandler::baseCommand(int id, uint8_t type, Reader& r) {
     }
     case C_MoveTown: { int tx = r.get<int32_t>(), ty = r.get<int32_t>(); if (r.ok) s.territory.doMoveTown(id, tx, ty); break; }
     case C_Relocate: { uint32_t uid = r.get<uint32_t>(); int tx = r.get<int32_t>(), ty = r.get<int32_t>(); if (r.ok) s.territory.doRelocate(id, uid, tx, ty); break; }
+    case C_Repair: s.construction.repairCmd(id, r); break;
     case C_Dequeue: {
         auto be = world.find(r.get<uint32_t>());
         int idx = r.get<uint8_t>();

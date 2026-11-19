@@ -61,7 +61,9 @@ std::vector<SocialMenu::SRow> SocialMenu::rows() {
                 if (p.id != W.me) {
                     if (leader == W.me) r.btns.push_back({"Lead", 8, 0, 0, p.id, true, false, 38});
                     static const char* ab[R_Count] = {"W", "G", "S", "M"};
-                    for (int k = 0; k < R_Count; k++) r.btns.push_back({std::string("50") + ab[k], 5, float(k), 50.f, p.id, W.res[k] >= 50.f, false, 34});
+                    float wait = W.donateWait();                              // shared donation / transfer cooldown
+                    for (int k = 0; k < R_Count; k++) r.btns.push_back({std::string("50") + ab[k], 5, float(k), 50.f, p.id, W.res[k] >= 50.f && wait <= 0, false, 34});
+                    if (wait > 0) r.sub += TextFormat("  - send again in %d s", int(std::ceil(wait)));
                 }
                 rows.push_back(r);
             }

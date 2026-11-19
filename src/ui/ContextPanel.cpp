@@ -34,14 +34,19 @@ void ContextPanel::rebuild() {
     auto line = [&](const std::string& t, Color c) { lines.push_back({t, c}); };
     line(std::string("Owner: ") + W.nameOf(in.owner), mine ? rgb(30, 90, 40) : (isFactionOwner(in.owner) ? rgb(60, 50, 110) : rgb(150, 40, 30)));
     if (isFactionOwner(in.owner)) {
-        int rp = W.facRep[in.owner - FACTION_BASE];
+        int f = in.owner - FACTION_BASE, rp = W.facRep[f];
         line(TextFormat("Reputation: %s (%d)", repTier(rp), rp), rp <= HOSTILE_REP ? rgb(170, 40, 30) : (rp >= FRIENDLY_REP ? rgb(30, 110, 40) : ink));
         line(rp <= HOSTILE_REP ? "They will fight you on sight." : (rp >= FRIENDLY_REP ? "They will aid you if attacked." : "Gifts earn their trust."), ink);
+        const FacDemand& d = W.demand[f];
+        int left = std::max(0, int(d.changeAt - GetTime()));
+        line(TextFormat("Town demand: %s (x%.1f reputation)", RES_NAME[d.res], cfg().demandBonus), rgb(150, 95, 0));
+        line(TextFormat("Changes in %d:%02d (or once satisfied)", left / 60, left % 60), ink);
     }
     if (in.prog < 100) line("Under construction " + std::to_string(in.prog) + "%", ink);
     line(TextFormat("Health %d / %d", int(in.hp), int(in.maxhp)), ink);
     if (mine || W.alliedWith(in.owner)) {
-        line(TextFormat("Level %d / %d", in.aux, MAX_LEVEL), ink);
+        int lvCap = maxLevelFor(in.kind, mine ? W.thLevel() : MAX_LEVEL);
+        line(lvCap < MAX_LEVEL && in.kind != K_Campfire ? TextFormat("Level %d / %d (max %d at Town Hall Lv%d)", in.aux, MAX_LEVEL, lvCap, W.thLevel()) : TextFormat("Level %d / %d", in.aux, in.kind == K_Campfire ? 1 : MAX_LEVEL), ink);
         Pos c = {W.reg.get<Goal>(it->second).x, W.reg.get<Goal>(it->second).y};
         int b = W.biomeAt(int(std::floor(c.x)), int(std::floor(c.y)));
         line(std::string("Biome: ") + (b == INVALID_BIOME ? "?" : BIOME_NAME[b]), ink);
@@ -50,34 +55,54 @@ void ContextPanel::rebuild() {
             std::string pr;
             int goldN = in.kind == K_Mine ? W.goldNear(c) : 0;                          // nearby gold deposits boost mines
             float gb = 1.f + goldBonusOf(goldN);
-            for (int r = 0; r < R_Count; r++) if (yv.r[r] > 0) pr += TextFormat("%s %.1f/s  ", RES_NAME[r], yv.r[r] * levelMul(in.aux) * gb);
+            float eff = hpEfficiency(in.hp / std::max(1.f, in.maxhp));
+            for (int r = 0; r < R_Count; r++) if (yv.r[r] > 0) pr += TextFormat("%s %.2f/s  ", RES_NAME[r], yv.r[r] * productionMul(in.aux) * gb * eff);
             line("Output: " + pr, ink);
             if (in.kind == K_Mine) line(goldN ? TextFormat("Gold deposits nearby: %d (+%d%% output)", goldN, int(std::lround((gb - 1.f) * 100.f))) : "No gold deposits nearby (+20% each, max +100%)", goldN ? rgb(150, 105, 0) : rgb(130, 90, 30));
             bool pref = preferredBiome(in.kind, b);
             line(pref ? "Preferred biome: BONUS ACTIVE" : (in.kind == K_Lumber ? "Best in: Forest" : (in.kind == K_Mine ? "Best in: Highlands, Desert" : "Coastal fishing")), pref ? rgb(30, 110, 40) : rgb(130, 90, 30));
             line(TextFormat("Stock waiting: %d", in.stock), ink);
         } else if (isStorage(in.kind)) {
-            float cap = storageCap(in.kind, in.aux);
+            float cap = std::max(1.f, storageCap(in.kind, in.aux) * hpEfficiency(in.hp / std::max(1.f, in.maxhp)));
             if (in.kind == K_TownHall) line(TextFormat("Storage: %d / %d", int(W.res[0] + W.res[1] + W.res[2] + W.res[3]), int(cap)), ink);
             else line(TextFormat("Stored: %d / %d (%d%%)", int(in.stock), int(cap), int(in.stock * 100.f / cap)), ink);
-            if (KINFO[in.kind].dps > 0) line(TextFormat("Defence %.0f dps, territory %d", KINFO[in.kind].dps * levelMul(in.aux), anchorRadius(in.kind)), ink);
+            if (KINFO[in.kind].dps > 0) line(TextFormat("Defence %.0f dps, territory %d", KINFO[in.kind].dps * levelMul(in.aux) * hpEfficiency(in.hp / std::max(1.f, in.maxhp)), anchorRadius(in.kind)), ink);
             if (mine && done && (in.kind == K_Outpost || in.kind == K_Storage)) { slider = true; if (!sliderDrag) pct = in.aim; }
         } else if (in.kind == K_Campfire) line("Warms units in the snow", ink);
     }
     if (mine && done) {
         Kind k = in.kind;
-        for (int u = K_Pawn; u < K_Count; u++)
-            if (canTrain(k, Kind(u))) acts.push_back({std::string("Build ") + KINFO[u].name + "  " + costText(KINFO[u].cost), 1, target, uint32_t(u), W.affordable(KINFO[u].cost), false});
+        int th = W.thLevel();
+        for (int u = K_Pawn; u < K_Count; u++) {
+            if (!canTrain(k, Kind(u))) continue;
+            float c[R_Count];
+            unitCost(Kind(u), c);
+            bool locked = th < unitThLevel(Kind(u));
+            acts.push_back({locked ? TextFormat("%s: requires Town Hall Lv%d", KINFO[u].name, unitThLevel(Kind(u))) : std::string("Build ") + KINFO[u].name + "  " + costText(c), 1, target, uint32_t(u), !locked && W.affordable(c), false});
+        }
         if (k != K_Campfire) {
             float c[R_Count];
-            for (int r = 0; r < R_Count; r++) c[r] = float(mapUpgradeCost(in, r));
-            acts.push_back({in.aux >= MAX_LEVEL ? "Max level reached" : "Upgrade to Lv" + std::to_string(in.aux + 1) + "  " + costText(c), 2, target, 0, in.aux < MAX_LEVEL && W.affordable(c), false});
-            nextLevelInfo(in, next, nextUnits);
+            upgradeCost(k, in.aux, c);
+            std::string why = upgradeBlock(k, in.aux, th);
+            const BJob* j = W.jobOf(target);
+            if (j && j->kind != SJ_Build) acts.push_back({j->kind == SJ_Upgrade ? "Cancel upgrade (partial refund)" : "Cancel repair (partial refund)", 8, target, 1, true, true});
+            else acts.push_back({!why.empty() ? why : "Upgrade to Lv" + std::to_string(in.aux + 1) + "  " + costText(c), 2, target, 0, why.empty() && W.affordable(c), false});
+            if (!j && in.hp < in.maxhp - .5f) {
+                float rc[R_Count];
+                repairCost(k, in.aux, 1.f - in.hp / std::max(1.f, in.maxhp), rc);
+                acts.push_back({"Repair  " + costText(rc), 7, target, 0, W.affordable(rc), false});
+            }
+            if (!j && why.empty()) nextLevelInfo(in, next, nextUnits);
         }
     } else if (!mine) {
         if (isFactionOwner(in.owner)) {
-            static const char* nm[R_Count] = {"Wood", "Gold", "Stone", "Meat"};
-            for (int r = 0; r < R_Count; r++) acts.push_back({std::string("Help: give 50 ") + nm[r], 6, uint32_t(in.owner - FACTION_BASE), uint32_t(r), W.res[r] >= 50.f, false});
+            int f = in.owner - FACTION_BASE;
+            float wait = W.donateWait();
+            for (int r = 0; r < R_Count; r++) {
+                int mul = W.demand[f].mul[r];
+                std::string lbl = wait > 0 ? TextFormat("Give 50 %s (wait %d s)", RES_NAME[r], int(std::ceil(wait))) : TextFormat("Give 50 %s  (rep x%.1f)%s", RES_NAME[r], float(mul) / 100.f, W.demand[f].res == r ? " WANTED" : "");
+                acts.push_back({lbl, 6, uint32_t(f), uint32_t(r), W.res[r] >= 50.f && wait <= 0, false});
+            }
         }
         acts.push_back({"Attack this target", 3, target, 0, true, true});
         if (in.owner > 0 && !isFactionOwner(in.owner)) {
@@ -99,6 +124,7 @@ void ContextPanel::baseContext(const Info& in, bool mine, bool done) {
     Color red = rgb(170, 40, 30), ink = rgb(70, 45, 30);
     bool burning = in.state & BLD_BURNING, dis = in.state & BLD_DISABLED, mov = in.state & BLD_MOVING;
     if (burning) lines.push_back({"ON FIRE! Idle units will put it out.", red});
+    siteLines(in, mine || W.alliedWith(in.owner));
     if (mov) lines.push_back({in.kind == K_TownHall ? "Town is being moved to a new site." : "Being relocated.", rgb(120, 80, 160)});
     else if (dis) lines.push_back({"NON-FUNCTIONAL: outside your territory", red});
     if (!mine || !done) return;
@@ -119,7 +145,25 @@ void ContextPanel::baseContext(const Info& in, bool mine, bool done) {
         bool can = W.affordable(KINFO[in.kind].cost) && !W.townMoving;
         acts.push_back({"Relocate  " + costText(KINFO[in.kind].cost), 21, target, 0, can, false});
     }
-    if (dis || mov) for (auto& a : acts) if (a.act == 1 || a.act == 2) a.enabled = false;
+    if (dis || mov || (in.state & BLD_CRIPPLED)) for (auto& a : acts) if (a.act == 1 || a.act == 2) a.enabled = false;
+}
+
+// construction / upgrade / repair progress, damage efficiency, paused production / training
+void ContextPanel::siteLines(const Info& in, bool friendly) {
+    const ClientWorld& W = app.world;
+    Color red = rgb(170, 40, 30), work = rgb(150, 95, 0), ink = rgb(70, 45, 30);
+    const BJob* j = friendly ? W.jobOf(target) : nullptr;
+    static const char* phase[3] = {"Waiting for a pawn", "A pawn is on the way", "A pawn is at work"};
+    if (j) {
+        if (j->kind == SJ_Upgrade) lines.push_back({TextFormat("Upgrading to Lv%d... %d%%", in.aux + 1, j->pct), work});
+        else if (j->kind == SJ_Repair) lines.push_back({TextFormat("Repairing... %d%%", j->pct), work});
+        lines.push_back({phase[std::min<int>(j->phase, 2)], j->phase == SP_Waiting ? red : ink});
+    } else if (in.state & BLD_WORK) lines.push_back({"Work in progress", work});
+    float hpf = in.hp / std::max(1.f, in.maxhp);
+    if (in.prog >= 100 && (in.state & BLD_CRIPPLED)) lines.push_back({"CRITICAL DAMAGE: disabled until repaired", red});
+    else if (in.prog >= 100 && hpf < .995f && friendly) lines.push_back({TextFormat("Damaged: working at %d%% efficiency", int(std::lround(hpEfficiency(hpf) * 100.f))), rgb(170, 90, 30)});
+    bool producer = isResourceBuilding(in.kind) || in.kind == K_Archery || in.kind == K_Harbour;
+    if (friendly && producer && (in.prog < 100 || (in.state & BLD_WORK))) lines.push_back({"Production and training paused", red});
 }
 
 void ContextPanel::run(const MenuAct& a) {
@@ -131,6 +175,8 @@ void ContextPanel::run(const MenuAct& a) {
     case 4: cmd.ally(int(a.a), AA_Invite); break;
     case 5: cmd.ally(int(a.a), AA_Break); break;
     case 6: cmd.donate(int(a.a), int(a.b), 50.f); break;
+    case 7: cmd.repair(a.a, 0); break;
+    case 8: cmd.repair(a.a, 1); break;
     default: if (!baseRun(a)) isOpen = false; break;
     }
 }

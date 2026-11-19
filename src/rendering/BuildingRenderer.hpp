@@ -1,6 +1,7 @@
 #pragma once
-// Buildings (sprites, harbour pier, campfire, mine, construction, damage smoke / flames, labels, bars) and the
-// placement preview (footprint, territory, cost / error label).
+// Buildings (sprites, harbour pier, campfire, mine, construction / upgrade / repair sites, damage smoke / flames, labels,
+// bars) and the placement preview (footprint, territory, cost / error label).
+#include "client/ClientState.hpp"
 #include "client/Components.hpp"
 #include "rendering/DrawItem.hpp"
 
@@ -16,5 +17,6 @@ public:
 private:
     void drawPlaceExtras();             // clan-radius hints while placing a homeless Town Hall
     void mineGhost(IV t, float cx, float bottom);   // gold bonus radius while placing a mine
+    void siteOverlay(Kind k, float cx, float bottom, BJob job, bool hasJob, uint32_t id, double t);   // scaffold + tool icon
     App& app;
 };

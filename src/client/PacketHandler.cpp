@@ -42,6 +42,7 @@ void PacketHandler::onWelcome(Reader& r) {
     float cx = r.get<float>(), cy = r.get<float>();
     std::string nm = r.str();
     if (!r.ok) return;
+    getRules(r);                                                  // the server's progression / food / donation tunables
     w.myName = nm;
     cam.target = {cx * TILE, cy * TILE};
     cam.zoom = 1.f;
@@ -323,6 +324,34 @@ bool PacketHandler::basePacket(uint8_t type, Reader& r) {
         if (w.homeless && !w.wasHomeless) app.placement.begin(Placement::HomelessHall, K_TownHall, 0);
         if (!w.homeless && w.wasHomeless && app.placement.placeMode == Placement::HomelessHall) app.placement.buildKind = -1;
         w.wasHomeless = w.homeless;
+        return true;
+    }
+    case S_Jobs: {
+        int n = r.get<uint16_t>();
+        std::unordered_map<uint32_t, BJob> v;
+        for (int i = 0; i < n; i++) {
+            uint32_t uid = r.get<uint32_t>();
+            BJob j;
+            j.kind = r.get<uint8_t>();
+            j.phase = r.get<uint8_t>();
+            j.pct = r.get<uint8_t>();
+            if (!r.ok) return true;
+            v[uid] = j;
+        }
+        w.jobs = std::move(v);
+        return true;
+    }
+    case S_Econ: {
+        float cd = r.get<float>();
+        FacDemand d[FACTION_COUNT];
+        for (auto& f : d) {
+            f.res = r.get<uint8_t>();
+            f.changeAt = GetTime() + double(r.get<uint16_t>());
+            for (int& m : f.mul) m = r.get<uint8_t>();
+        }
+        if (!r.ok) return true;
+        w.donateReadyAt = GetTime() + double(cd);
+        for (int f = 0; f < FACTION_COUNT; f++) w.demand[f] = d[f];
         return true;
     }
     default: return false;

@@ -1,5 +1,6 @@
 #include "systems/TerritorySystem.hpp"
 
+#include "common/Progression.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -77,7 +78,7 @@ void TerritorySystem::doRelocate(int id, uint32_t uid, int tx, int ty) {
     if (be == entt::null || !reg.all_of<Building>(be) || reg.get<Owner>(be).id != id) return;
     Kind k = reg.get<Info>(be).kind;
     if (k == K_TownHall || k == K_Campfire || !world.complete(be)) return;
-    if (!world.inactive(be) || reg.all_of<Moving>(be)) { world.say(id, "Only non-functional buildings can be relocated."); return; }
+    if (!world.outOfTerritory(be) || reg.all_of<Moving>(be)) { world.say(id, "Only buildings outside your territory can be relocated."); return; }
     if (world.townMoveActive(id)) { world.say(id, "Wait until the town move is finished."); return; }
     if (!world.afford(id, KINFO[k].cost)) { world.say(id, "Not enough resources to relocate."); return; }
     PlaceWorld w{world, id};

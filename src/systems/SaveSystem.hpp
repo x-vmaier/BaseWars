@@ -5,7 +5,7 @@
 
 struct Systems;
 
-inline constexpr uint32_t SAVE_MAGIC = 0x36535742u;  // "BWS6" (world + ships + base sections appended)
+inline constexpr uint32_t SAVE_MAGIC = 0x37535742u;  // "BWS7" (world + ships + base sections appended)
 
 class SaveSystem {
 public:

@@ -86,9 +86,11 @@ bool SpawnSystem::testSpawn(IV& c) {
 // test hook (BW_ARMY=<n>): a freshly spawned player also gets n extra warriors
 void SpawnSystem::worldTestSpawn(int id, bool fresh) {
     static const char* a = std::getenv("BW_ARMY");
-    if (!a || !fresh) return;
+    static const char* hurt = std::getenv("BW_HURT");                 // test hook BW_HURT=<fraction>: the new Town Hall starts damaged
     auto th = world.townHallOf(id);
-    if (th == entt::null) return;
+    if (!fresh || th == entt::null) return;
+    if (hurt) { auto& h = reg.get<Health>(th); h.hp = h.maxhp * std::clamp(float(std::atof(hurt)), .01f, 1.f); }
+    if (!a) return;
     Pos at;
     for (int i = 0; i < std::atoi(a); i++) if (world.spawnSpot(th, false, at)) { world.makeUnit(K_Warrior, uint8_t(id), at.x + float(i) * .01f, at.y); }
 }

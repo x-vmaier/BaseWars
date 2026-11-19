@@ -1,5 +1,5 @@
 #pragma once
-// Where new (or defeated) players found their base, plus the spawn-related test hooks (BW_SPAWN, BW_ARMY, BW_BASETEST).
+// Where new (or defeated) players found their base, plus the spawn-related test hooks (BW_SPAWN, BW_ARMY, BW_HURT, BW_BASETEST).
 #include "server/World.hpp"
 
 struct Systems;

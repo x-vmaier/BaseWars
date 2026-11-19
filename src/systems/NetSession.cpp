@@ -72,6 +72,7 @@ void NetSession::onHello(uint64_t conn, Reader& r) {
     Writer w;
     w.put<uint8_t>(S_Welcome).put<uint8_t>(uint8_t(id)).put<uint32_t>(world.seed).put<float>(p.cam.x).put<float>(p.cam.y);
     w.str(p.name);
+    putRules(w);                                                         // progression / food / donation tunables (common/Progression.hpp)
     world.net.send(conn, w);
     s.repl.sendFog(id);
     s.clearing.sendClearedFull(id);                                     // [world] cleared surface features

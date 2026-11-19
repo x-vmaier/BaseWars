@@ -22,6 +22,7 @@ Anim unitAnim(Kind k, int owner, int state, int aux, int aim, bool moving, int b
     if (state == US_Extinguish) return extinguishAnim(k, owner);
     switch (k) {
     case K_Pawn: {
+        if (state == US_Build) return mkAnim(base + "Pawn/Pawn_Interact Hammer.png", 192, 192, 8, 96, 135);
         if (state == US_Work) return mkAnim(base + (biome == B_Forest ? "Pawn/Pawn_Interact Axe.png" : "Pawn/Pawn_Interact Pickaxe.png"), 192, 192, 9, 96, 135);
         if (state == US_Attack) return mkAnim(base + "Pawn/Pawn_Interact Knife.png", 192, 192, 10, 96, 135);
         static const char* carry[] = {"", " Wood", " Gold", " Gold", " Meat"};

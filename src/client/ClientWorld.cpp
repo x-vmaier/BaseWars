@@ -122,6 +122,20 @@ Pos ClientWorld::myTH(Vector2 camTarget) const {
     return out;
 }
 bool ClientWorld::affordable(const float* cost) const { for (int r = 0; r < R_Count; r++) if (res[r] + 1e-3f < cost[r]) return false; return true; }
+int ClientWorld::thLevel() const {
+    int lv = 0;
+    reg.view<Info>().each([&](const Info& i) { if (i.kind == K_TownHall && i.owner == me && i.prog >= 100 && !(i.state & BLD_MOVING)) lv = std::max<int>(lv, i.aux); });
+    return lv;
+}
+int ClientWorld::countKind(Kind k) const {
+    int n = 0;
+    reg.view<Info>().each([&](const Info& i) { if (i.kind == k && i.owner == me && !(i.state & BLD_MOVING)) n++; });
+    for (auto& ps : pendingSites) if (ps.kind == k) n++;
+    return n;
+}
+int ClientWorld::buildGateErr(Kind k) const { return buildGate(k, thLevel(), countKind(k)); }
+float ClientWorld::donateWait() const { return float(std::max(0.0, donateReadyAt - GetTime())); }
+const BJob* ClientWorld::jobOf(uint32_t id) const { auto it = jobs.find(id); return it == jobs.end() ? nullptr : &it->second; }
 
 void ClientWorld::clear() {
     reg.clear();
@@ -134,6 +148,7 @@ void ClientWorld::clear() {
     fxs.clear();
     ghosts.clear();
     pendingSites.clear();
+    jobs.clear();
     markers.clear();
     ripples.clear();
     me = 0;

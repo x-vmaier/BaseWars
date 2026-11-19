@@ -32,6 +32,7 @@ private:
     Rectangle closeBtn() const;
     Rectangle queueSlot(int i) const;
     bool queueClick(Vector2 m);         // click a queued unit to cancel it (refund)
+    std::string lockReason(Kind k, int archeryLevel) const;   // "Town Hall Lv4" / "Archery Lv3" / "" when trainable
     void drawQueueStrip(Vector2 m);
 
     App& app;

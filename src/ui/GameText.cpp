@@ -10,7 +10,13 @@ std::string costText(const float* c) {
     for (int r = 0; r < R_Count; r++) if (c[r] > 0) s += std::string(ab[r]) + std::to_string(int(c[r])) + " ";
     return s.empty() ? "free" : s;
 }
-int mapUpgradeCost(const Info& in, int r) { return int(std::ceil(KINFO[in.kind].cost[r] * upgradeCostMul(in.aux) * .7f)); }
+int mapUpgradeCost(const Info& in, int r) { float c[R_Count]; upgradeCost(in.kind, in.aux, c); return int(c[r]); }
+std::string timeText(float s) {
+    int t = int(std::ceil(s));
+    if (t < 60) return std::to_string(t) + " s";
+    if (t < 3600) return std::to_string(t / 60) + " min" + (t % 60 ? " " + std::to_string(t % 60) + " s" : "");
+    return std::to_string(t / 3600) + " h " + std::to_string(t / 60 % 60) + " min";
+}
 std::string unlockText(int level) {
     std::string t;
     for (int u = K_Pawn; u <= K_Monk; u++) if (unitUnlockLevel(Kind(u)) == level) t += (t.empty() ? "" : ", ") + std::string(KINFO[u].name);
@@ -19,7 +25,7 @@ std::string unlockText(int level) {
 void nextLevelInfo(const Info& in, std::vector<std::string>& out, std::vector<Kind>& units) {
     int L = in.aux, N = L + 1;
     if (L >= MAX_LEVEL || in.kind == K_Campfire) return;
-    out.push_back(TextFormat("Health +%d%%", int(std::lround((levelHp(N) / levelHp(L) - 1.f) * 100.f))));
+    out.push_back(TextFormat("Health +%d%%, takes %s of pawn work", int(std::lround((levelHp(N) / levelHp(L) - 1.f) * 100.f)), timeText(upgradeSeconds(in.kind, L)).c_str()));
     if (isStorage(in.kind)) out.push_back(TextFormat("Capacity %d -> %d", int(storageCap(in.kind, L)), int(storageCap(in.kind, N))));
     if (KINFO[in.kind].dps > 0) out.push_back(TextFormat("Defence %.0f -> %.0f dps", KINFO[in.kind].dps * levelMul(L), KINFO[in.kind].dps * levelMul(N)));
     if (isResourceBuilding(in.kind)) out.push_back(TextFormat("Output x%.1f -> x%.1f", levelMul(L), levelMul(N)));

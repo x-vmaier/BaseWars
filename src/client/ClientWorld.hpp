@@ -47,6 +47,9 @@ struct ClientWorld {
 
     // side tables
     std::unordered_map<uint32_t, QEntry> queues;              // building uid -> training queue (S_Queue)
+    std::unordered_map<uint32_t, BJob> jobs;                  // building uid -> construction / upgrade / repair job (S_Jobs)
+    double donateReadyAt = 0;                                 // S_Econ: local time when donations / transfers are allowed again
+    FacDemand demand[FACTION_COUNT];                          // S_Econ: what each faction wants
     std::unordered_map<uint32_t, ShipDetail> shipDetails;     // own ships (S_ShipInfo)
     std::unordered_map<uint32_t, std::vector<IV>> pathLines;  // S_Paths
     int myQuota = 5, movePct = 0;                             // S_BaseInfo
@@ -80,6 +83,11 @@ struct ClientWorld {
     bool nearStorage(float x, float y) const;                 // within reach of a Town Hall / Outpost / Storage (convoys end there)
     Pos myTH(Vector2 camTarget) const;                        // own Town Hall, or the camera position
     bool affordable(const float* cost) const;
+    int thLevel() const;                                      // level of our completed Town Hall (0 = none)
+    int countKind(Kind k) const;                              // own buildings of a kind incl. sites and sites waiting for clearing
+    int buildGateErr(Kind k) const;                           // GateErr for placing one more building of kind k
+    float donateWait() const;                                 // seconds until the donation cooldown ends (0 = ready)
+    const BJob* jobOf(uint32_t id) const;
     void clear();                                             // reset on join / leave (keeps the side tables)
     void interpolate(float dt);                               // ease rendered positions towards the server's, update facing
 };

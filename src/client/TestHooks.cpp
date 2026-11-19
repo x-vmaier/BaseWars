@@ -25,6 +25,7 @@ void TestHooks::update() {
         auto p = cm.find("xfer:");
         if (p != std::string::npos) app.cmd.transfer(std::atoi(cm.c_str() + p + 5), R_Wood, 60.f);
     }
+    siteCommands();
     if (shotFrames < 20) return;
     if (const char* mp = std::getenv("BW_MOUSE")) { float dx = 0, dy = 0; if (std::sscanf(mp, "%f,%f", &dx, &dy) == 2) SetMousePosition(::GetScreenWidth() / 2 + int(dx), ::GetScreenHeight() / 2 + int(dy)); }
     const char* u = std::getenv("BW_UI");
@@ -46,6 +47,39 @@ void TestHooks::update() {
         W.reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!cp.isOpen && isFactionOwner(i.owner) && i.kind == K_TownHall) cp.open(n.id, {sw * .55f, sh * .2f}); });
     else if (ui.find("ctx") != std::string::npos && ui.find("ctxfac") == std::string::npos && !cp.isOpen)
         W.reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (i.owner == W.me && i.kind == K_TownHall) cp.open(n.id, {sw * .6f, sh * .25f}); });
+}
+
+void TestHooks::siteCommands() {
+    const char* env = std::getenv("BW_SITE");
+    if (!env) return;
+    ClientWorld& W = app.world;
+    auto firstOf = [&](int k) {
+        uint32_t id = 0;
+        W.reg.view<NetId, Info>().each([&](const NetId& n, const Info& i) { if (!id && i.owner == W.me && i.kind == k) id = n.id; });
+        return id;
+    };
+    std::string all = env;
+    size_t p = 0;
+    while (p < all.size()) {
+        size_t e = all.find(';', p);
+        std::string tok = all.substr(p, e == std::string::npos ? std::string::npos : e - p);
+        p = e == std::string::npos ? all.size() : e + 1;
+        size_t at = tok.find('@'), c1 = tok.find(':');
+        if (at == std::string::npos || c1 == std::string::npos || std::atoi(tok.c_str() + at + 1) != shotFrames) continue;
+        std::string verb = tok.substr(0, c1), args = tok.substr(c1 + 1, at - c1 - 1);
+        int kind = std::atoi(args.c_str()), dx = 0, dy = 0;
+        if (verb == "build" && std::sscanf(args.c_str(), "%d:%d,%d", &kind, &dx, &dy) == 3) {
+            Pos th = W.myTH(app.cam.target);
+            app.cmd.build(Kind(kind), {int(std::floor(th.x)) + dx, int(std::floor(th.y)) + dy});
+        } else if (verb == "donate" && std::sscanf(args.c_str(), "%d:%d", &dx, &dy) == 2) {
+            app.cmd.donate(dx, dy, 50.f);
+        } else if (uint32_t id = firstOf(kind); id) {
+            if (verb == "upgrade") app.cmd.upgrade(id);
+            else if (verb == "repair") app.cmd.repair(id, 0);
+            else if (verb == "cancel") app.cmd.repair(id, 1);
+            else if (verb == "ctx") app.context.open(id, {float(ui::screenW()) * .55f, float(ui::screenH()) * .12f});
+        }
+    }
 }
 
 bool TestHooks::captureIfDue() {

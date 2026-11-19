@@ -32,6 +32,7 @@ void UnitSystem::behave(const std::vector<entt::entity>& units, float dt) {
         if (s.fire.extinguishTick(e, u, p, dt)) continue;                  // firefighting duty
         if (isFactionOwner(ow)) s.faction.factionAI(e, u, p, dt);
         if (auto* ct = reg.try_get<ClearTask>(e)) { s.clearing.pawnTick(e, u, *ct, p, dt); }   // clearing an obstacle (prior work is restored after)
+        else if (auto* bt = reg.try_get<BuildTask>(e)) { s.construction.pawnTick(e, u, *bt, p, dt); }   // building / upgrading / repairing a site
         else if (auto* wk = reg.try_get<Worker>(e)) { s.convoy.runWorker(e, u, *wk, dt); }
         else if (auto* cv = reg.try_get<Convoy>(e)) { s.convoy.runConvoy(e, u, *cv, dt); }
         else if (auto* hl = reg.try_get<Haul>(e)) { s.convoy.runHaul(e, u, *hl, dt); }

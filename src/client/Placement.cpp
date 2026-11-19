@@ -32,8 +32,13 @@ struct PlaceWorld {
 int Placement::curPlaceMode() const { int m = effMode(); return m == HomelessHall ? PM_HomelessHall : (m == MoveTown ? PM_MoveHall : PM_Normal); }
 const float* Placement::placeCost(Kind k) const {
     static const float zero[R_Count] = {0, 0, 0, 0};
+    static float cost[R_Count];
     int m = effMode();
-    return m == HomelessHall ? zero : (m == MoveTown ? TOWN_MOVE_COST : KINFO[k].cost);
+    if (m == HomelessHall) return zero;
+    if (m == MoveTown) return TOWN_MOVE_COST;
+    if (m == Relocate) return KINFO[k].cost;
+    buildCost(k, cost);                                         // includes the food share
+    return cost;
 }
 IV Placement::placeTile(Kind k, Vector2 world) {
     return {int(std::floor(world.x / TILE - float(KINFO[k].fw) * .5f + .5f)), int(std::floor(world.y / TILE - float(KINFO[k].fh) * .5f + .5f))};
@@ -57,6 +62,7 @@ void Placement::begin(int mode, Kind k, uint32_t target) {
     else if (mode == Relocate) app.msg("Choose the new site for this building (normal cost, it keeps its level and stock).");
 }
 void Placement::selectBuildKind(Kind k) {
+    if (int g = app.world.buildGateErr(k); g && buildKind != int(k)) { app.msg("Cannot build " + aName(k) + ": " + gateText(g, k, app.world.thLevel()) + "."); return; }
     placeMode = Normal;
     buildKind = buildKind == int(k) ? -1 : int(k);
     app.input.mode = Input::M_None;

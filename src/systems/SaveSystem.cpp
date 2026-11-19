@@ -60,6 +60,7 @@ void SaveSystem::saveGame() {
             w.put<uint8_t>(0).put<float>(p.x).put<float>(p.y);
             const Worker* wk = reg.try_get<Worker>(e);
             if (const ClearTask* ct = reg.try_get<ClearTask>(e); !wk && ct && ct->hadWorker) wk = &ct->worker;   // a clearing pawn keeps its job across saves
+            if (const BuildTask* bt = reg.try_get<BuildTask>(e); !wk && bt && bt->hadWorker) wk = &bt->worker;   // ... and so does a pawn on a building site
             const Convoy* cv = reg.try_get<Convoy>(e);
             const Haul* hl = reg.try_get<Haul>(e);
             w.put<uint8_t>(uint8_t((wk ? 1 : 0) | (cv ? 2 : 0) | (hl ? 4 : 0)));
@@ -254,7 +255,7 @@ void SaveSystem::saveBase(Writer& w) {
         for (size_t f = 0; f < world.bp[i].friends.size() && f < 200; f++) w.put<uint64_t>(world.bp[i].friends[f]);
     }
     std::vector<entt::entity> es;
-    reg.view<Uid>().each([&](entt::entity e, const Uid&) { if (reg.any_of<BFlags, Moving, RelocNew, TrainQ, Support>(e)) es.push_back(e); });
+    reg.view<Uid>().each([&](entt::entity e, const Uid&) { if (reg.any_of<BFlags, Moving, RelocNew, TrainQ, Support, SiteJob>(e)) es.push_back(e); });
     w.put<uint32_t>(uint32_t(es.size()));
     for (auto e : es) {
         w.put<uint32_t>(reg.get<Uid>(e).id);
@@ -271,6 +272,9 @@ void SaveSystem::saveBase(Writer& w) {
         const Support* sp = reg.try_get<Support>(e);
         w.put<uint8_t>(sp ? 1 : 0);
         if (sp) w.put<float>(sp->dest.x).put<float>(sp->dest.y).put<float>(sp->home.x).put<float>(sp->home.y).put<uint8_t>(sp->victim).put<uint8_t>(sp->phase).put<uint8_t>(sp->defense ? 1 : 0);
+        const SiteJob* sj = reg.try_get<SiteJob>(e);                              // site jobs (the pawn is re-assigned after loading)
+        w.put<uint8_t>(sj ? 1 : 0);
+        if (sj) { w.put<uint8_t>(sj->kind).put<float>(sj->t).put<float>(sj->total).put<float>(sj->hpRate); for (float v : sj->paid) w.put<float>(v); }
     }
 }
 void SaveSystem::loadBase(Reader& r) {
@@ -302,7 +306,11 @@ void SaveSystem::loadBase(Reader& r) {
         bool hasSp = r.get<uint8_t>() != 0;
         Support sp;
         if (hasSp) { sp.dest.x = r.get<float>(); sp.dest.y = r.get<float>(); sp.home.x = r.get<float>(); sp.home.y = r.get<float>(); sp.victim = r.get<uint8_t>(); sp.phase = r.get<uint8_t>(); sp.defense = r.get<uint8_t>() != 0; }
+        bool hasSj = r.get<uint8_t>() != 0;
+        SiteJob sj;
+        if (hasSj) { sj.kind = r.get<uint8_t>(); sj.t = r.get<float>(); sj.total = r.get<float>(); sj.hpRate = r.get<float>(); for (float& v : sj.paid) v = r.get<float>(); sj.since = world.clock; }
         if (!r.ok || e == entt::null) continue;
+        if (hasSj && sj.kind <= SJ_Repair && reg.all_of<Building>(e)) reg.emplace_or_replace<SiteJob>(e, sj);
         if (burn > 0) { auto& f = reg.get_or_emplace<BFlags>(e); f.burn = burn; f.burnBy = burnBy; }
         if (mv) reg.emplace_or_replace<Moving>(e, Moving{mv});
         if (hasRn) reg.emplace_or_replace<RelocNew>(e, rn);

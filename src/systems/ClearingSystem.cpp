@@ -1,5 +1,6 @@
 #include "systems/ClearingSystem.hpp"
 
+#include "common/Progression.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -44,7 +45,8 @@ bool ClearingSystem::worldBuildOk(int id, Kind k, int tx, int ty) {
 void ClearingSystem::queueBuild(int id, Kind k, int tx, int ty, const std::vector<IV>& blocked) {
     PendingBuild pb{id, k, tx, ty, {}, blocked};
     float total[R_Count];
-    for (int r = 0; r < R_Count; r++) { pb.cost[r] = KINFO[k].cost[r]; total[r] = pb.cost[r]; }
+    buildCost(k, pb.cost);
+    for (int r = 0; r < R_Count; r++) total[r] = pb.cost[r];
     std::vector<IV> fresh;
     for (auto t : blocked) if (!clearJobs.count(tkey(t.x, t.y))) { fresh.push_back(t); total[R_Wood] += float(clearCostWood(world.featOf(t.x, t.y))); }
     if (!world.afford(id, total)) { world.say(id, "Not enough resources (the building plus " + std::to_string(int(total[R_Wood] - pb.cost[R_Wood])) + " wood for clearing)."); return; }
@@ -127,7 +129,7 @@ void ClearingSystem::onClear(int id, Reader& r) {
 // ---------------------------------------------------------------- pawns
 bool ClearingSystem::freePawn(entt::entity e, int owner, bool explicitPick) {
     if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || reg.get<Info>(e).kind != K_Pawn || reg.get<Owner>(e).id != owner) return false;
-    if (reg.any_of<Convoy, Haul, Raider, Aboard, Boarding, Extinguish>(e) || world.dying.count(reg.get<Uid>(e).id)) return false;
+    if (reg.any_of<Convoy, Haul, Raider, Aboard, Boarding, Extinguish, BuildTask>(e) || world.dying.count(reg.get<Uid>(e).id)) return false;
     if (explicitPick) return true;
     if (reg.all_of<ClearTask>(e)) return false;
     if (auto it = manualUntil.find(reg.get<Uid>(e).id); it != manualUntil.end() && it->second > world.clock) return false;
@@ -365,6 +367,12 @@ void ClearingSystem::sendClearedList(int id, const std::vector<int64_t>& tiles, 
 void ClearingSystem::sendClearedFull(int id) {                                 // hook for onHello
     std::vector<int64_t> v(world.cleared.begin(), world.cleared.end());
     sendClearedList(id, v, true);
+}
+
+int ClearingSystem::pendingOf(int id, Kind k) const {
+    int n = 0;
+    for (auto& [pid, pb] : pending) if (pb.owner == id && pb.k == k) n++;
+    return n;
 }
 
 // ---------------------------------------------------------------- gold deposits boost mines

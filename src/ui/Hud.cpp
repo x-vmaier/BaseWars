@@ -34,8 +34,13 @@ void Hud::drawTop() {
     for (int r = 0; r < R_Count; r++) {
         float x = h.x + float(mHud.padding) + 22 + float(r) * slot;
         ui::drawResourceIcon(r, x, h.y + h.height * .5f - 14, .45f);
-        textShadow(std::to_string(int(W.res[r])), int(x) + 30, int(h.y + h.height * .5f) - 8, 18, WHITE);
+        bool food = r == R_Meat, low = food && W.res[r] < 60.f;              // food (meat) pays for every unit, building, upgrade and repair
+        Color c = low ? (std::fmod(GetTime(), 1.0) < .5 ? rgb(255, 110, 90) : rgb(255, 200, 120)) : WHITE;
+        textShadow(std::to_string(int(W.res[r])), int(x) + 30, int(h.y + h.height * .5f) - 13, 18, c);
+        textShadow(food ? "Food" : RES_NAME[r], int(x) + 30, int(h.y + h.height * .5f) + 5, 10, food ? rgb(255, 200, 150) : rgb(230, 220, 200));
     }
+    if (W.res[R_Meat] < 60.f && app.session.welcomed)
+        textShadow("Low food! Free pawns hunt sheep; Harbours fish. Food pays for units, buildings, upgrades and repairs.", int(h.x) + 8, int(h.y + h.height) + 2, 12, rgb(255, 160, 130));
     // name banner
     Rectangle nr = nameRect();
     drawTMap(ui::titleMap(), nr);

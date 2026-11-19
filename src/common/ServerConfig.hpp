@@ -34,8 +34,27 @@ struct ServerConfig {
     // ---- sheep
     float sheepDensityPlains = 1.f, sheepDensityFlowers = 1.f;  // multiplier on initial and repopulated sheep (0 = none)
     int sheepMax = 900;
+    // ---- progression (shared with clients through S_Welcome so their cost / time previews match)
+    float buildTimeScale = 2.f;        // multiplier on every building's base construction time
+    float upgradeCostGrowth = 1.9f;    // upgrade cost from level L: base cost x .7 x growth^(L-1)
+    float upgradeTimeGrowth = 1.6f;    // upgrade time from level L: build time x 1.5 x growth^(L-1)
+    float productionScale = .6f;       // multiplier on resource building output
+    float repairCostFraction = .5f;    // repair cost = build cost x this x missing HP fraction (x level HP factor)
+    float repairTimeScale = .5f;       // repair time = build time x this x missing HP fraction
+    // ---- damaged buildings
+    float damageMinEfficiency = .4f;   // a damaged building works at max(HP fraction, this)
+    float damageCriticalHp = .25f;     // below this HP fraction a building is disabled until repaired
+    // ---- food (meat) on actions: multipliers on the food share of each cost
+    float foodCostBuild = 1.f, foodCostUpgrade = 1.f, foodCostRepair = 1.f, foodCostTrain = 1.f;
+    // ---- donations and NPC town demand
+    float donationCooldown = 60.f;     // seconds between two donations / clan transfers of one player
+    float demandChangeMin = 600.f, demandChangeMax = 1200.f;   // seconds until a faction wants a different resource
+    float demandBonus = 2.f;           // reputation multiplier for gifts of the wanted resource
+    float demandSatisfy = 400.f;       // gifts of the wanted resource that satisfy a faction (its demand then moves on)
+    float donationDiminish = 150.f;    // recent gifts of the same resource: reputation x 1 / (1 + recent / this)
+    float donationMemory = 900.f;      // seconds for the "recent gifts" memory to fade (time constant)
     // ---- debug timers: complete things instantly for fast testing
-    bool instantBuild = false, instantUpgrade = false, instantTrain = false, instantClear = false;
+    bool instantBuild = false, instantUpgrade = false, instantTrain = false, instantClear = false;   // instant build / upgrade (and repair) also skip the pawn walk
 
     static ServerConfig& get();                                 // process-wide instance
     bool load(const std::string& path);                         // false when the file is missing (defaults stay)

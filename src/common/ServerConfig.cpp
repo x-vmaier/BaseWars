@@ -44,6 +44,12 @@ bool ServerConfig::load(const std::string& path) {
         I("patrols_per_town_min", patrolsPerTownMin); I("patrols_per_town_max", patrolsPerTownMax); I("patrol_map_groups", patrolMapGroups);
         D("patrol_respawn_min", patrolRespawnMin); D("patrol_respawn_random", patrolRespawnRandom);
         F("sheep_density_plains", sheepDensityPlains); F("sheep_density_flowers", sheepDensityFlowers); I("sheep_max", sheepMax);
+        F("build_time_scale", buildTimeScale); F("upgrade_cost_growth", upgradeCostGrowth); F("upgrade_time_growth", upgradeTimeGrowth);
+        F("production_scale", productionScale); F("repair_cost_fraction", repairCostFraction); F("repair_time_scale", repairTimeScale);
+        F("damage_min_efficiency", damageMinEfficiency); F("damage_critical_hp", damageCriticalHp);
+        F("food_cost_build", foodCostBuild); F("food_cost_upgrade", foodCostUpgrade); F("food_cost_repair", foodCostRepair); F("food_cost_train", foodCostTrain);
+        F("donation_cooldown", donationCooldown); F("demand_change_min", demandChangeMin); F("demand_change_max", demandChangeMax);
+        F("demand_bonus", demandBonus); F("demand_satisfy", demandSatisfy); F("donation_diminish", donationDiminish); F("donation_memory", donationMemory);
         B("debug_instant_build", instantBuild); B("debug_instant_upgrade", instantUpgrade);
         B("debug_instant_train", instantTrain); B("debug_instant_clear", instantClear);
     }
@@ -55,6 +61,18 @@ bool ServerConfig::load(const std::string& path) {
     patrolMapGroups = std::max(0, patrolMapGroups);
     patrolsPerTownMin = std::max(0, patrolsPerTownMin);
     patrolsPerTownMax = std::max(patrolsPerTownMin, patrolsPerTownMax);
+    buildTimeScale = std::max(.01f, buildTimeScale);
+    upgradeCostGrowth = std::max(1.f, upgradeCostGrowth);
+    upgradeTimeGrowth = std::max(1.f, upgradeTimeGrowth);
+    productionScale = std::max(0.f, productionScale);
+    damageCriticalHp = std::clamp(damageCriticalHp, 0.f, .95f);
+    damageMinEfficiency = std::clamp(damageMinEfficiency, 0.f, 1.f);
+    donationCooldown = std::max(0.f, donationCooldown);
+    demandChangeMin = std::max(30.f, demandChangeMin);
+    demandChangeMax = std::max(demandChangeMin, demandChangeMax);
+    demandSatisfy = std::max(1.f, demandSatisfy);
+    donationDiminish = std::max(1.f, donationDiminish);
+    donationMemory = std::max(1.f, donationMemory);
     std::printf("Loaded server config %s\n", path.c_str());
     return true;
 }

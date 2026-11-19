@@ -1,5 +1,6 @@
 #include "systems/TrainingSystem.hpp"
 
+#include "common/Progression.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -41,20 +42,27 @@ entt::entity TrainingSystem::spawnTrained(entt::entity be, Kind k) {
 }
 void TrainingSystem::enqueueTrain(int id, entt::entity be, Kind k) {                            // C_Train: pay now, produce over time
     if (reg.get<Owner>(be).id != id || !world.complete(be) || !canTrain(reg.get<Info>(be).kind, k)) return;
+    if (world.crippled(be)) { world.say(id, "This building is too badly damaged to train: repair it first."); return; }
     if (world.inactive(be) || reg.all_of<Moving>(be)) { world.say(id, "This building is not functional."); return; }
-    if (reg.get<Info>(be).level < unitUnlockLevel(k)) { world.say(id, std::string(KINFO[k].name) + "s unlock at Archery level " + std::to_string(unitUnlockLevel(k)) + "."); return; }
+    if (world.thLevel(id) < unitThLevel(k)) { world.say(id, std::string(KINFO[k].name) + "s require Town Hall level " + std::to_string(unitThLevel(k)) + "."); return; }
+    if (reg.get<Info>(be).kind == K_Archery && reg.get<Info>(be).level < unitUnlockLevel(k)) { world.say(id, std::string(KINFO[k].name) + "s unlock at Archery level " + std::to_string(unitUnlockLevel(k)) + "."); return; }
     auto& tq = reg.get_or_emplace<TrainQ>(be);
     if (int(tq.q.size()) >= MAX_QUEUE) { world.say(id, "The training queue is full (" + std::to_string(MAX_QUEUE) + ")."); return; }
-    if (!world.afford(id, KINFO[k].cost)) { world.say(id, "Not enough resources."); return; }
+    float cost[R_Count];
+    unitCost(k, cost);
+    if (!world.afford(id, cost)) { world.say(id, cost[R_Meat] > world.pl[id].res[R_Meat] ? "Not enough food: hunt sheep or build a Harbour." : "Not enough resources."); return; }
     if (world.unitCount(id) + queuedUnits(id) >= UNIT_CAP) { world.say(id, "Unit cap reached."); return; }
-    world.spend(id, KINFO[k].cost);
+    world.spend(id, cost);
     tq.q.push_back(QItem{k, 0.f, trainTime(k), 0.f});
+    if (world.siteBusy(be)) world.say(id, "Queued: training starts once the building's upgrade / repair is finished.");
 }
 void TrainingSystem::dequeueTrain(int id, entt::entity be, int idx) {
     auto* tq = reg.try_get<TrainQ>(be);
     if (!tq || reg.get<Owner>(be).id != id || idx < 0 || idx >= int(tq->q.size())) return;
     Kind k = tq->q[size_t(idx)].k;
-    for (int r = 0; r < R_Count; r++) world.pl[id].res[r] += KINFO[k].cost[r];
+    float cost[R_Count];
+    unitCost(k, cost);
+    for (int r = 0; r < R_Count; r++) world.pl[id].res[r] += cost[r];
     tq->q.erase(tq->q.begin() + idx);
     world.say(id, std::string("Training of ") + KINFO[k].name + " cancelled and refunded.");
 }

@@ -1,5 +1,7 @@
 #include "server/World.hpp"
 
+#include "common/Progression.hpp"
+
 #include <algorithm>
 #include <climits>
 #include <cmath>
@@ -76,7 +78,10 @@ float World::stockOf(entt::entity e) const {                                // t
     for (float v : reg.get<Building>(e).stock) t += v;
     return t;
 }
-float World::capOf(entt::entity e) const { const auto& i = reg.get<Info>(e); return inactive(e) ? 0.f : storageCap(i.kind, i.level); }   // non-functional storage holds nothing
+float World::capOf(entt::entity e) const {                                  // non-functional storage holds nothing; damaged storage holds less
+    const auto& i = reg.get<Info>(e);
+    return inactive(e) ? 0.f : storageCap(i.kind, i.level) * efficiency(e);
+}
 // puts as much of `cargo` as fits into storage building `st`; returns the amount stored
 float World::storeCargo(entt::entity st, float* cargo) {
     int o = reg.get<Owner>(st).id;
@@ -375,11 +380,32 @@ void World::shipDestroyed(entt::entity ship) {                       // passenge
     if (n) say(ow, "Your ship sank with " + std::to_string(n) + " unit(s) aboard!");
 }
 
-bool World::inactive(entt::entity e) const { auto* b = reg.try_get<BFlags>(e); return b && b->dis; }     // non-functional building
+bool World::outOfTerritory(entt::entity e) const { auto* b = reg.try_get<BFlags>(e); return b && b->dis; }
+bool World::inactive(entt::entity e) const { return outOfTerritory(e) || crippled(e); }     // non-functional building
+bool World::crippled(entt::entity e) const {
+    const auto* b = reg.try_get<Building>(e);
+    if (!b || b->progress < 1.f || !isPlayer(reg.get<Owner>(e).id)) return false;
+    const auto& h = reg.get<Health>(e);
+    return critical(h.hp / std::max(1.f, h.maxhp));
+}
+float World::efficiency(entt::entity e) const {
+    if (!reg.all_of<Building>(e) || !isPlayer(reg.get<Owner>(e).id)) return 1.f;
+    const auto& h = reg.get<Health>(e);
+    return hpEfficiency(h.hp / std::max(1.f, h.maxhp));
+}
+bool World::siteBusy(entt::entity e) const { const auto* b = reg.try_get<Building>(e); return (b && b->progress < 1.f) || reg.all_of<SiteJob>(e); }
+int World::thLevel(int id) { auto th = townHallOf(id); return th == entt::null ? 0 : reg.get<Info>(th).level; }
+int World::countKind(int id, Kind k) {
+    int n = 0;
+    reg.view<Info, Owner, Building>().each([&](entt::entity e, const Info& i, const Owner& o, const Building&) { if (o.id == id && i.kind == k && !reg.all_of<Moving>(e)) n++; });
+    return n;
+}
 uint8_t World::bflagsOf(entt::entity e) const {
     uint8_t f = 0;
     if (auto* b = reg.try_get<BFlags>(e)) { if (b->burn > 0) f |= BLD_BURNING; if (b->dis) f |= BLD_DISABLED; }
     if (reg.all_of<Moving>(e)) f |= BLD_MOVING;
+    if (const SiteJob* j = reg.try_get<SiteJob>(e); j && j->kind != SJ_Build) f |= BLD_WORK;
+    if (crippled(e)) f |= BLD_CRIPPLED;
     return f;
 }
 

@@ -45,7 +45,11 @@ struct Profile {
     double raidNext[FACTION_COUNT]{}, lastLootWarn = -100;
     float rep[FACTION_COUNT]{};
     double helpCool[FACTION_COUNT]{};
+    double donateReady = 0;                                          // donation / clan transfer cooldown (world clock)
+    float giftRecent[FACTION_COUNT][R_Count]{};                      // recent gifts per faction and resource (fading memory)
 };
+
+struct Demand { uint8_t res = 0; double until = 0; float filled = 0; };   // what a faction's towns want right now
 
 struct BaseProf {                                                    // per-player base mechanics state (saved in the "base" section)
     uint8_t quota = 5;                                               // defense quota: troops sent to every attacked clan mate
@@ -102,6 +106,7 @@ public:
     std::vector<Town> towns;
     std::unordered_set<int64_t> regionsDone;
     float facDonated[FACTION_COUNT]{};
+    Demand demand[FACTION_COUNT];
     std::unordered_set<int64_t> cleared;                              // tiles whose surface feature has been removed (persisted)
     std::vector<int64_t> clearedNew;                                  // delta waiting to be broadcast
     uint32_t clearVer = 1;                                            // bumps whenever `cleared` changes (invalidates mine bonus cache)
@@ -154,7 +159,13 @@ public:
     int workersOf(uint32_t home);
     bool spawnSpot(entt::entity b, bool water, Pos& out);
     entt::entity nearestHostile(Pos p, int owner, float range, bool buildings);
-    bool inactive(entt::entity e) const;                              // non-functional building
+    bool inactive(entt::entity e) const;                              // non-functional building (outside territory or critically damaged)
+    bool outOfTerritory(entt::entity e) const;                        // BLD_DISABLED: outside functional territory (relocatable)
+    bool crippled(entt::entity e) const;                              // BLD_CRIPPLED: complete player building below damage_critical_hp
+    float efficiency(entt::entity e) const;                           // damage efficiency 0..1 (production, training, storage, defence)
+    bool siteBusy(entt::entity e) const;                              // under construction / upgrading / repairing: no production or training
+    int thLevel(int id);                                              // level of the player's completed Town Hall (0 = none)
+    int countKind(int id, Kind k);                                    // own buildings of a kind, including sites under construction
     uint8_t bflagsOf(entt::entity e) const;
     bool townMoveActive(int id);
     bool isPatrol(entt::entity e) const { return reg.all_of<Patrol>(e); }

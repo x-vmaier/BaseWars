@@ -30,6 +30,7 @@ public:
 private:
     void run(const MenuAct& a);
     void baseContext(const Info& in, bool mine, bool done);   // fire / territory / queue lines, move town, relocate
+    void siteLines(const Info& in, bool friendly);             // site job progress, damage efficiency, paused production
     bool baseRun(const MenuAct& a);
     static int quotaFromMouse(float mx, const Rectangle& sr);
     Rectangle rect() const;

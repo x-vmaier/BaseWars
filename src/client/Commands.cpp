@@ -79,4 +79,5 @@ void Commands::support(float x, float y, int n) { Writer w; w.put<uint8_t>(C_Sup
 void Commands::moveTown(IV t) { Writer w; w.put<uint8_t>(C_MoveTown).put<int32_t>(t.x).put<int32_t>(t.y); app.session.send(w); }
 void Commands::relocate(uint32_t b, IV t) { Writer w; w.put<uint8_t>(C_Relocate).put<uint32_t>(b).put<int32_t>(t.x).put<int32_t>(t.y); app.session.send(w); }
 void Commands::dequeue(uint32_t b, int idx) { Writer w; w.put<uint8_t>(C_Dequeue).put<uint32_t>(b).put<uint8_t>(uint8_t(idx)); app.session.send(w); }
+void Commands::repair(uint32_t b, int mode) { Writer w; w.put<uint8_t>(C_Repair).put<uint32_t>(b).put<uint8_t>(uint8_t(mode)); app.session.send(w); }
 void Commands::camera(Vector2 t) { Writer w; w.put<uint8_t>(C_Cam).put<float>(t.x / TILE).put<float>(t.y / TILE); app.session.send(w); }

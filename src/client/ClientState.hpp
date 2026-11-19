@@ -20,6 +20,8 @@ struct Marker { float x, y; double t; };                             // command 
 struct DropFx { float x, y; int res, amt; double t; };               // bouncing "+N" resource drops
 struct CJob { float pct; uint8_t state = 0; };                       // clear job: progress 0..1, state 0 waiting for a pawn / 1 walking / 2 working
 struct PendingSite { Kind kind; int tx, ty; };                       // own building waiting for its site to be cleared
+struct BJob { uint8_t kind = 0, phase = 0; int pct = 0; };           // building site job (S_Jobs): SiteKind, SitePhase, progress %
+struct FacDemand { int res = 0; double changeAt = 0; int mul[R_Count]{100, 100, 100, 100}; };   // S_Econ: wanted resource, gift multipliers %
 struct QEntry { std::vector<uint8_t> kinds; int pct = 0; };          // training queue of a building
 struct ShipDetail { int tier = 1, kinds[5]{}, res[R_Count]{}, voyage = 0; };
 struct ChatLine { uint8_t ch; std::string name, text; double t; };

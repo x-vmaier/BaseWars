@@ -27,6 +27,7 @@ public:
     void pawnTick(entt::entity e, Unit& u, ClearTask& ct, Pos& p, float dt);   // unit loop: a pawn on a clear job
     void releasePawn(entt::entity e, bool manual);          // ends a pawn's clear task and restores its previous work
     float mineMul(entt::entity e, Kind k, Pos c);           // output multiplier from nearby gold deposits (cached per clear-version)
+    int pendingOf(int id, Kind k) const;                    // own buildings of a kind waiting for their site to be cleared
 
 private:
     World& world;

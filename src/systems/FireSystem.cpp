@@ -28,7 +28,7 @@ void FireSystem::archerShot(int ow, Pos from, Pos to, entt::entity tg) {
     else world.fx(E_Arrow, from.x, from.y - .4f, to.x, to.y);
 }
 bool FireSystem::canExtinguish(entt::entity e) {
-    if (reg.any_of<Attack, AMove, Convoy, Haul, Raider, Support, Extinguish, ClearTask>(e)) return false;
+    if (reg.any_of<Attack, AMove, Convoy, Haul, Raider, Support, Extinguish, ClearTask, BuildTask>(e)) return false;
     Kind k = reg.get<Info>(e).kind;
     if (!(k == K_Pawn || isArmy(k) || k == K_Monk)) return false;
     if (auto* w = reg.try_get<Worker>(e)) { if (w->phase != 0) return false; }

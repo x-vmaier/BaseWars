@@ -78,6 +78,7 @@ private:
         sys.fire.burnSecond();
         sys.defense.supportSecond();
         sys.clan.homelessSecond();
+        sys.faction.demandSecond();                                 // NPC town demand, gift memory, S_Econ
         for (int id = 1; id <= MAX_PLAYERS; id++) if (world.pl[id].online) sys.repl.sendBaseInfo(id);
     }
 
@@ -106,6 +107,7 @@ private:
         if (world.tick % 4 == 0) sys.env.explore(units, blds);
 
         sys.clearing.clearTick(dt);                                     // clearing jobs
+        sys.construction.tick(dt);                                      // building sites: pawn assignment, S_Jobs
         if (world.tick % 20 == 7) { sys.hunt.sheepSecond(); sys.patrol.patrolSecond(); }   // sheep repopulation, patrols
         sys.defense.flushAlerts();
         for (int id = 1; id <= MAX_PLAYERS; id++) {

@@ -1,5 +1,6 @@
 #include "systems/BuildSystem.hpp"
 
+#include "common/Progression.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -12,12 +13,21 @@
 
 float BuildSystem::buildTimeFor(entt::entity e, Kind k) const {                              // construction time; relocations take much longer
     if (auto* rn = reg.try_get<RelocNew>(e)) return std::max(1.f, rn->total / baseTestSpeed());
-    return cfg().instantBuild ? .05f : KINFO[k].buildTime;
+    return cfg().instantBuild ? .05f : buildSeconds(k);
+}
+void BuildSystem::onCompleted(entt::entity e) {
+    const auto& b = reg.get<Building>(e);
+    Kind k = reg.get<Info>(e).kind;
+    int ow = reg.get<Owner>(e).id;
+    Pos c = footCenter(k, b.tx, b.ty);
+    world.reveal(ow, int(std::floor(c.x)), int(std::floor(c.y)), KINFO[k].vision);
+    world.fx(E_Dust, c.x, c.y);
+    world.say(ow, std::string(KINFO[k].name) + " completed.");
 }
 
 bool BuildSystem::buildingTick(entt::entity e, float dt) {
     if (world.inactive(e)) return false;
-    s.training.trainTick(e, dt);
+    if (!world.siteBusy(e)) s.training.trainTick(e, dt * world.efficiency(e));   // upgrades / repairs pause the training queue
     return true;
 }
 
@@ -32,18 +42,16 @@ void BuildSystem::tick(const std::vector<entt::entity>& blds, float dt) {
         int ow = reg.get<Owner>(e).id;
         Pos c = footCenter(in.kind, b.tx, b.ty);
         if (b.progress < 1.f) {
+            if (s.construction.needsPawn(e)) continue;               // pawn-built sites advance in ConstructionSystem
             b.progress = std::min(1.f, b.progress + dt / buildTimeFor(e, in.kind));
-            if (b.progress >= 1.f) {
-                world.reveal(ow, int(std::floor(c.x)), int(std::floor(c.y)), KINFO[in.kind].vision);
-                world.fx(E_Dust, c.x, c.y);
-                world.say(ow, std::string(KINFO[in.kind].name) + " completed.");
-            }
+            if (b.progress >= 1.f) onCompleted(e);
             continue;
         }
         if (!buildingTick(e, dt)) continue;                         // non-functional buildings do nothing
-        if (isResourceBuilding(in.kind) && isPlayer(ow)) {
+        float eff = world.efficiency(e);
+        if (isResourceBuilding(in.kind) && isPlayer(ow) && !world.siteBusy(e)) {   // upgrades / repairs pause production
             Yield y = yieldOf(in.kind, world.biome(int(std::floor(c.x)), int(std::floor(c.y))), in.kind == K_Harbour);
-            float f = levelMul(in.level) * s.clearing.mineMul(e, in.kind, c) * (world.pl[ow].online ? 1.f : OFFLINE_PROD) * dt, tot = 0;   // [world] gold deposits boost mines
+            float f = productionMul(in.level) * eff * s.clearing.mineMul(e, in.kind, c) * (world.pl[ow].online ? 1.f : OFFLINE_PROD) * dt, tot = 0;   // [world] gold deposits boost mines
             for (int r = 0; r < R_Count; r++) tot += b.stock[r];
             if (tot < 150) for (int r = 0; r < R_Count; r++) b.stock[r] += y.r[r] * f;
             int cnt = workerCount[reg.get<Uid>(e).id];
@@ -65,7 +73,7 @@ void BuildSystem::tick(const std::vector<entt::entity>& blds, float dt) {
             entt::entity best = world.nearestHostile(c, ow, range, false);
             b.cd -= dt;
             if (best != entt::null) {
-                s.combat.damage(best, KINFO[in.kind].dps * levelMul(in.level) * dt, ow, reg.get<Uid>(e).id);
+                s.combat.damage(best, KINFO[in.kind].dps * levelMul(in.level) * eff * dt, ow, reg.get<Uid>(e).id);
                 if (b.cd <= 0) { b.cd = .9f; Pos t = reg.get<Pos>(best); world.fx(E_Arrow, c.x, c.y - 1.2f, t.x, t.y); }
             }
         }

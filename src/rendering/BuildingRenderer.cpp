@@ -22,10 +22,13 @@ void BuildingRenderer::queue(const RPos& p, const Info& i, uint32_t id, bool sel
     Color oc = !mine && W.hostileTo(i.owner) ? rgb(255, 90, 90) : rgb(255, 255, 255);
     int col = colorIdx(i.owner);
     float sortY = bottom;
+    const BJob* jp = W.jobOf(id);
+    BJob job = jp ? *jp : BJob{};
+    bool hasJob = jp != nullptr, working = (i.state & BLD_WORK) != 0, crippled = (i.state & BLD_CRIPPLED) != 0;
 
     items.push_back({sortY - 6.f, [=, this]() {
         bool moving = (i.state & BLD_MOVING) != 0;
-        Color tint = remembered ? rgb(150, 155, 175, 170) : (moving ? rgb(255, 255, 255, 62) : (prog < 1.f ? rgb(255, 255, 255, 190) : WHITE));
+        Color tint = remembered ? rgb(150, 155, 175, 170) : (moving ? rgb(255, 255, 255, 62) : (prog < 1.f ? rgb(255, 255, 255, 190) : (working ? rgb(175, 170, 160) : (crippled ? rgb(255, 140, 130) : WHITE))));
         auto A = [&](Color c) { if (moving) c.a = 62; return c; };
         int md = hover ? 1 : 0;
         if (i.kind == K_Harbour) {                                    // wooden pier over adjacent ocean tiles
@@ -70,12 +73,14 @@ void BuildingRenderer::queue(const RPos& p, const Info& i, uint32_t id, bool sel
         if (hover || selected) items.push_back({sortY + 5.f, [=]() { textShadow("Last seen", int(cx) - MeasureText("Last seen", 14) / 2, int(bottom) + 6, 14, rgb(200, 205, 220)); }});
         return;
     }
-    if (prog < 1.f)
-        items.push_back({sortY + 1.f, [=]() {
-            Anim h = mkAnim(std::string("Units/") + COLOR_NAME[col] + " Units/Pawn/Pawn_Interact Hammer.png", 192, 192, 6, 96, 135);
-            drawAnim(h, frameFor(h, t, float(id % 3)), cx + float(ki.fw) * 28.f, bottom - 4, false, .9f);
-            Anim d = mkAnim("Particle FX/Dust_01.png", 64, 64, 8, 32, 60);
-            drawAnim(d, frameFor(d, t, float(id % 4)), cx - float(ki.fw) * 20.f, bottom - 6, false, 1.2f, rgb(255, 255, 255, 180));
+    if ((prog < 1.f || working) && i.kind != K_Campfire)                // site work: scaffold, tool icon, dust while a pawn works
+        items.push_back({sortY + 1.f, [=, this]() { siteOverlay(i.kind, cx, bottom, job, hasJob, id, t); }});
+    if (crippled && prog >= 1.f)
+        items.push_back({sortY + 6.f, [=]() {
+            float y = bottom - float(ki.fh) * TILE - 46.f;
+            DrawTexturePro(tex("UI Elements/UI Elements/Icons/Icon_10.png"), {0, 0, 64, 64}, {cx - 20, y - 20, 40, 40}, {0, 0}, 0, rgb(255, 110, 100));
+            const char* s = "Critical damage: repair!";
+            textShadow(s, int(cx) - MeasureText(s, 14) / 2, int(y + 22), 14, rgb(255, 140, 120));
         }});
     app.worldRenderer.effects.queueBuildingStatus(i, id, cx, bottom, ki.fw, ki.fh, sortY, items, t);       // fire, red cross, relocation marker
     float hpFrac = i.hp / std::max(1.f, i.maxhp);
@@ -95,10 +100,50 @@ void BuildingRenderer::queue(const RPos& p, const Info& i, uint32_t id, bool sel
     items.push_back({sortY + 5.f, [=]() {
         Rectangle fr{float(tx) * TILE, float(ty) * TILE - 40, float(ki.fw) * TILE, float(ki.fh) * TILE + 40};
         if (selected) brackets(fr, rgb(255, 235, 90));
-        if (prog < 1.f) drawBar({cx, bottom + 4}, 70, prog, rgb(90, 160, 255));
-        else if (hpFrac < .995f || selected || hover) drawBar({cx, bottom + 4}, 76, hpFrac, hpFrac > .5f ? rgb(90, 220, 90) : (hpFrac > .25f ? rgb(240, 190, 50) : rgb(235, 70, 60)));
+        if (prog < 1.f) {
+            drawBar({cx, bottom + 4}, 70, prog, rgb(90, 160, 255));
+            std::string s = hasJob && job.phase == SP_Waiting ? "Waiting for a pawn" : TextFormat("Building %d%%", int(prog * 100.f));
+            textShadow(s, int(cx) - MeasureText(s.c_str(), 14) / 2, int(bottom) + 18, 14, hasJob && job.phase == SP_Waiting ? rgb(255, 170, 120) : rgb(200, 225, 255));
+        } else if (hasJob && job.kind != SJ_Build) {
+            drawBar({cx, bottom + 4}, 76, float(job.pct) / 100.f, job.kind == SJ_Upgrade ? rgb(240, 170, 50) : rgb(90, 220, 120));
+            std::string s = job.phase == SP_Waiting ? "Waiting for a pawn" : TextFormat("%s %d%%", job.kind == SJ_Upgrade ? "Upgrading" : "Repairing", job.pct);
+            textShadow(s, int(cx) - MeasureText(s.c_str(), 14) / 2, int(bottom) + 18, 14, job.phase == SP_Waiting ? rgb(255, 170, 120) : rgb(255, 225, 150));
+        }
+        if (prog >= 1.f && !(hasJob && job.kind != SJ_Build) && (hpFrac < .995f || selected || hover)) drawBar({cx, bottom + 4}, 76, hpFrac, hpFrac > .5f ? rgb(90, 220, 90) : (hpFrac > .25f ? rgb(240, 190, 50) : rgb(235, 70, 60)));
         if (i.kind == K_Campfire && (hover || selected)) DrawCircleLinesV({cx, bottom - 16}, WARMTH_RADIUS * TILE, rgb(255, 170, 70, 160));
     }});
+}
+
+// Wooden scaffold in front of a building site, a bobbing hammer (construction / upgrade) or gear (repair) icon above it,
+// pulsing while the job waits for a pawn, and dust while a pawn works.
+void BuildingRenderer::siteOverlay(Kind k, float cx, float bottom, BJob job, bool hasJob, uint32_t id, double t) {
+    const KindInfo& ki = KINFO[k];
+    float w = float(ki.fw) * TILE - 10.f, h = float(ki.fh) * TILE + 30.f, x0 = cx - w / 2, top = bottom - h;
+    Color pole = rgb(140, 95, 52, 230), dark = rgb(80, 52, 30, 230);
+    int cols = ki.fw + 1;
+    for (int c = 0; c < cols; c++) {
+        float x = x0 + w * float(c) / float(cols - 1);
+        DrawRectangleRec({x - 3, top, 6, h}, pole);
+        DrawRectangleLinesEx({x - 3, top, 6, h}, 1, dark);
+    }
+    for (int r = 0; r < 3; r++) {                                       // planks and cross braces
+        float y = top + 14.f + (h - 24.f) * float(r) / 2.f;
+        DrawRectangleRec({x0 - 6, y, w + 12, 7}, pole);
+        DrawRectangleLinesEx({x0 - 6, y, w + 12, 7}, 1, dark);
+    }
+    for (int c = 0; c + 1 < cols; c++) {
+        float xa = x0 + w * float(c) / float(cols - 1), xb = x0 + w * float(c + 1) / float(cols - 1);
+        DrawLineEx({xa, top + 18.f}, {xb, bottom - 8.f}, 3, dark);
+    }
+    bool waiting = hasJob && job.phase == SP_Waiting, repair = hasJob && job.kind == SJ_Repair;
+    float bob = float(std::sin(t * 3.0 + double(id % 7))) * 4.f, s = waiting ? 34.f + float(std::sin(t * 6.0)) * 4.f : 34.f;
+    Texture2D icon = tex(repair ? "UI Elements/UI Elements/Icons/Icon_10.png" : "UI Elements/UI Elements/Icons/Icon_01.png");
+    DrawCircleV({cx, top - 26.f + bob}, s * .62f, waiting ? rgb(120, 40, 30, 200) : rgb(40, 30, 20, 190));
+    DrawTexturePro(icon, {0, 0, 64, 64}, {cx - s / 2, top - 26.f + bob - s / 2, s, s}, {0, 0}, 0, WHITE);
+    if (hasJob && job.phase == SP_Working) {
+        Anim d = mkAnim("Particle FX/Dust_01.png", 64, 64, 8, 32, 60);
+        drawAnim(d, frameFor(d, t, float(id % 4)), cx - float(ki.fw) * 20.f, bottom - 6, false, 1.2f, rgb(255, 255, 255, 180));
+    }
 }
 
 void BuildingRenderer::drawPlaceExtras() {

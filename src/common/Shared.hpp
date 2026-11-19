@@ -38,15 +38,20 @@ enum Msg : uint8_t { C_Hello, C_Build, C_Train, C_Move, C_Attack, C_AttackMove, 
                      C_Clear,   // [world] clear surface features: u8 n, n x (i32 x, i32 y)
                      C_Board, C_Disembark,   // [ships] embark troops / disembark all
                      C_SetQuota, C_Support, C_MoveTown, C_Relocate, C_Dequeue,   // [base] defense quota, support patrol, town move, relocation, queue cancel
+                     C_Repair,   // [sites] u32 building, u8 mode (0 start a repair, 1 cancel the running upgrade / repair)
                      S_Welcome, S_State, S_Fog, S_Text, S_Roster, S_Effect, S_Map, S_Chat,
                      S_Cleared, S_ClearJobs, S_Drop,   // [world] cleared-tile list/delta, clearing progress, resource drop effect
                      S_Paths, S_ShipInfo,              // [ships] path lines, ship passenger/cargo breakdown
-                     S_Queue, S_Alert, S_BaseInfo };   // [base] training queues, clan alerts, own base info
+                     S_Queue, S_Alert, S_BaseInfo,     // [base] training queues, clan alerts, own base info
+                     S_Jobs,                           // [sites] construction / upgrade / repair jobs of own and allied buildings
+                     S_Econ };                         // [economy] donation cooldown, faction demands and gift multipliers
 enum EffectType : uint8_t { E_Explosion, E_Dust, E_Splash, E_Arrow, E_Heal, E_Fire, E_FireArrow, E_Extinguish };
-enum UnitState : uint8_t { US_Idle, US_Move, US_Attack, US_Work, US_Heal, US_Extinguish };
+enum UnitState : uint8_t { US_Idle, US_Move, US_Attack, US_Work, US_Heal, US_Extinguish, US_Build };   // US_Build: pawn hammering at a building site
 // Bit registry for the `state` byte of a state record (units: low 3 bits are the UnitState; buildings: only the flags below).
 inline constexpr uint8_t UNIT_SUPPORT_FLAG = 0x40;                          // troop patrol sent to support a clan member (shown on maps)
 inline constexpr uint8_t BLD_BURNING = 1, BLD_DISABLED = 2, BLD_MOVING = 4;  // building flags: on fire / outside any territory / being relocated
+inline constexpr uint8_t BLD_WORK = 8;                                      // building flag: upgrade or repair job running (no production / training)
+inline constexpr uint8_t BLD_CRIPPLED = 16;                                 // building flag: HP below damage_critical_hp, disabled until repaired
 enum AllyAct : uint8_t { AA_Invite, AA_Break };
 
 inline constexpr const char* BIOME_NAME[B_Count] = {"Ocean", "Plains", "Forest", "Highlands", "Desert", "Flower Fields", "Snow"};
@@ -80,8 +85,8 @@ inline constexpr KindInfo KINFO[K_Count] = {
     {"Monk", false, 1, 1, {0, 50, 0, 30}, 50, 2.6f, 8, 4.f, 0, 6},
     {"Ship", false, 1, 1, {80, 30, 0, 20}, 220, 4.2f, 0, 0, 0, 10},
     {"Sheep", false, 1, 1, {0, 0, 0, 0}, 12, 0.9f, 0, 0, 0, 0}};
-inline constexpr float START_RES[R_Count] = {300, 200, 150, 150};
-inline constexpr int MAX_LEVEL = 3;
+inline constexpr float START_RES[R_Count] = {300, 200, 150, 200};
+// Building level cap, Town Hall gates, cost / time curves and storage capacity: common/Progression.hpp
 
 // ---------------------------------------------------------------- naval transport (ships are empty boats; the Harbour level at build time is the tier)
 // Strict capacities per tier (1..3). Ship state fields in S_State: Info.level = tier (aux), prog = troops aboard, stock = resources aboard.
@@ -105,12 +110,6 @@ inline bool canTrain(Kind building, Kind unit) {
     return building == K_Harbour && unit == K_Ship;
 }
 inline int unitUnlockLevel(Kind u) { return u == K_Pawn || u == K_Warrior ? 1 : (u == K_Archer || u == K_Monk ? 2 : (u == K_Lancer ? 3 : 1)); }   // Archery level needed
-// Storage capacity (total resources) by building level 1..3.
-inline float storageCap(Kind k, int level) {
-    static const float th[3] = {3000, 6000, 10000}, op[3] = {300, 600, 1000}, sh[3] = {800, 1600, 2800};
-    int i = std::clamp(level, 1, 3) - 1;
-    return k == K_TownHall ? th[i] : (k == K_Outpost ? op[i] : (k == K_Storage ? sh[i] : 0.f));
-}
 inline constexpr float HAULER_CARRY = 400.f;
 inline constexpr int MAX_UNIT_LEVEL = 5;
 inline bool isTroop(Kind k) { return k == K_Pawn || k == K_Warrior || k == K_Archer || k == K_Lancer || k == K_Monk; }
@@ -125,7 +124,6 @@ inline float damageVs(Kind attacker, Kind target) {      // unit roles: lancers 
     return 1.f;
 }
 inline float armorOf(Kind target) { return target == K_Warrior ? .8f : 1.f; }   // warriors take 20% less damage
-inline float upgradeCostMul(int level) { return 1.f + float(level); }       // cost of going from `level` to level+1
 inline float levelMul(int level) { return 1.f + 0.5f * float(level - 1); }  // production / defence multiplier
 inline float levelHp(int level) { return 1.f + 0.25f * float(level - 1); }
 
