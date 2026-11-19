@@ -96,15 +96,15 @@ void UnitRenderer::drawShip(const UnitView &v) const
 
 void UnitRenderer::queueShipWake(const UnitView &v, DrawList &items) const
 {
-    if (!v.moving)
-        return;
+    if (v.moving)
+        items.push_back({v.py - 1, [=, this] { drawShipWake(v); }});
+}
 
-    items.push_back({v.py - 1, [=]
-    {
-        Anim s = mkAnim("Particle FX/Water Splash.png", 192, 192, 8, 96, 150);
-        drawAnim(s, frameFor(s, v.t, float(v.id % 3)), v.px - (v.left ? -30.f : 30.f), v.py + 6, false, .45f,
-                 rgb(255, 255, 255, 140));
-    }});
+void UnitRenderer::drawShipWake(const UnitView &v) const
+{
+    Anim s = mkAnim("Particle FX/Water Splash.png", 192, 192, 8, 96, 150);
+    drawAnim(s, frameFor(s, v.t, float(v.id % 3)), v.px - (v.left ? -30.f : 30.f), v.py + 6, false, .45f,
+             rgb(255, 255, 255, 140));
 }
 
 void UnitRenderer::drawHealAura(const UnitView &v) const

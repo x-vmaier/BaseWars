@@ -51,6 +51,7 @@ class UnitRenderer
     void drawShip(const UnitView &v) const;
     void drawHealAura(const UnitView &v) const;
     void queueShipWake(const UnitView &v, DrawList &items) const;
+    void drawShipWake(const UnitView &v) const;
     static const UnitDrawer &drawerOf(Kind k);
     static void extinguishSplash(float px, float py, bool left, double t, uint32_t id);
     App &app;

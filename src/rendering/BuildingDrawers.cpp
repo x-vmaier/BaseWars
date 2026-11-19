@@ -77,27 +77,29 @@ void BuildingRenderer::drawMine(const BuildingView &v) const
 
 void BuildingRenderer::queueCampfireSmoke(const BuildingView &v, DrawList &items) const
 {
-    if (v.prog < 1.f)
-        return;
+    if (v.prog >= 1.f)
+        items.push_back({v.sortY() + 2.f, [=, this] { drawCampfireSmoke(v); }});
+}
 
-    items.push_back({v.sortY() + 2.f, [=]
-    {
-        Anim d = mkAnim("Particle FX/Dust_02.png", 64, 64, 6, 32, 60);
-        drawAnim(d, frameFor(d, v.t, float(v.id % 3)), v.cx + 6, v.bottom - 60, false, 1.2f, rgb(200, 200, 205, 120));
-    }});
+void BuildingRenderer::drawCampfireSmoke(const BuildingView &v) const
+{
+    Anim d = mkAnim("Particle FX/Dust_02.png", 64, 64, 6, 32, 60);
+    drawAnim(d, frameFor(d, v.t, float(v.id % 3)), v.cx + 6, v.bottom - 60, false, 1.2f, rgb(200, 200, 205, 120));
 }
 
 void BuildingRenderer::queueTownHallName(const BuildingView &v, DrawList &items) const
 {
-    items.push_back({v.sortY() + 4.f, [=, this]
-    {
-        std::string nm = app.world.nameOf(v.i.owner);
-        int hall = app.world.leaderClanOf(v.i.owner);
-        if (hall)
-            nm += "  [Clan Hall]";
-        textShadow(nm, int(v.cx) - MeasureText(nm.c_str(), 16) / 2, int(v.bottom) - 150, 16,
-                   hall ? clanColor(hall) : teamColor(v.i.owner));
-    }});
+    items.push_back({v.sortY() + 4.f, [=, this] { drawTownHallName(v); }});
+}
+
+void BuildingRenderer::drawTownHallName(const BuildingView &v) const
+{
+    std::string nm = app.world.nameOf(v.i.owner);
+    int hall = app.world.leaderClanOf(v.i.owner);
+    if (hall)
+        nm += "  [Clan Hall]";
+    textShadow(nm, int(v.cx) - MeasureText(nm.c_str(), 16) / 2, int(v.bottom) - 150, 16,
+               hall ? clanColor(hall) : teamColor(v.i.owner));
 }
 
 void BuildingRenderer::drawWarmthRing(const BuildingView &v) const

@@ -93,24 +93,22 @@ void BuildingRenderer::queueBody(const BuildingView &v, DrawList &items) const
 void BuildingRenderer::queueDamageFx(const BuildingView &v, DrawList &items) const
 {
     if (v.hpFrac < .6f)
-    {
-        items.push_back({v.sortY() + 2.f, [=]
-        {
-            Anim d = mkAnim("Particle FX/Dust_02.png", 64, 64, 9, 32, 60);
-            drawAnim(d, frameFor(d, v.t, float(v.id % 7)), v.cx - 20, v.bottom - 70, false, 1.8f,
-                     rgb(120, 120, 130, 210));
-        }});
-    }
-
+        items.push_back({v.sortY() + 2.f, [=, this] { drawDamageSmoke(v); }});
     if (v.hpFrac < .3f)
-    {
-        items.push_back({v.sortY() + 3.f, [=]
-        {
-            Anim f = mkAnim("Particle FX/Fire_02.png", 64, 64, 12, 32, 62);
-            drawAnim(f, frameFor(f, v.t, float(v.id % 5)), v.cx + 14, v.bottom - 46, false, 1.4f);
-            drawAnim(f, frameFor(f, v.t, float(v.id % 3) + 4), v.cx - 22, v.bottom - 40, false, 1.1f);
-        }});
-    }
+        items.push_back({v.sortY() + 3.f, [=, this] { drawDamageFlames(v); }});
+}
+
+void BuildingRenderer::drawDamageSmoke(const BuildingView &v) const
+{
+    Anim d = mkAnim("Particle FX/Dust_02.png", 64, 64, 9, 32, 60);
+    drawAnim(d, frameFor(d, v.t, float(v.id % 7)), v.cx - 20, v.bottom - 70, false, 1.8f, rgb(120, 120, 130, 210));
+}
+
+void BuildingRenderer::drawDamageFlames(const BuildingView &v) const
+{
+    Anim f = mkAnim("Particle FX/Fire_02.png", 64, 64, 12, 32, 62);
+    drawAnim(f, frameFor(f, v.t, float(v.id % 5)), v.cx + 14, v.bottom - 46, false, 1.4f);
+    drawAnim(f, frameFor(f, v.t, float(v.id % 3) + 4), v.cx - 22, v.bottom - 40, false, 1.1f);
 }
 
 void BuildingRenderer::queueStatus(const BuildingView &v, DrawList &items) const

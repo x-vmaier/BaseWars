@@ -39,6 +39,8 @@ class BuildingRenderer
                           double t) const;
     void queueBody(const BuildingView &v, DrawList &items) const;
     void queueDamageFx(const BuildingView &v, DrawList &items) const;
+    void drawDamageSmoke(const BuildingView &v) const;
+    void drawDamageFlames(const BuildingView &v) const;
     void queueStatus(const BuildingView &v, DrawList &items) const;
     void drawBody(const BuildingView &v) const;
     void drawSpriteBody(const BuildingView &v) const;
@@ -54,6 +56,8 @@ class BuildingRenderer
     void drawMine(const BuildingView &v) const;
     void queueCampfireSmoke(const BuildingView &v, DrawList &items) const;
     void queueTownHallName(const BuildingView &v, DrawList &items) const;
+    void drawTownHallName(const BuildingView &v) const;
+    void drawCampfireSmoke(const BuildingView &v) const;
     void drawWarmthRing(const BuildingView &v) const;
     static const BuildingDrawer &drawerOf(Kind k);
 
