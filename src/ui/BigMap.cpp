@@ -233,8 +233,8 @@ void BigMap::drawFriendArrow(const Peer &p, Vector2 sp, const Rectangle &in)
 
     float dist = std::hypot(p.lx - center.x, p.ly - center.y);
     std::string lb = p.name + " " + std::to_string(int(dist)) + "m";
-    float tx = std::clamp(e.x - float(MeasureText(lb.c_str(), 11)) / 2 - std::cos(ang) * 22, in.x + 4,
-                          in.x + in.width - float(MeasureText(lb.c_str(), 11)) - 4);
+    float tx = std::clamp(e.x - float(measureText(lb.c_str(), 11)) / 2 - std::cos(ang) * 22, in.x + 4,
+                          in.x + in.width - float(measureText(lb.c_str(), 11)) - 4);
     float ty = std::clamp(e.y - 6 - std::sin(ang) * 18, in.y + 4, in.y + in.height - 16);
     textShadow(lb, int(tx), int(ty), 11, col);
 }
@@ -255,7 +255,7 @@ void BigMap::drawCaptions(const Rectangle &fr)
 {
     textShadow("WORLD MAP", int(fr.x + fr.width / 2) - 50, int(fr.y) + 10, 18, rgb(255, 240, 200));
     std::string hint = "Click: travel   Right-click ally: support patrol   Drag: pan   Wheel: zoom   N/Esc: close";
-    textShadow(hint, int(fr.x + fr.width / 2) - MeasureText(hint.c_str(), 12) / 2, int(fr.y + fr.height) - 24, 12,
+    textShadow(hint, int(fr.x + fr.width / 2) - measureText(hint.c_str(), 12) / 2, int(fr.y + fr.height) - 24, 12,
                rgb(255, 240, 200));
 }
 
@@ -263,9 +263,9 @@ void BigMap::drawCursorTile(Vector2 m)
 {
     Vector2 t = mapToTile(m);
     std::string cs = TextFormat("%d, %d", int(std::floor(t.x)), int(std::floor(t.y)));
-    DrawRectangleRounded({m.x + 14, m.y + 16, float(MeasureText(cs.c_str(), 14)) + 12, 22}, .3f, 4,
+    DrawRectangleRounded({m.x + 14, m.y + 16, float(measureText(cs.c_str(), 14)) + 12, 22}, .3f, 4,
                          rgb(30, 22, 16, 225));
-    DrawText(cs.c_str(), int(m.x) + 20, int(m.y) + 20, 14, WHITE);
+    drawText(cs.c_str(), int(m.x) + 20, int(m.y) + 20, 14, WHITE);
 }
 
 std::vector<BigMap::Cand> BigMap::candidates()
@@ -368,12 +368,12 @@ void BigMap::drawMenu()
     DrawRectangleRounded(r, .1f, 6, rgb(238, 222, 190, 250));
     DrawRectangleRoundedLinesEx(r, .1f, 6, 2, rgb(120, 90, 60));
     std::string t = menu.name;
-    while (MeasureText(t.c_str(), 15) > int(r.width) - 20 && t.size() > 4)
+    while (measureText(t.c_str(), 15) > int(r.width) - 20 && t.size() > 4)
         t.pop_back();
-    DrawText(t.c_str(), int(r.x) + 10, int(r.y) + 9, 15, rgb(70, 45, 30));
-    DrawText("Troops:", int(r.x) + 12, int(r.y) + 41, 15, rgb(70, 45, 30));
+    drawText(t.c_str(), int(r.x) + 10, int(r.y) + 9, 15, rgb(70, 45, 30));
+    drawText("Troops:", int(r.x) + 12, int(r.y) + 41, 15, rgb(70, 45, 30));
     ui::drawButton(minusBtn(), "-", true, false, CheckCollisionPointRec(m, minusBtn()), false, 16);
-    DrawText(TextFormat("%d", patrolN), int(r.x) + 178 - MeasureText(TextFormat("%d", patrolN), 16) / 2, int(r.y) + 41,
+    drawText(TextFormat("%d", patrolN), int(r.x) + 178 - measureText(TextFormat("%d", patrolN), 16) / 2, int(r.y) + 41,
              16, rgb(70, 45, 30));
     ui::drawButton(plusBtn(), "+", true, false, CheckCollisionPointRec(m, plusBtn()), false, 16);
     ui::drawButton(sendBtn(), TextFormat("Send support patrol (%d)", patrolN), true, false,

@@ -6,6 +6,7 @@
 
 #include "client/App.hpp"
 #include "rendering/Palette.hpp"
+#include "rendering/Text.hpp"
 #include "ui/CostRow.hpp"
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
@@ -405,7 +406,7 @@ void SocialMenu::drawSearchBox()
     std::string shown = searchText.empty() && !textFocus
                             ? (tab == 2 ? "Search clans or type a new clan name..." : "Search by name...")
                             : searchText + (textFocus && int(GetTime() * 2) % 2 == 0 ? "|" : "");
-    DrawText(shown.c_str(), int(sb.x) + 8, int(sb.y) + 5, 15,
+    drawText(shown.c_str(), int(sb.x) + 8, int(sb.y) + 5, 15,
              searchText.empty() && !textFocus ? rgb(150, 130, 110) : rgb(70, 45, 30));
 }
 
@@ -420,21 +421,21 @@ std::string SocialMenu::drawRows(Vector2 m)
     scroll = std::clamp(scroll, 0, std::max(0, int(rs.size()) - vis));
 
     if (rs.empty())
-        DrawText(tab == 1 ? "No friends yet. Add players from the Players tab." : "Nothing to show.", int(ls.x) + 6,
+        drawText(tab == 1 ? "No friends yet. Add players from the Players tab." : "Nothing to show.", int(ls.x) + 6,
                  int(ls.y) + 8, 14, rgb(120, 90, 60));
     for (int i = 0; i < vis && i + scroll < int(rs.size()); i++)
     {
         Rectangle rr{ls.x, ls.y + float(i) * SROW, ls.width, SROW};
         auto &row = rs[size_t(i + scroll)];
         DrawRectangleRec(rr, i % 2 ? rgb(0, 0, 0, 14) : rgb(255, 255, 255, 36));
-        DrawText(row.text.c_str(), int(rr.x) + 6, int(rr.y) + 2, 15,
+        drawText(row.text.c_str(), int(rr.x) + 6, int(rr.y) + 2, 15,
                  row.col.r > 200 && row.col.g > 200 ? ink : row.col);
-        DrawText(row.sub.c_str(), int(rr.x) + 6, int(rr.y) + 17, 10, rgb(110, 85, 60));
+        drawText(row.sub.c_str(), int(rr.x) + 6, int(rr.y) + 17, 10, rgb(110, 85, 60));
         drawRowButtons(row, rr, m, tip);
     }
 
     if (int(rs.size()) > vis)
-        DrawText(TextFormat("%d-%d of %d  (mouse wheel)", scroll + 1, std::min(int(rs.size()), scroll + vis),
+        drawText(TextFormat("%d-%d of %d  (mouse wheel)", scroll + 1, std::min(int(rs.size()), scroll + vis),
                             int(rs.size())),
                  int(ls.x) + 6, int(ls.y + ls.height) + 2, 10, ink);
     return tip;
@@ -470,17 +471,17 @@ void SocialMenu::drawBottom(Vector2 m, const Rectangle &sr)
 
     int mc = app.world.myClan();
     if (tab == 3 && mc)
-        DrawText("Resources travel by convoy and can be raided.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28),
+        drawText("Resources travel by convoy and can be raided.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28),
                  11, ink);
     if (tab == 2 && mc == 0)
-        DrawText("Type a name above, then press Create.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28), 11,
+        drawText("Type a name above, then press Create.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28), 11,
                  ink);
 }
 
 void SocialMenu::drawTip(Vector2 m, const std::string &tip)
 {
-    int w = MeasureText(tip.c_str(), 13);
+    int w = measureText(tip.c_str(), 13);
     float tx = std::min(m.x + 14, float(ui::screenW()) - float(w) - 20);
     DrawRectangleRounded({tx, m.y + 18, float(w) + 12, 20}, .3f, 4, rgb(30, 22, 16, 235));
-    DrawText(tip.c_str(), int(tx) + 6, int(m.y) + 22, 13, WHITE);
+    drawText(tip.c_str(), int(tx) + 6, int(m.y) + 22, 13, WHITE);
 }

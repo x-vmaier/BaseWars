@@ -123,6 +123,8 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 ## Known gaps / follow-ups
 
+* **Font change (owner request, outside the roadmap):** Noto Sans via `rendering/Text.*`, main menu enlarged. Verified with `BW_SHOT` runs (menu and in-game, which also ran the T19b interpolation against a live `--local` server on Windows without Steam: units moved normally). Still small / unreviewed at scale 1 on 1920x1200: HUD sub-labels, bottom help line (overlaps the welcome line), other panels were not viewed with the new metrics; check `BW_SCALE` 1.25-1.5. `fs / 2` vertical centring elsewhere still uses unboosted sizes (`textHeight` exists).
+
 * **T19b gate:** release build + all 9 selftests (incl. `raid`, `interp`), asan build + `boot`, `saveload`, `economy`, `net-garbage`, `identity`, `defeat`, `net-snapshot`, `interp`; clang-format applied by hand; asan `raid` / `invariants` skipped as before.
 * **T19b only verified by reading / partly run:** no real client session (Steam client unavailable): `ClientWorld::interpolate`, the `PacketHandler` buffer pushes, facing from rendered motion and the `BW_STUTTER` log were built but not run. The selftest drives the same `PosBuffer` / `InterpClock` with simulated 120 ms +-30 ms lag and 3% loss (p99 0.30 tiles/s, 0 snaps). Needs one `BW_STUTTER=1 BW_NETLAG=120 BW_NETLOSS=3` client run to confirm; owner playtest after T19c.
 * **T19b gaps:** rendered positions now lag the server by ~150-200 ms (own units too until T19c prediction); entities that appear mid-snapshot start at their first position (no fade-in); attack facing still reads `aim`.

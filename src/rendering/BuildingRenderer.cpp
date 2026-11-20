@@ -145,7 +145,7 @@ void BuildingRenderer::drawSpriteBody(const BuildingView &v) const
 // Last known state of an NPC town building outside vision.
 void BuildingRenderer::drawLastSeen(const BuildingView &v) const
 {
-    textShadow("Last seen", int(v.cx) - MeasureText("Last seen", 14) / 2, int(v.bottom) + 6, 14, rgb(200, 205, 220));
+    textShadow("Last seen", int(v.cx) - measureText("Last seen", 14) / 2, int(v.bottom) + 6, 14, rgb(200, 205, 220));
 }
 
 void BuildingRenderer::drawCrippledLabel(const BuildingView &v) const
@@ -155,7 +155,7 @@ void BuildingRenderer::drawCrippledLabel(const BuildingView &v) const
                    {0, 0}, 0, rgb(255, 110, 100));
 
     const char *s = "Critical damage: repair!";
-    textShadow(s, int(v.cx) - MeasureText(s, 14) / 2, int(y + 22), 14, rgb(255, 140, 120));
+    textShadow(s, int(v.cx) - measureText(s, 14) / 2, int(y + 22), 14, rgb(255, 140, 120));
 }
 
 void BuildingRenderer::drawStatus(const BuildingView &v) const
@@ -183,7 +183,7 @@ void BuildingRenderer::drawProgressBars(const BuildingView &v) const
     {
         drawBar({v.cx, v.bottom + 4}, 70, v.prog, waiting ? BAR_IDLE : BAR_BUILD);
         std::string s = waiting ? "Waiting for a pawn" : TextFormat("Building %d%%", int(v.prog * 100.f));
-        textShadow(s, int(v.cx) - MeasureText(s.c_str(), 14) / 2, int(v.bottom) + 18, 14,
+        textShadow(s, int(v.cx) - measureText(s.c_str(), 14) / 2, int(v.bottom) + 18, 14,
                    waiting ? rgb(255, 170, 120) : rgb(200, 225, 255));
     }
     else if (v.hasJob && v.job.kind != SJ_Build)
@@ -193,7 +193,7 @@ void BuildingRenderer::drawProgressBars(const BuildingView &v) const
                 waiting ? BAR_IDLE : (job.kind == SJ_Upgrade ? BAR_UPGRADE : BAR_REPAIR));
         std::string s = waiting ? "Waiting for a pawn"
                                 : TextFormat("%s %d%%", job.kind == SJ_Upgrade ? "Upgrading" : "Repairing", job.pct);
-        textShadow(s, int(v.cx) - MeasureText(s.c_str(), 14) / 2, int(v.bottom) + 18, 14,
+        textShadow(s, int(v.cx) - measureText(s.c_str(), 14) / 2, int(v.bottom) + 18, 14,
                    waiting ? rgb(255, 170, 120) : rgb(255, 225, 150));
     }
 }

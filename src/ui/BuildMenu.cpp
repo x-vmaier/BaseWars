@@ -92,7 +92,7 @@ void BuildMenu::draw(float dt)
             hoverGate = gate;
         }
     }
-    DrawText("Shift: keep placing", int(br.x) + mBuild.padding + 4, int(br.y + br.height) - mBuild.padding - 20, 12,
+    drawText("Shift: keep placing", int(br.x) + mBuild.padding + 4, int(br.y + br.height) - mBuild.padding - 20, 12,
              rgb(255, 235, 200));
     if (hoverItem >= 0)
         tooltip(LIST[hoverItem], item(hoverItem), hoverGate);
@@ -127,15 +127,15 @@ void BuildMenu::drawItem(int i, bool hov, int gate)
     if (mx > 0)
     {
         std::string cnt = TextFormat("%d/%d", have, mx);
-        DrawText(cnt.c_str(), int(it.x + it.width) - MeasureText(cnt.c_str(), 12) - 6, int(it.y) + 8, 12,
+        drawText(cnt.c_str(), int(it.x + it.width) - measureText(cnt.c_str(), 12) - 6, int(it.y) + 8, 12,
                  have >= mx ? rgb(255, 140, 120) : rgb(220, 220, 220));
     }
 
     if (gate == G_Locked)
-        DrawText(TextFormat("Requires Town Hall Lv%d", thUnlock(k)), int(it.x) + 54, int(it.y) + 26, 13,
+        drawText(TextFormat("Requires Town Hall Lv%d", thUnlock(k)), int(it.x) + 54, int(it.y) + 26, 13,
                  rgb(255, 150, 120));
     else if (gate)
-        DrawText(TextFormat("Limit reached (Town Hall Lv%d)", th), int(it.x) + 54, int(it.y) + 26, 13,
+        drawText(TextFormat("Limit reached (Town Hall Lv%d)", th), int(it.x) + 54, int(it.y) + 26, 13,
                  rgb(255, 150, 120));
     else
     {
@@ -206,16 +206,16 @@ void BuildMenu::tooltip(Kind k, Rectangle it, int gate)
     ty += 22;
     ui::drawCosts(cost, x + 10, ty, w - 20, W.res, st);
     ty += cs.y + 8;
-    DrawText(time.c_str(), int(x) + 10, int(ty), 13, rgb(225, 225, 230));
+    drawText(time.c_str(), int(x) + 10, int(ty), 13, rgb(225, 225, 230));
     ty += 16;
     if (!cnt.empty())
     {
-        DrawText(cnt.c_str(), int(x) + 10, int(ty), 13, rgb(225, 225, 230));
+        drawText(cnt.c_str(), int(x) + 10, int(ty), 13, rgb(225, 225, 230));
         ty += 16;
     }
     for (auto &l : whyLines)
     {
-        DrawText(l.c_str(), int(x) + 10, int(ty), 13, rgb(255, 150, 120));
+        drawText(l.c_str(), int(x) + 10, int(ty), 13, rgb(255, 150, 120));
         ty += 15;
     }
 }

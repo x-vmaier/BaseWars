@@ -22,7 +22,7 @@ std::string valueText(float v)
 }
 float itemW(float v, const CostStyle &st)
 {
-    return st.icon + st.gap + float(MeasureText(valueText(v).c_str(), st.fs));
+    return st.icon + st.gap + float(measureText(valueText(v).c_str(), st.fs));
 }
 float lineH(const CostStyle &st)
 {
@@ -88,7 +88,7 @@ Vector2 measureCosts(const float *cost, float maxW, const CostStyle &st)
         w = std::max(w, x);
     }
     if (w == 0)
-        w = float(MeasureText("Free", st.fs));
+        w = float(measureText("Free", st.fs));
     return {w, lines * lineH(st) + (lines - 1) * st.lineGap};
 }
 
@@ -101,7 +101,7 @@ Vector2 drawCosts(const float *cost, float x0, float y0, float maxW, const float
         if (cost[r] <= 0)
             continue;
         std::string v = valueText(cost[r]);
-        float iw = st.icon + st.gap + float(MeasureText(v.c_str(), st.fs));
+        float iw = st.icon + st.gap + float(measureText(v.c_str(), st.fs));
         if (any && x + st.margin + iw > maxW)
         {
             y += lh + st.lineGap;
@@ -116,7 +116,7 @@ Vector2 drawCosts(const float *cost, float x0, float y0, float maxW, const float
         if (st.shadow)
             textShadow(v, tx, ty, st.fs, c);
         else
-            DrawText(v.c_str(), tx, ty, st.fs, c);
+            drawText(v.c_str(), tx, ty, st.fs, c);
         x += iw;
         w = std::max(w, x);
         any = drew = true;
@@ -127,8 +127,8 @@ Vector2 drawCosts(const float *cost, float x0, float y0, float maxW, const float
         if (st.shadow)
             textShadow("Free", int(x0), ty, st.fs, st.ok);
         else
-            DrawText("Free", int(x0), ty, st.fs, st.ok);
-        return {float(MeasureText("Free", st.fs)), lh};
+            drawText("Free", int(x0), ty, st.fs, st.ok);
+        return {float(measureText("Free", st.fs)), lh};
     }
     return {w, y + lh};
 }

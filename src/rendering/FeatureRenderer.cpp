@@ -266,7 +266,7 @@ void FeatureRenderer::drawTooltipBox(const TipBox &tip)
     st.fs = sz;
     auto lineW = [&](const TLine &l)
     {
-        float w = float(MeasureText(l.text.c_str(), sz));
+        float w = float(measureText(l.text.c_str(), sz));
         if (l.res >= 0)
         {
             float c[R_Count]{};
@@ -293,7 +293,7 @@ void FeatureRenderer::drawTooltipBox(const TipBox &tip)
         ui::CostStyle ls = st;
         if (!l.cost)
             ls.ok = rgb(160, 255, 160); // a yield, not a price
-        ui::drawCosts(c, float(x0 + sz / 2 + MeasureText(l.text.c_str(), sz)) + float(sz) / 2,
+        ui::drawCosts(c, float(x0 + sz / 2 + measureText(l.text.c_str(), sz)) + float(sz) / 2,
                       float(ty) - (std::max(ls.icon, float(sz)) - float(sz)) / 2, 1e9f, l.cost ? have : nullptr, ls);
     }
 }

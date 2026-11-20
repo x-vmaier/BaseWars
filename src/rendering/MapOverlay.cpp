@@ -6,6 +6,7 @@
 
 #include "client/App.hpp"
 #include "rendering/Palette.hpp"
+#include "rendering/Text.hpp"
 
 #include <cmath>
 
@@ -79,7 +80,7 @@ void MapOverlay::factionTowns(const View &v)
         if (!v.mini)
         {
             std::string nm = FACTION_NAME[t.faction];
-            DrawText(nm.c_str(), int(sp.x) - MeasureText(nm.c_str(), 10) / 2, int(sp.y) + 6, 10, WHITE);
+            drawText(nm.c_str(), int(sp.x) - measureText(nm.c_str(), 10) / 2, int(sp.y) + 6, 10, WHITE);
         }
     }
 }
@@ -133,7 +134,7 @@ void MapOverlay::playerTowns(const View &v, std::set<int> &drawnTH)
         if (!mini)
         {
             std::string nm = W.nameOf(i.owner);
-            DrawText(nm.c_str(), int(sp.x) - MeasureText(nm.c_str(), 11) / 2, int(sp.y) + 6, 11,
+            drawText(nm.c_str(), int(sp.x) - measureText(nm.c_str(), 11) / 2, int(sp.y) + 6, 11,
                      mine ? rgb(255, 235, 140) : (W.alliedWith(i.owner) ? rgb(150, 255, 170) : WHITE));
         }
     });
@@ -157,7 +158,7 @@ void MapOverlay::hiddenTowns(const View &v, const std::set<int> &drawnTH)
         icon(std::string("Buildings/") + COLOR_NAME[colorIdx(p.id)] + " Buildings/Castle.png", sp, castle - 2, 320, 256,
              rgb(255, 255, 255, 200));
         if (!v.mini)
-            DrawText(p.name.c_str(), int(sp.x) - MeasureText(p.name.c_str(), 11) / 2, int(sp.y) + 6, 11, WHITE);
+            drawText(p.name.c_str(), int(sp.x) - measureText(p.name.c_str(), 11) / 2, int(sp.y) + 6, 11, WHITE);
     }
 }
 
@@ -193,8 +194,8 @@ void MapOverlay::convoys(const View &v)
         DrawTexturePro(a.t, frameRect(a, 0), {sp.x - 12, sp.y - 16, 24, 24}, {0, 0}, 0, WHITE);
         if (!friendly)
         {
-            DrawText("!", int(sp.x) + 9, int(sp.y) - 16, 14, rgb(255, 90, 70));
-            DrawText((W.nameOf(i.owner) + " convoy").c_str(), int(sp.x) + 14, int(sp.y) - 4, 10, rgb(255, 170, 150));
+            drawText("!", int(sp.x) + 9, int(sp.y) - 16, 14, rgb(255, 90, 70));
+            drawText((W.nameOf(i.owner) + " convoy").c_str(), int(sp.x) + 14, int(sp.y) - 4, 10, rgb(255, 170, 150));
         }
     });
 }
@@ -225,7 +226,7 @@ void MapOverlay::supportIcons(Rectangle in, Vector2 c, float tpp, bool mini)
         DrawLineEx({sp.x - 4, sp.y + 4}, {sp.x + 4, sp.y - 4}, 2, WHITE);
         DrawLineEx({sp.x - 4, sp.y - 4}, {sp.x + 4, sp.y + 4}, 1, rgb(60, 40, 20));
         if (tpp <= 2.f)
-            DrawText(friendly ? "Patrol" : "Hostile patrol", int(sp.x) + 12, int(sp.y) - 5, 10,
+            drawText(friendly ? "Patrol" : "Hostile patrol", int(sp.x) + 12, int(sp.y) - 5, 10,
                      friendly ? rgb(255, 215, 130) : rgb(255, 150, 140));
     });
 }

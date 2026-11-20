@@ -205,7 +205,7 @@ void TrainingPanel::drawFrame(const Info &bin, Vector2 m)
     Rectangle tr{sz.x / 2 - mTitle.size().x / 2, -26, mTitle.size().x, mTitle.size().y};
     drawTMap(mTitle, tr);
     std::string title = TextFormat("Archery - Level %d", bin.aux);
-    textShadow(title, int(tr.x + tr.width / 2) - MeasureText(title.c_str(), 20) / 2, int(tr.y + tr.height / 2) - 12, 20,
+    textShadow(title, int(tr.x + tr.width / 2) - measureText(title.c_str(), 20) / 2, int(tr.y + tr.height / 2) - 12, 20,
                WHITE);
     ui::drawButton(closeBtn(), "X", true, true, CheckCollisionPointRec(m, closeBtn()), false, 12);
 }
@@ -223,10 +223,10 @@ void TrainingPanel::drawCard(int i, const Info &bin, Vector2 m, double now)
     float sc = a.fw > 200 ? .36f : .62f;
     drawAnim(a, frameFor(a, now, float(i) * .7f), c.x + c.width / 2, c.y + 84, false, sc,
              locked ? rgb(70, 70, 90, 255) : WHITE);
-    DrawText(KINFO[k].name, int(c.x + c.width / 2) - MeasureText(KINFO[k].name, 14) / 2, int(c.y + c.height - 20), 14,
+    drawText(KINFO[k].name, int(c.x + c.width / 2) - measureText(KINFO[k].name, 14) / 2, int(c.y + c.height - 20), 14,
              INK);
     DrawRectangleRounded({c.x + 4, c.y + 4, 34, 18}, .4f, 4, rgb(60, 40, 28, 220));
-    DrawText(TextFormat("Lv%d", troopLevel(k)), int(c.x) + 9, int(c.y) + 7, 12, rgb(255, 235, 160));
+    drawText(TextFormat("Lv%d", troopLevel(k)), int(c.x) + 9, int(c.y) + 7, 12, rgb(255, 235, 160));
 
     if (locked)
         drawCardLock(c, k);
@@ -241,7 +241,7 @@ void TrainingPanel::drawCardLock(Rectangle c, Kind k)
 
     std::string need = app.world.thLevel() < unitThLevel(k) ? TextFormat("Town Hall Lv%d", unitThLevel(k))
                                                             : TextFormat("Archery Lv%d", unitUnlockLevel(k));
-    DrawText(need.c_str(), int(c.x + c.width / 2) - MeasureText(need.c_str(), 12) / 2, int(c.y + 60), 12, WHITE);
+    drawText(need.c_str(), int(c.x + c.width / 2) - measureText(need.c_str(), 12) / 2, int(c.y + 60), 12, WHITE);
 }
 
 void TrainingPanel::drawTroopDetail(const Info &bin, Vector2 m, double now)
@@ -256,8 +256,8 @@ void TrainingPanel::drawTroopDetail(const Info &bin, Vector2 m, double now)
     Anim big = unitAnim(k, W.me, US_Idle, 0, 0, false, 1, now);
     drawAnim(big, frameFor(big, now), d.x + 52, d.y + 106, false, big.fw > 200 ? .5f : .9f);
     TroopText tt = troopText(k);
-    DrawText(TextFormat("%s  Lv%d", KINFO[k].name, lv), int(d.x) + 104, int(d.y) + 8, 17, INK);
-    DrawText(tt.role, int(d.x) + 104, int(d.y) + 28, 12, rgb(110, 80, 50));
+    drawText(TextFormat("%s  Lv%d", KINFO[k].name, lv), int(d.x) + 104, int(d.y) + 8, 17, INK);
+    drawText(tt.role, int(d.x) + 104, int(d.y) + 28, 12, rgb(110, 80, 50));
 
     drawTroopStats(k, lv, d);
     float ty = d.y + 122;
@@ -266,7 +266,7 @@ void TrainingPanel::drawTroopDetail(const Info &bin, Vector2 m, double now)
         // never run into the buttons
         if (ty + 13 > btnTrain().y - 6)
             break;
-        DrawText(ln.c_str(), int(d.x) + 9, int(ty), 12, INK);
+        drawText(ln.c_str(), int(d.x) + 9, int(ty), 12, INK);
         ty += 14;
     }
 
@@ -317,7 +317,7 @@ void TrainingPanel::drawBuildingBlock(const Info &bin, Vector2 m, double now)
 {
     const ClientWorld &W = app.world;
     Rectangle bb = block();
-    DrawText(TextFormat("Building health %d / %d", int(bin.hp), int(bin.maxhp)), int(bb.x) + 4, int(bb.y) + 4, 14, INK);
+    drawText(TextFormat("Building health %d / %d", int(bin.hp), int(bin.maxhp)), int(bb.x) + 4, int(bb.y) + 4, 14, INK);
 
     std::string why = upgradeBlock(bin.kind, bin.aux, W.thLevel());
     const BJob *job = W.jobOf(target);
@@ -332,11 +332,11 @@ void TrainingPanel::drawBuildingBlock(const Info &bin, Vector2 m, double now)
     iy = std::max(iy, bb.y + 104);
     if (!info.empty())
     {
-        DrawText("Next level:", int(bb.x) + 6, int(iy), 14, rgb(30, 90, 40));
+        drawText("Next level:", int(bb.x) + 6, int(iy), 14, rgb(30, 90, 40));
         iy += 17;
         for (auto &t : info)
         {
-            DrawText(t.c_str(), int(bb.x) + 12, int(iy), 13, INK);
+            drawText(t.c_str(), int(bb.x) + 12, int(iy), 13, INK);
             iy += 15;
         }
     }
@@ -368,12 +368,12 @@ float TrainingPanel::drawBuildingUpgrade(const Info &bin, Vector2 m, const std::
     {
         static const char *phase[3] = {"Waiting for a pawn - training paused", "A pawn is on the way - training paused",
                                        "A pawn is at work - training paused"};
-        DrawText(phase[std::min<int>(job->phase, 2)], int(bub.x), int(iy), 12, rgb(170, 60, 30));
+        drawText(phase[std::min<int>(job->phase, 2)], int(bub.x), int(iy), 12, rgb(170, 60, 30));
         iy += 16;
     }
     else if (!why.empty())
     {
-        DrawText(why.c_str(), int(bub.x), int(iy), 12, rgb(170, 60, 30));
+        drawText(why.c_str(), int(bub.x), int(iy), 12, rgb(170, 60, 30));
         iy += 16;
     }
     else
@@ -381,7 +381,7 @@ float TrainingPanel::drawBuildingUpgrade(const Info &bin, Vector2 m, const std::
         Vector2 cs = ui::drawCosts(bc, bub.x, iy, 228, W.res, ui::paperCost());
         iy += cs.y + 4;
         std::string tt2 = "Takes " + timeText(upgradeSeconds(bin.kind, bin.aux)) + " of pawn work";
-        DrawText(tt2.c_str(), int(bub.x), int(iy), 12, rgb(110, 80, 50));
+        drawText(tt2.c_str(), int(bub.x), int(iy), 12, rgb(110, 80, 50));
         iy += 16;
     }
     return iy;
@@ -393,7 +393,7 @@ void TrainingPanel::drawQueueStrip(Vector2 m)
     Rectangle bb = block();
     auto q = W.queues.find(target);
     size_t n = q == W.queues.end() ? 0 : q->second.kinds.size();
-    DrawText(TextFormat("Training queue %d/5%s", int(n), n ? "  (click to cancel)" : ""), int(bb.x) + 246,
+    drawText(TextFormat("Training queue %d/5%s", int(n), n ? "  (click to cancel)" : ""), int(bb.x) + 246,
              int(bb.y) + 4, 13, INK);
     double now = GetTime();
     for (int i = 0; i < 5; i++)
@@ -426,7 +426,7 @@ void TrainingPanel::sideCosts(Rectangle b, const float *cost, const std::string 
         float y = b.y + b.height / 2 - 7.f * float(ls.size());
         for (auto &l : ls)
         {
-            DrawText(l.c_str(), int(x), int(y), 12, rgb(170, 60, 30));
+            drawText(l.c_str(), int(x), int(y), 12, rgb(170, 60, 30));
             y += 14;
         }
         return;

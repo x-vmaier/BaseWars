@@ -5,6 +5,7 @@
 #include "ui/MainMenu.hpp"
 
 #include "client/App.hpp"
+#include "rendering/Text.hpp"
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
 
@@ -22,13 +23,13 @@ Rectangle MainMenu::tabBtn(int i) const
 {
     Rectangle r = rect();
     float pad = float(mMenu.padding);
-    return {r.x + pad + 8 + float(i) * 110, r.y + pad + 6, 104, 26};
+    return {r.x + pad + 8 + float(i) * 118, r.y + pad + 4, 112, 30};
 }
 Rectangle MainMenu::nameBox() const
 {
     Rectangle r = rect();
     float pad = float(mMenu.padding);
-    return {r.x + r.width - pad - 210, r.y + pad + 6, 202, 26};
+    return {r.x + r.width - pad - 250, r.y + pad + 4, 242, 30};
 }
 Rectangle MainMenu::listArea() const
 {
@@ -241,22 +242,22 @@ void MainMenu::drawTitle(const Rectangle &r)
     drawTMap(ui::titleMap(), {tr.x, tr.y, tr.width, tr.height});
 
     // Drop shadow first, then the lit text one pixel up-left.
-    DrawText("BASE WARS", int(tr.x + tr.width / 2) - MeasureText("BASE WARS", 34) / 2 + 2, int(tr.y) + 22, 34,
-             rgb(20, 40, 60));
-    DrawText("BASE WARS", int(tr.x + tr.width / 2) - MeasureText("BASE WARS", 34) / 2, int(tr.y) + 20, 34,
-             rgb(255, 245, 210));
+    drawText("BASE WARS", int(tr.x + tr.width / 2) - measureText("BASE WARS", 34, TextWeight::Bold) / 2 + 2,
+             int(tr.y) + 22, 34, rgb(20, 40, 60), TextWeight::Bold);
+    drawText("BASE WARS", int(tr.x + tr.width / 2) - measureText("BASE WARS", 34, TextWeight::Bold) / 2, int(tr.y) + 20,
+             34, rgb(255, 245, 210), TextWeight::Bold);
 }
 
 void MainMenu::drawTopBar(Vector2 m)
 {
     static const char *tabs[3] = {"Internet", "Friends", "Direct"};
     for (int i = 0; i < 3; i++)
-        ui::drawButton(tabBtn(i), tabs[i], true, false, CheckCollisionPointRec(m, tabBtn(i)), tab == i, 13);
+        ui::drawButton(tabBtn(i), tabs[i], true, false, CheckCollisionPointRec(m, tabBtn(i)), tab == i, 16);
 
     // The name is the Steam persona of the account that will own the town; it cannot be edited here.
     const Session &s = app.session;
     std::string who = s.devId ? "Dev " + std::to_string(s.devId) : (s.steam.ok ? s.steam.name : "Steam is not running");
-    DrawText(("Playing as: " + who).c_str(), int(nameBox().x) + 4, int(nameBox().y) + 6, 15, rgb(70, 45, 30));
+    drawText(("Playing as: " + who).c_str(), int(nameBox().x) + 4, int(nameBox().y) + 6, 17, rgb(70, 45, 30));
 }
 
 void MainMenu::drawServerList(Vector2 m)
@@ -270,10 +271,10 @@ void MainMenu::drawServerList(Vector2 m)
         la.height -= 32;
     }
 
-    DrawText("Server", int(la.x) + 8, int(la.y) - 18, 12, rgb(110, 80, 50));
-    DrawText("Players", int(la.x + la.width) - 200, int(la.y) - 18, 12, rgb(110, 80, 50));
-    DrawText("Ping", int(la.x + la.width) - 110, int(la.y) - 18, 12, rgb(110, 80, 50));
-    DrawText("Via", int(la.x + la.width) - 54, int(la.y) - 18, 12, rgb(110, 80, 50));
+    drawText("Server", int(la.x) + 8, int(la.y) - 22, 14, rgb(110, 80, 50));
+    drawText("Players", int(la.x + la.width) - 200, int(la.y) - 22, 14, rgb(110, 80, 50));
+    drawText("Ping", int(la.x + la.width) - 110, int(la.y) - 22, 14, rgb(110, 80, 50));
+    drawText("Via", int(la.x + la.width) - 54, int(la.y) - 22, 14, rgb(110, 80, 50));
 
     if (list.empty() || (tab < 2 && !s.steam.ok && list.size() <= 1))
     {
@@ -282,7 +283,7 @@ void MainMenu::drawServerList(Vector2 m)
                 ? "Type an address above and press Connect."
                 : (s.steam.ok ? (s.browser.loading() ? "Searching for servers..." : "No servers found. Press Refresh.")
                               : "Steam is not running or not built in: use the local server or the Direct tab.");
-        DrawText(hint.c_str(), int(la.x) + 10, int(la.y) + 6 + (list.empty() ? 0 : 28), 14, rgb(120, 90, 60));
+        drawText(hint.c_str(), int(la.x) + 10, int(la.y) + 6 + (list.empty() ? 0 : 28), 16, rgb(120, 90, 60));
     }
 
     int rows = int(la.height / 28.f);
@@ -297,39 +298,39 @@ void MainMenu::drawServerRow(int i, const Rectangle &rr, Vector2 m)
     DrawRectangleRec(rr, selected
                              ? rgb(120, 180, 240, 160)
                              : (hov ? rgb(255, 255, 255, 90) : (i % 2 ? rgb(0, 0, 0, 14) : rgb(255, 255, 255, 40))));
-    DrawText(e.name.c_str(), int(rr.x) + 8, int(rr.y) + 6, 15, rgb(60, 40, 28));
+    drawText(e.name.c_str(), int(rr.x) + 8, int(rr.y) + 5, 17, rgb(60, 40, 28));
 
     if (!e.local)
     {
-        DrawText(TextFormat("%d / %d", e.players, e.maxPlayers), int(rr.x + rr.width) - 200, int(rr.y) + 7, 14,
+        drawText(TextFormat("%d / %d", e.players, e.maxPlayers), int(rr.x + rr.width) - 200, int(rr.y) + 6, 16,
                  rgb(60, 40, 28));
-        DrawText(TextFormat("%d ms", e.ping), int(rr.x + rr.width) - 110, int(rr.y) + 7, 14,
+        drawText(TextFormat("%d ms", e.ping), int(rr.x + rr.width) - 110, int(rr.y) + 6, 16,
                  e.ping < 80 ? rgb(30, 120, 40) : (e.ping < 160 ? rgb(170, 120, 20) : rgb(170, 40, 30)));
     }
 
     const char *via = e.friends ? "Friend" : (e.steamId ? "Steam" : "IP");
-    DrawText(via, int(rr.x + rr.width) - 54, int(rr.y) + 7, 13, e.friends ? rgb(30, 130, 60) : rgb(90, 70, 50));
+    drawText(via, int(rr.x + rr.width) - 54, int(rr.y) + 6, 15, e.friends ? rgb(30, 130, 60) : rgb(90, 70, 50));
 }
 
 void MainMenu::drawButtons(Vector2 m)
 {
     const Session &s = app.session;
     bool canJoin = tab == 2 ? !directAddr.empty() : (sel >= 0 && sel < int(list.size()));
-    ui::drawButton(btn(0), tab == 2 ? "Connect" : "Join", canJoin, false, CheckCollisionPointRec(m, btn(0)), false, 14);
+    ui::drawButton(btn(0), tab == 2 ? "Connect" : "Join", canJoin, false, CheckCollisionPointRec(m, btn(0)), false, 17);
     if (tab < 2)
         ui::drawButton(btn(1), s.browser.loading() ? "Searching..." : "Refresh", s.steam.ok, false,
-                       CheckCollisionPointRec(m, btn(1)), false, 14);
-    ui::drawButton(quitBtn(), "Quit", true, true, CheckCollisionPointRec(m, quitBtn()), false, 14);
+                       CheckCollisionPointRec(m, btn(1)), false, 17);
+    ui::drawButton(quitBtn(), "Quit", true, true, CheckCollisionPointRec(m, quitBtn()), false, 17);
 }
 
 void MainMenu::drawFooter(const Rectangle &r)
 {
     const Session &s = app.session;
     std::string st = s.steam.ok ? "Steam: " + s.steam.name : "Steam: offline";
-    DrawText(st.c_str(), int(r.x) + int(mMenu.padding) + 120, int(r.y + r.height) - int(mMenu.padding) - 34, 12,
+    drawText(st.c_str(), int(r.x) + int(mMenu.padding) + 120, int(r.y + r.height) - int(mMenu.padding) - 38, 15,
              s.steam.ok ? rgb(30, 110, 50) : rgb(130, 90, 60));
     if (!status.empty())
-        DrawText(status.c_str(), int(r.x) + int(mMenu.padding) + 120, int(r.y + r.height) - int(mMenu.padding) - 18, 13,
+        drawText(status.c_str(), int(r.x) + int(mMenu.padding) + 120, int(r.y + r.height) - int(mMenu.padding) - 20, 15,
                  rgb(170, 50, 30));
 }
 
@@ -340,6 +341,6 @@ void MainMenu::drawConnecting(Vector2 m)
     DrawRectangle(0, 0, sw, sh, rgb(0, 0, 0, 150));
 
     std::string c = "Connecting to " + s.connectingTo.name + std::string(int(GetTime() * 3) % 4, '.');
-    DrawText(c.c_str(), sw / 2 - MeasureText(c.c_str(), 24) / 2, sh / 2 - 20, 24, WHITE);
-    ui::drawButton(btn(0), "Cancel", true, true, CheckCollisionPointRec(m, btn(0)), false, 14);
+    drawText(c.c_str(), sw / 2 - measureText(c.c_str(), 24) / 2, sh / 2 - 20, 24, WHITE);
+    ui::drawButton(btn(0), "Cancel", true, true, CheckCollisionPointRec(m, btn(0)), false, 17);
 }

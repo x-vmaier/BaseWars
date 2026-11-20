@@ -41,7 +41,7 @@ void BuildingRenderer::mineGhost(IV t, float cx, float bottom) const
 
     std::string s = n ? TextFormat("Gold nearby: %d (+%d%% output)", n, int(std::lround(goldBonusOf(n) * 100.f)))
                       : "No gold nearby";
-    textShadow(s, int(cx) - MeasureText(s.c_str(), 16) / 2, int(bottom) + 34, 16,
+    textShadow(s, int(cx) - measureText(s.c_str(), 16) / 2, int(bottom) + 34, 16,
                n ? rgb(255, 225, 90) : rgb(210, 210, 210));
 }
 
@@ -156,7 +156,7 @@ void BuildingRenderer::drawPendingSite(const PendingSite &site) const
     }
 
     const char *lbl = "Waiting for the site to be cleared";
-    textShadow(lbl, int(cx) - MeasureText(lbl, 16) / 2, int(bottom) + 8, 16, rgb(255, 220, 150));
+    textShadow(lbl, int(cx) - measureText(lbl, 16) / 2, int(bottom) + 8, 16, rgb(255, 220, 150));
 }
 
 // Under the placement ghost: the reason it cannot go here, or its cost row (red values = missing) and clearing cost.
@@ -168,7 +168,7 @@ void BuildingRenderer::ghostLabel(Kind k, IV tt, int err, float cx, float bottom
     if (err)
     {
         std::string s = PLACE_TEXT[err];
-        textShadow(s, int(cx) - MeasureText(s.c_str(), 18) / 2, int(y), 18, rgb(255, 150, 130));
+        textShadow(s, int(cx) - measureText(s.c_str(), 18) / 2, int(y), 18, rgb(255, 150, 130));
         return;
     }
 
@@ -182,7 +182,7 @@ void BuildingRenderer::ghostLabel(Kind k, IV tt, int err, float cx, float bottom
     if (!W.affordable(cost))
     {
         const char *s = "Not enough resources";
-        textShadow(s, int(cx) - MeasureText(s, 16) / 2, int(y), 16, rgb(255, 150, 130));
+        textShadow(s, int(cx) - measureText(s, 16) / 2, int(y), 16, rgb(255, 150, 130));
         y += 22;
     }
 
@@ -193,7 +193,7 @@ void BuildingRenderer::ghostLabel(Kind k, IV tt, int err, float cx, float bottom
     float wood[R_Count]{};
     wood[R_Wood] = float(W.clearWoodCost(W.blockedUnder(k, tt)));
     Vector2 ws = ui::measureCosts(wood, 1e9f, st);
-    float tw = float(MeasureText(wl.c_str(), 18)), x0 = cx - (tw + 8 + ws.x) / 2;
+    float tw = float(measureText(wl.c_str(), 18)), x0 = cx - (tw + 8 + ws.x) / 2;
     textShadow(wl, int(x0), int(y + (ws.y - 18) / 2), 18, rgb(255, 210, 140));
     ui::drawCosts(wood, x0 + tw + 8, y, 1e9f, W.res, st);
 }

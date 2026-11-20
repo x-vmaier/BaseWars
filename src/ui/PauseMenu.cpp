@@ -5,6 +5,7 @@
 #include "ui/PauseMenu.hpp"
 
 #include "client/App.hpp"
+#include "rendering/Text.hpp"
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
 
@@ -163,14 +164,14 @@ void PauseMenu::drawScaleRow()
     const Settings &s = app.settings;
     Color ink = rgb(70, 45, 30);
     Rectangle row0 = row(0), sl = slider();
-    DrawText("UI scale", int(row0.x), int(row0.y) + 14, 15, ink);
+    drawText("UI scale", int(row0.x), int(row0.y) + 14, 15, ink);
 
     float k = (s.uiScale - 0.6f) / 1.4f;
     DrawRectangleRounded(sl, .5f, 6, rgb(60, 40, 28, 220));
     DrawRectangleRounded({sl.x, sl.y, std::max(8.f, sl.width * k), sl.height}, .5f, 6, rgb(80, 170, 220));
     DrawCircleV({sl.x + sl.width * k, sl.y + sl.height / 2}, 11, rgb(250, 235, 200));
     DrawCircleLines(int(sl.x + sl.width * k), int(sl.y + sl.height / 2), 11, rgb(60, 40, 28));
-    DrawText(TextFormat("%d%%", int(std::lround(s.uiScale * 100.f))), int(row0.x + row0.width) - 46, int(row0.y) + 14,
+    drawText(TextFormat("%d%%", int(std::lround(s.uiScale * 100.f))), int(row0.x + row0.width) - 46, int(row0.y) + 14,
              15, ink);
 }
 
@@ -179,7 +180,7 @@ void PauseMenu::drawWindowRow(Vector2 m)
     const Settings &s = app.settings;
     Color ink = rgb(70, 45, 30);
     Rectangle row1 = row(1);
-    DrawText("Window", int(row1.x), int(row1.y) + 9, 15, ink);
+    drawText("Window", int(row1.x), int(row1.y) + 9, 15, ink);
 
     for (int d = -1; d <= 1; d += 2)
     {
@@ -193,7 +194,7 @@ void PauseMenu::drawWindowRow(Vector2 m)
     }
 
     const char *mn = Settings::modeName(s.windowMode);
-    DrawText(mn, int(row1.x + 96 + (row1.width - 96 - 0) / 2) - 15 - MeasureText(mn, 14) / 2 + 0, int(row1.y) + 10, 14,
+    drawText(mn, int(row1.x + 96 + (row1.width - 96 - 0) / 2) - 15 - measureText(mn, 14) / 2 + 0, int(row1.y) + 10, 14,
              ink);
 }
 

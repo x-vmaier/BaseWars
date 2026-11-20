@@ -32,7 +32,7 @@ void costBeside(Rectangle b, float right, const float *cost, const float *have, 
         float y = b.y + b.height / 2 - 7.f * float(ls.size());
         for (auto &l : ls)
         {
-            DrawText(l.c_str(), int(x), int(y), 12, WARN);
+            drawText(l.c_str(), int(x), int(y), 12, WARN);
             y += 14;
         }
         return;
@@ -48,7 +48,7 @@ void section(Rectangle r, const char *title)
 {
     DrawRectangleRounded(r, .03f, 6, rgb(255, 250, 235, 150));
     DrawRectangleRoundedLinesEx(r, .03f, 6, 2, rgb(120, 90, 60));
-    DrawText(title, int(r.x) + 10, int(r.y) + 8, 18, INK);
+    drawText(title, int(r.x) + 10, int(r.y) + 8, 18, INK);
 }
 } // namespace
 
@@ -262,7 +262,7 @@ void TownHallWindow::drawFrame(Vector2 m, const Info &in)
     Rectangle tr{sz.x / 2 - mTitle.size().x / 2, -30, mTitle.size().x, mTitle.size().y};
     drawTMap(mTitle, tr);
     std::string title = TextFormat("Town Hall - Level %d", in.aux);
-    textShadow(title, int(tr.x + tr.width / 2) - MeasureText(title.c_str(), 20) / 2, int(tr.y + tr.height / 2) - 12, 20,
+    textShadow(title, int(tr.x + tr.width / 2) - measureText(title.c_str(), 20) / 2, int(tr.y + tr.height / 2) - 12, 20,
                WHITE);
     Rectangle closeR{sz.x - 52, 20, 26, 20};
     ui::drawButton(closeR, "X", true, true, CheckCollisionPointRec(m, closeR), false, 12);
@@ -283,7 +283,7 @@ void TownHallWindow::drawMain(Vector2 m, const Info &in)
     drawWorkers(m, L, in);
     drawQueue(m, L, now);
     drawMoveTown(m, L, in);
-    DrawText("Tip: right-click your Town Hall to open this window.", int(L.x) + 10, int(L.y + L.height) - 22, 12, SOFT);
+    drawText("Tip: right-click your Town Hall to open this window.", int(L.x) + 10, int(L.y + L.height) - 22, 12, SOFT);
     drawHallSection(m, in);
 }
 
@@ -307,9 +307,9 @@ void TownHallWindow::drawWorkers(Vector2 m, Rectangle L, const Info &in)
 
     float tx = pc.x + pc.width + 12, tw = L.x + L.width - 10 - tx;
     TroopText tt = troopText(K_Pawn);
-    DrawText("Pawn", int(tx), int(pc.y), 17, INK);
-    DrawText(tt.role, int(tx), int(pc.y) + 20, 12, SOFT);
-    DrawText(TextFormat("Pawns %d   Units %d / %d", pawns, units, UNIT_CAP), int(tx), int(pc.y) + 38, 13,
+    drawText("Pawn", int(tx), int(pc.y), 17, INK);
+    drawText(tt.role, int(tx), int(pc.y) + 20, 12, SOFT);
+    drawText(TextFormat("Pawns %d   Units %d / %d", pawns, units, UNIT_CAP), int(tx), int(pc.y) + 38, 13,
              units >= UNIT_CAP ? WARN : INK);
     drawPawnBlurb(pc, tx, tw);
 
@@ -326,7 +326,7 @@ void TownHallWindow::drawWorkers(Vector2 m, Rectangle L, const Info &in)
             ? "Unit cap reached: training waits for room"
             : (job && job->kind != SJ_Build ? "Training paused while the hall is upgraded / repaired" : "");
     if (!why.empty())
-        DrawText(why.c_str(), int(tb.x), int(tb.y + tb.height) + 6, 12, WARN);
+        drawText(why.c_str(), int(tb.x), int(tb.y + tb.height) + 6, 12, WARN);
 }
 
 // Wrapped description; the last line that fits the card is cut with "..." when more text follows.
@@ -339,10 +339,10 @@ void TownHallWindow::drawPawnBlurb(Rectangle pc, float tx, float tw)
     {
         if (ty + 26 > pc.y + pc.height && i + 1 < desc.size())
         {
-            DrawText((desc[i] + "...").c_str(), int(tx), int(ty), 12, INK);
+            drawText((desc[i] + "...").c_str(), int(tx), int(ty), 12, INK);
             break;
         }
-        DrawText(desc[i].c_str(), int(tx), int(ty), 12, INK);
+        drawText(desc[i].c_str(), int(tx), int(ty), 12, INK);
         ty += 14;
     }
 }
@@ -353,7 +353,7 @@ void TownHallWindow::drawQueue(Vector2 m, Rectangle L, double now)
     const ClientWorld &W = app.world;
     auto q = W.queues.find(target);
     size_t n = q == W.queues.end() ? 0 : q->second.kinds.size();
-    DrawText(TextFormat("Training queue %d/5%s", int(n), n ? "  (click to cancel)" : ""), int(L.x) + 10,
+    drawText(TextFormat("Training queue %d/5%s", int(n), n ? "  (click to cancel)" : ""), int(L.x) + 10,
              int(queueSlot(0).y) - 18, 13, INK);
 
     for (int i = 0; i < 5; i++)
@@ -379,13 +379,13 @@ void TownHallWindow::drawMoveTown(Vector2 m, Rectangle L, const Info &in)
 {
     const ClientWorld &W = app.world;
     Rectangle mb = moveBtn();
-    DrawText("Move town", int(L.x) + 10, int(mb.y) - 58, 16, INK);
+    drawText("Move town", int(L.x) + 10, int(mb.y) - 58, 16, INK);
 
     float my = mb.y - 38;
     for (auto &l : wrapText("Rebuild the Town Hall on a new site. It keeps its level; building stops until it is done.",
                             int(L.width) - 20, 12))
     {
-        DrawText(l.c_str(), int(L.x) + 10, int(my), 12, SOFT);
+        drawText(l.c_str(), int(L.x) + 10, int(my), 12, SOFT);
         my += 14;
     }
 
@@ -411,11 +411,11 @@ void TownHallWindow::drawHallSection(Vector2 m, const Info &in)
 
     float x = R.x + 12, w = R.width - 24, y = R.y + 36;
     float hpf = in.hp / std::max(1.f, in.maxhp);
-    DrawText(TextFormat("Health %d / %d", int(in.hp), int(in.maxhp)), int(x), int(y), 14, INK);
+    drawText(TextFormat("Health %d / %d", int(in.hp), int(in.maxhp)), int(x), int(y), 14, INK);
     barRect({x + 150, y + 3, w - 150, 10}, hpf, healthColor(hpf));
     y += 22;
     float cap = storageCap(K_TownHall, in.aux) * hpEfficiency(hpf);
-    DrawText(TextFormat("Storage %d / %d", int(W.res[0] + W.res[1] + W.res[2] + W.res[3]), int(cap)), int(x), int(y),
+    drawText(TextFormat("Storage %d / %d", int(W.res[0] + W.res[1] + W.res[2] + W.res[3]), int(cap)), int(x), int(y),
              14, INK);
     y += 22;
 
@@ -430,19 +430,19 @@ float TownHallWindow::drawJobState(const Info &in, const BJob *job, float x, flo
     if (job && job->kind != SJ_Build)
     {
         static const char *phase[3] = {"Waiting for a pawn", "A pawn is on the way", "A pawn is at work"};
-        DrawText(
+        drawText(
             TextFormat("%s to Lv%d... %d%%", job->kind == SJ_Upgrade ? "Upgrading" : "Repairing", in.aux + 1, job->pct),
             int(x), int(y), 14, rgb(150, 95, 0));
         y += 18;
         barRect({x, y, w, 10}, float(job->pct) / 100.f,
                 job->phase == SP_Waiting ? BAR_IDLE : (job->kind == SJ_Upgrade ? BAR_UPGRADE : BAR_REPAIR));
         y += 16;
-        DrawText(phase[std::min<int>(job->phase, 2)], int(x), int(y), 13, job->phase == SP_Waiting ? WARN : INK);
+        drawText(phase[std::min<int>(job->phase, 2)], int(x), int(y), 13, job->phase == SP_Waiting ? WARN : INK);
         y += 20;
     }
     else if (in.state & BLD_CRIPPLED)
     {
-        DrawText("CRITICAL DAMAGE: repair the hall", int(x), int(y), 14, WARN);
+        drawText("CRITICAL DAMAGE: repair the hall", int(x), int(y), 14, WARN);
         y += 20;
     }
     return y;
@@ -453,7 +453,7 @@ void TownHallWindow::drawNextLevel(const Info &in, float x, float y, float w, fl
 {
     if (in.aux >= MAX_LEVEL)
     {
-        DrawText("Maximum level reached.", int(x), int(y), 14, GOOD);
+        drawText("Maximum level reached.", int(x), int(y), 14, GOOD);
         return;
     }
 
@@ -461,14 +461,14 @@ void TownHallWindow::drawNextLevel(const Info &in, float x, float y, float w, fl
     std::vector<Kind> units;
     nextLevelInfo(in, info, units);
     townHallUnlocks(in.aux + 1, info);
-    DrawText(TextFormat("Next level (Lv%d):", in.aux + 1), int(x), int(y), 15, rgb(30, 90, 40));
+    drawText(TextFormat("Next level (Lv%d):", in.aux + 1), int(x), int(y), 15, rgb(30, 90, 40));
     y += 20;
     for (auto &t : info)
         for (auto &l : wrapText(t, int(w) - 8, 13))
         {
             if (y + 13 > stop)
                 break;
-            DrawText(l.c_str(), int(x) + 6, int(y), 13, INK);
+            drawText(l.c_str(), int(x) + 6, int(y), 13, INK);
             y += 15;
         }
 }
@@ -507,7 +507,7 @@ void TownHallWindow::drawHallButtons(Vector2 m, const Info &in, Rectangle R, con
         costBeside(rb, R.x + R.width - 10, rc, W.res, "");
     }
     else
-        DrawText(job ? "Repairs wait for the current job." : "Undamaged: no repair needed.", int(rb.x), int(rb.y) + 8,
+        drawText(job ? "Repairs wait for the current job." : "Undamaged: no repair needed.", int(rb.x), int(rb.y) + 8,
                  13, SOFT);
 }
 
@@ -522,9 +522,9 @@ void TownHallWindow::card(Rectangle c, Kind k, bool selected, bool hover, bool d
     float sc = (a.fw > 200 ? .36f : .62f) * std::min(1.f, c.width / 100.f);
     drawAnim(a, frameFor(a, now, phase), c.x + c.width / 2, c.y + c.height * .71f, false, sc,
              dim ? rgb(70, 70, 90, 255) : WHITE);
-    DrawText(KINFO[k].name, int(c.x + c.width / 2) - MeasureText(KINFO[k].name, 14) / 2, int(c.y + c.height - 20), 14,
+    drawText(KINFO[k].name, int(c.x + c.width / 2) - measureText(KINFO[k].name, 14) / 2, int(c.y + c.height - 20), 14,
              INK);
     DrawRectangleRounded({c.x + 4, c.y + 4, 34, 18}, .4f, 4, rgb(60, 40, 28, 220));
-    DrawText(TextFormat("Lv%d", W.unitLvl[std::clamp(int(k) - int(K_Pawn), 0, 4)]), int(c.x) + 9, int(c.y) + 7, 12,
+    drawText(TextFormat("Lv%d", W.unitLvl[std::clamp(int(k) - int(K_Pawn), 0, 4)]), int(c.x) + 9, int(c.y) + 7, 12,
              rgb(255, 235, 160));
 }

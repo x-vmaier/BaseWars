@@ -6,6 +6,7 @@
 
 #include "client/App.hpp"
 #include "rendering/Sprites.hpp"
+#include "rendering/Text.hpp"
 #include "rendering/UnitAnims.hpp"
 #include "ui/CostRow.hpp"
 #include "ui/GameText.hpp"
@@ -400,7 +401,7 @@ float btnWidth(const ContextPanel::MenuAct &a, float inner)
 {
     if (!a.hasCost)
         return inner;
-    return std::clamp(float(MeasureText(a.label.c_str(), 14)) + 28.f, 76.f, inner * .5f);
+    return std::clamp(float(measureText(a.label.c_str(), 14)) + 28.f, 76.f, inner * .5f);
 }
 } // namespace
 
@@ -424,7 +425,7 @@ void ContextPanel::layout()
             Vector2 cs = ui::measureCosts(a.cost, cw, st);
             float nh = 0;
             if (!a.note.empty())
-                nh = cs.x + 8 + float(MeasureText(a.note.c_str(), int(NOTE_FS))) <= cw ? 0.f : NOTE_FS + 3;
+                nh = cs.x + 8 + float(measureText(a.note.c_str(), int(NOTE_FS))) <= cw ? 0.f : NOTE_FS + 3;
             h = std::max(BTN_H, cs.y + nh);
         }
         rowY[i] = y;
@@ -534,7 +535,7 @@ void ContextPanel::draw()
     float x = cr.x + float(mCtx.padding) + 8, y = topY();
     for (auto &l : lines)
     {
-        DrawText(l.first.c_str(), int(x), int(y), 15, l.second);
+        drawText(l.first.c_str(), int(x), int(y), 15, l.second);
         y += 19;
     }
     if (slider)
@@ -551,7 +552,7 @@ void ContextPanel::draw()
 
 void ContextPanel::drawSlider(float x, float y) const
 {
-    DrawText(TextFormat("Auto-haul to Town Hall at %d%% full", pct), int(x), int(y) + 2, 13, INK);
+    drawText(TextFormat("Auto-haul to Town Hall at %d%% full", pct), int(x), int(y) + 2, 13, INK);
 
     Rectangle sr = sliderRect();
     float k = (float(pct) - 10.f) / 90.f;
@@ -574,7 +575,7 @@ void ContextPanel::drawAct(int i, Vector2 m, const ui::CostStyle &st) const
     Rectangle ca = costArea(i);
     float noteH = a.note.empty() ? 0.f : NOTE_FS + 3;
     Vector2 cs = ui::measureCosts(a.cost, ca.width, st);
-    bool inlineNote = !a.note.empty() && cs.x + 8 + float(MeasureText(a.note.c_str(), int(NOTE_FS))) <= ca.width;
+    bool inlineNote = !a.note.empty() && cs.x + 8 + float(measureText(a.note.c_str(), int(NOTE_FS))) <= ca.width;
     float blockH = cs.y + (inlineNote || a.note.empty() ? 0.f : noteH);
     float cy = ca.y + (ca.height - blockH) / 2;
     cs = ui::drawCosts(a.cost, ca.x, cy, ca.width, W.res, st);
@@ -583,9 +584,9 @@ void ContextPanel::drawAct(int i, Vector2 m, const ui::CostStyle &st) const
 
     Color nc = a.note.find("WANTED") != std::string::npos ? rgb(30, 120, 40) : rgb(120, 90, 60);
     if (inlineNote)
-        DrawText(a.note.c_str(), int(ca.x + cs.x + 8), int(cy + (cs.y - NOTE_FS) / 2 + 1), int(NOTE_FS), nc);
+        drawText(a.note.c_str(), int(ca.x + cs.x + 8), int(cy + (cs.y - NOTE_FS) / 2 + 1), int(NOTE_FS), nc);
     else
-        DrawText(a.note.c_str(), int(ca.x), int(cy + cs.y + 3), int(NOTE_FS), nc);
+        drawText(a.note.c_str(), int(ca.x), int(cy + cs.y + 3), int(NOTE_FS), nc);
 }
 
 void ContextPanel::drawNextLevel(Rectangle cr, float x) const
@@ -593,11 +594,11 @@ void ContextPanel::drawNextLevel(Rectangle cr, float x) const
     const ClientWorld &W = app.world;
     float pad = float(mCtx.padding);
     float ny = button(int(acts.size())).y + 4;
-    DrawText("Next level:", int(x), int(ny), 14, rgb(30, 90, 40));
+    drawText("Next level:", int(x), int(ny), 14, rgb(30, 90, 40));
     ny += 17;
     for (auto &t : next)
     {
-        DrawText(t.c_str(), int(x) + 6, int(ny), 13, INK);
+        drawText(t.c_str(), int(x) + 6, int(ny), 13, INK);
         ny += 16;
     }
 

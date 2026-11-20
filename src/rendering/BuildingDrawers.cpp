@@ -120,7 +120,7 @@ void BuildingRenderer::drawTownHallName(const BuildingView &v) const
     int hall = app.world.leaderClanOf(v.i.owner);
     if (hall)
         nm += "  [Clan Hall]";
-    textShadow(nm, int(v.cx) - MeasureText(nm.c_str(), 16) / 2, int(v.bottom) - 150, 16,
+    textShadow(nm, int(v.cx) - measureText(nm.c_str(), 16) / 2, int(v.bottom) - 150, 16,
                hall ? clanColor(hall) : teamColor(v.i.owner));
 }
 

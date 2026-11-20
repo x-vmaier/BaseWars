@@ -124,11 +124,11 @@ void BaseMenus::drawToast(int i, Vector2 m, double now)
     DrawRectangleRoundedLinesEx(r, .2f, 6, 2 + pulse * 2, rgb(255, 210, 120, int(255 * a)));
 
     std::string s = t.text;
-    while (MeasureText(s.c_str(), 15) > int(r.width) - 20 && s.size() > 4)
+    while (measureText(s.c_str(), 15) > int(r.width) - 20 && s.size() > 4)
         s.pop_back();
-    DrawText(s.c_str(), int(r.x) + 10, int(r.y) + 7, 15, rgb(255, 255, 255, int(255 * a)));
+    drawText(s.c_str(), int(r.x) + 10, int(r.y) + 7, 15, rgb(255, 255, 255, int(255 * a)));
     std::string loc = TextFormat("(%d, %d)  click to jump", int(t.x), int(t.y));
-    DrawText(loc.c_str(), int(r.x) + 10, int(r.y) + 27, 12, rgb(255, 230, 170, int(255 * a)));
+    drawText(loc.c_str(), int(r.x) + 10, int(r.y) + 27, 12, rgb(255, 230, 170, int(255 * a)));
 }
 
 void BaseMenus::drawDefeat(Vector2 m)
@@ -142,11 +142,11 @@ void BaseMenus::drawDefeat(Vector2 m)
     if (!d.clan.empty())
         by += "  [" + d.clan + "]";
     int fs = 17;
-    while (MeasureText(by.c_str(), fs) > int(r.width) - 50 && fs > 11)
+    while (measureText(by.c_str(), fs) > int(r.width) - 50 && fs > 11)
         fs--;
-    DrawText(by.c_str(), int(r.x + r.width / 2) - MeasureText(by.c_str(), fs) / 2, int(r.y) + 62, fs, rgb(70, 45, 30));
+    drawText(by.c_str(), int(r.x + r.width / 2) - measureText(by.c_str(), fs) / 2, int(r.y) + 62, fs, rgb(70, 45, 30));
     const char *hint = "Your town is burning. Found a new one elsewhere.";
-    DrawText(hint, int(r.x + r.width / 2) - MeasureText(hint, 14) / 2, int(r.y) + 92, 14, rgb(90, 62, 44));
+    drawText(hint, int(r.x + r.width / 2) - measureText(hint, 14) / 2, int(r.y) + 92, 14, rgb(90, 62, 44));
     Rectangle b = defeatButton(0);
     ui::drawButton(b, "Resettle", true, false, CheckCollisionPointRec(m, b), false, 17);
 }
@@ -158,7 +158,7 @@ void BaseMenus::drawOffer(Vector2 m)
     drawTMap(mPaper, r);
     int left = std::max(0, int(std::ceil(d.offerEndsAt - GetTime())));
     std::string t = "New town site offered - auto-accepted in " + std::to_string(left) + " s";
-    DrawText(t.c_str(), int(r.x + r.width / 2) - MeasureText(t.c_str(), 15) / 2, int(r.y) + 26, 15, rgb(70, 45, 30));
+    drawText(t.c_str(), int(r.x + r.width / 2) - measureText(t.c_str(), 15) / 2, int(r.y) + 26, 15, rgb(70, 45, 30));
     Rectangle a = defeatButton(1), n = defeatButton(0);
     ui::drawButton(n, "Resettle (next site)", true, true, CheckCollisionPointRec(m, n), false, 15);
     ui::drawButton(a, "Accept", true, false, CheckCollisionPointRec(m, a), false, 17);
@@ -178,7 +178,7 @@ void BaseMenus::drawOfferSite() const
     DrawRectangleRec(fp, rgb(120, 220, 120, int(50 + 50 * pulse)));
     DrawRectangleLinesEx(fp, 3, rgb(200, 255, 190));
     const char *label = "New Town Hall";
-    textShadow(label, int(fp.x + fp.width / 2) - MeasureText(label, 16) / 2, int(fp.y) - 24, 16, rgb(255, 245, 190));
+    textShadow(label, int(fp.x + fp.width / 2) - measureText(label, 16) / 2, int(fp.y) - 24, 16, rgb(255, 245, 190));
 }
 
 void BaseMenus::drawHomeless(Vector2 m)
@@ -187,8 +187,8 @@ void BaseMenus::drawHomeless(Vector2 m)
     bool hov = CheckCollisionPointRec(m, b);
     DrawRectangleRounded(b, .2f, 6, hov ? rgb(190, 100, 40, 240) : rgb(160, 80, 30, 235));
     DrawRectangleRoundedLinesEx(b, .2f, 6, 2, rgb(255, 220, 140));
-    DrawText("You are homeless", int(b.x) + 14, int(b.y) + 8, 18, WHITE);
-    DrawText("Click here, then place a new Town Hall near your clan (free).", int(b.x) + 14, int(b.y) + 32, 13,
+    drawText("You are homeless", int(b.x) + 14, int(b.y) + 8, 18, WHITE);
+    drawText("Click here, then place a new Town Hall near your clan (free).", int(b.x) + 14, int(b.y) + 32, 13,
              rgb(255, 235, 200));
 }
 
@@ -201,5 +201,5 @@ void BaseMenus::drawPlacementBanner()
     std::string h = em == Placement::HomelessHall
                         ? "Place your new Town Hall"
                         : (em == Placement::MoveTown ? "Place the moved Town Hall" : "Place the relocated building");
-    textShadow(h, ui::screenW() / 2 - MeasureText(h.c_str(), 20) / 2, 16, 20, rgb(255, 230, 120));
+    textShadow(h, ui::screenW() / 2 - measureText(h.c_str(), 20) / 2, 16, 20, rgb(255, 230, 120));
 }

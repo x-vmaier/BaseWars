@@ -175,7 +175,7 @@ void ShipRenderer::drawLabel(float px, float py, const Info &i, bool selected, b
     int tier = shipTier(i.aux ? i.aux : 1);
     float s = tier == 1 ? 1.f : (tier == 2 ? 1.3f : 1.6f);
     std::string t = TextFormat("%d/%d", int(i.prog), shipTroopCap(tier));
-    textShadow(t, int(px) - MeasureText(t.c_str(), 14) / 2, int(py - 78 * s), 14,
+    textShadow(t, int(px) - measureText(t.c_str(), 14) / 2, int(py - 78 * s), 14,
                i.prog >= shipTroopCap(tier) ? rgb(255, 170, 120) : rgb(235, 245, 255));
     // Troops aboard, then cargo when carrying any.
     float y = py - 78 * s + 18;

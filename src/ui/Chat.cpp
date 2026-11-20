@@ -5,6 +5,7 @@
 #include "ui/Chat.hpp"
 
 #include "client/App.hpp"
+#include "rendering/Text.hpp"
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
 
@@ -80,7 +81,7 @@ void Chat::draw()
 
     if (!isOpen)
     {
-        DrawText("Enter: chat", int(b.x + b.width) - MeasureText("Enter: chat", 11) - 4, int(b.y) + 8, 11,
+        drawText("Enter: chat", int(b.x + b.width) - measureText("Enter: chat", 11) - 4, int(b.y) + 8, 11,
                  rgb(210, 214, 225, 170));
         return;
     }
@@ -105,11 +106,11 @@ void Chat::drawLines(const Rectangle &b, double now)
     {
         const ChatLine &c = **it;
         std::string t = std::string("[") + channelName(c.ch)[0] + "] " + c.name + ": " + c.text;
-        while (MeasureText(t.c_str(), 13) > int(b.width) - 12 && t.size() > 4)
+        while (measureText(t.c_str(), 13) > int(b.width) - 12 && t.size() > 4)
             t.pop_back();
 
         float a = isOpen ? 1.f : std::clamp(float(14 - (now - c.t)) / 3.f, 0.f, 1.f);
-        DrawText(t.c_str(), int(b.x) + 6, int(y), 13,
+        drawText(t.c_str(), int(b.x) + 6, int(y), 13,
                  Color{channelColor(c.ch).r, channelColor(c.ch).g, channelColor(c.ch).b, (unsigned char)(255 * a)});
         y += 17;
     }
@@ -131,10 +132,10 @@ void Chat::drawTabs(Vector2 m)
     if (tip.empty())
         return;
 
-    int w = MeasureText(tip.c_str(), 12);
+    int w = measureText(tip.c_str(), 12);
     Rectangle t1 = tab(1);
     DrawRectangleRounded({t1.x, t1.y - 24, float(w) + 12, 20}, .3f, 4, rgb(30, 22, 16, 235));
-    DrawText(tip.c_str(), int(t1.x) + 6, int(t1.y) - 20, 12, rgb(255, 200, 160));
+    drawText(tip.c_str(), int(t1.x) + 6, int(t1.y) - 20, 12, rgb(255, 200, 160));
 }
 
 void Chat::drawInputBar(const Rectangle &b, double now)
@@ -144,8 +145,8 @@ void Chat::drawInputBar(const Rectangle &b, double now)
 
     // Show the tail of the text so the cursor stays visible.
     std::string shown = text + (int(now * 2) % 2 == 0 ? "|" : "");
-    while (MeasureText(shown.c_str(), 14) > int(b.width) - 14 && shown.size() > 2)
+    while (measureText(shown.c_str(), 14) > int(b.width) - 14 && shown.size() > 2)
         shown.erase(shown.begin());
-    DrawText(shown.c_str(), int(b.x) + 8, int(b.y) + 6, 14, rgb(70, 45, 30));
-    DrawText("Tab: channel   Enter: send   Esc: cancel", int(b.x), int(b.y) + 30, 10, rgb(210, 214, 225, 200));
+    drawText(shown.c_str(), int(b.x) + 8, int(b.y) + 6, 14, rgb(70, 45, 30));
+    drawText("Tab: channel   Enter: send   Esc: cancel", int(b.x), int(b.y) + 30, 10, rgb(210, 214, 225, 200));
 }

@@ -25,7 +25,7 @@ void box(Rectangle r)
 }
 void centred(const std::string &s, float cx, float y, int fs, Color c)
 {
-    DrawText(s.c_str(), int(cx) - MeasureText(s.c_str(), fs) / 2, int(y), fs, c);
+    drawText(s.c_str(), int(cx) - measureText(s.c_str(), fs) / 2, int(y), fs, c);
 }
 std::string shortNum(float v)
 {
@@ -124,7 +124,7 @@ void TownHallWindow::drawStorage(Vector2 m, const Info &in)
     drawStorageSummary({c.x, c.y, c.width, 150}, in, cap, hpf);
     for (int r = 0; r < R_Count; r++)
         drawStorageSlot(r, m, cap);
-    DrawText("Income above a resource's share is discarded. Shares can add up to more than 100%: the total capacity "
+    drawText("Income above a resource's share is discarded. Shares can add up to more than 100%: the total capacity "
              "still applies.",
              int(c.x) + 4, int(c.y + c.height) - 22, 12, SOFT);
 }
@@ -133,11 +133,11 @@ void TownHallWindow::drawStorageSummary(Rectangle top, const Info &in, float cap
 {
     const ClientWorld &W = app.world;
     box(top);
-    DrawText("Storage", int(top.x) + 10, int(top.y) + 8, 18, INK);
+    drawText("Storage", int(top.x) + 10, int(top.y) + 8, 18, INK);
 
     float used = W.res[0] + W.res[1] + W.res[2] + W.res[3];
     float lw = top.width - 360;
-    DrawText(TextFormat("Total %d / %d", int(used), int(cap)), int(top.x) + 12, int(top.y) + 38, 16, INK);
+    drawText(TextFormat("Total %d / %d", int(used), int(cap)), int(top.x) + 12, int(top.y) + 38, 16, INK);
     barRect({top.x + 12, top.y + 60, lw - 12, 12}, used / std::max(1.f, cap),
             used >= cap * .98f ? BAR_UPGRADE : BAR_BUILD);
 
@@ -151,7 +151,7 @@ void TownHallWindow::drawStorageSummary(Rectangle top, const Info &in, float cap
         lv += TextFormat(" Damage limits it to %d%%.", int(std::lround(hpEfficiency(hpf) * 100.f)));
     for (auto &l : wrapText(lv + " Each resource may use its share of the total.", int(lw) - 12, 13))
     {
-        DrawText(l.c_str(), int(top.x) + 12, int(ty), 13, SOFT);
+        drawText(l.c_str(), int(top.x) + 12, int(ty), 13, SOFT);
         ty += 15;
     }
     drawCapacityChart({top.x + top.width - 340, top.y + 10, 328, 130}, in.aux);
@@ -189,7 +189,7 @@ void TownHallWindow::drawStorageSlot(int r, Vector2 m, float cap)
 // Capacity per Town Hall level as small columns (current level highlighted).
 void TownHallWindow::drawCapacityChart(Rectangle r, int level)
 {
-    DrawText("Capacity by Town Hall level", int(r.x), int(r.y), 13, INK);
+    drawText("Capacity by Town Hall level", int(r.x), int(r.y), 13, INK);
     float top = r.y + 32, base = r.y + r.height - 16, mx = storageCap(K_TownHall, MAX_LEVEL),
           cw = r.width / float(MAX_LEVEL);
     for (int l = 1; l <= MAX_LEVEL; l++)
@@ -265,8 +265,8 @@ void TownHallWindow::drawClan(Vector2 m)
 
     Rectangle q{c.x, c.y + 124, c.width, c.height - 124};
     box(q);
-    DrawText("Defense quotas", int(q.x) + 10, int(q.y) + 8, 18, INK);
-    DrawText("Idle troops of each type sent to every clan mate under attack.", int(q.x) + 12, int(q.y) + 34, 13, SOFT);
+    drawText("Defense quotas", int(q.x) + 10, int(q.y) + 8, 18, INK);
+    drawText("Idle troops of each type sent to every clan mate under attack.", int(q.x) + 12, int(q.y) + 34, 13, SOFT);
 
     int total = 0;
     for (int t = 0; t < QUOTA_TYPES; t++)
@@ -277,21 +277,21 @@ void TownHallWindow::drawClan(Vector2 m)
     std::string sum = TextFormat("Up to %d troops per attacked clan mate.", total);
     if (!W.myClan())
         sum += " Quotas apply once you are in a clan.";
-    DrawText(sum.c_str(), int(q.x) + 12, int(q.y + q.height) - 26, 14, W.myClan() ? INK : WARN);
+    drawText(sum.c_str(), int(q.x) + 12, int(q.y + q.height) - 26, 14, W.myClan() ? INK : WARN);
 }
 
 void TownHallWindow::drawClanMembership(Vector2 m, Rectangle top)
 {
     const ClientWorld &W = app.world;
     box(top);
-    DrawText("Clan", int(top.x) + 10, int(top.y) + 8, 18, INK);
+    drawText("Clan", int(top.x) + 10, int(top.y) + 8, 18, INK);
 
     int mc = W.myClan();
     Rectangle cb = clanBtn();
     if (!mc)
     {
-        DrawText("You are not in a clan.", int(top.x) + 12, int(top.y) + 40, 16, INK);
-        DrawText("Join or create one in the social menu (P) to defend each other.", int(top.x) + 12, int(top.y) + 62,
+        drawText("You are not in a clan.", int(top.x) + 12, int(top.y) + 40, 16, INK);
+        drawText("Join or create one in the social menu (P) to defend each other.", int(top.x) + 12, int(top.y) + 62,
                  13, SOFT);
         ui::drawButton(cb, "Find a clan", true, false, CheckCollisionPointRec(m, cb), false, 14);
         return;
@@ -307,8 +307,8 @@ void TownHallWindow::drawClanMembership(Vector2 m, Rectangle top)
     textShadow(W.clanName(mc), int(top.x) + 12, int(top.y) + 38, 20, clanColor(mc));
     std::string sub =
         TextFormat("%d member%s, leader %s", members, members == 1 ? "" : "s", leader ? W.nameOf(leader).c_str() : "?");
-    DrawText(sub.c_str(), int(top.x) + 12, int(top.y) + 64, 13, SOFT);
-    DrawText("Clan mates share vision; their troops help defend you.", int(top.x) + 12, int(top.y) + 82, 13, SOFT);
+    drawText(sub.c_str(), int(top.x) + 12, int(top.y) + 64, 13, SOFT);
+    drawText("Clan mates share vision; their troops help defend you.", int(top.x) + 12, int(top.y) + 82, 13, SOFT);
 
     bool armed = leaveArm && GetTime() - leaveAt < CONFIRM_SECONDS;
     if (leaveArm && !armed)

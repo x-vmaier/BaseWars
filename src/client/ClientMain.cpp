@@ -3,6 +3,7 @@
  * @brief Client entry point: window setup, config.txt / settings.txt / profile loading, optional auto-join.
  */
 #include "client/App.hpp"
+#include "rendering/Text.hpp"
 
 #include <raylib.h>
 
@@ -96,5 +97,6 @@ int main(int argc, char **argv)
         autoJoin = app.session.ip + ":" + std::to_string(app.session.port);
 
     app.run(autoJoin);
+    unloadFonts();
     CloseWindow();
 }

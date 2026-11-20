@@ -32,17 +32,17 @@ void drawButton(Rectangle r, const std::string &label, bool enabled, bool red, b
 {
     const TMap &m = red ? (pressed ? mBtnRP : mBtnR) : (pressed ? mBtnP : mBtn);
     drawTMap(m, r, enabled ? (hover ? rgb(255, 255, 255) : rgb(238, 238, 238)) : rgb(140, 140, 140, 220));
-    int tw = MeasureText(label.c_str(), fs);
+    int tw = measureText(label.c_str(), fs);
 
     // shrink long labels to fit
     while (tw > int(r.width) - 12 && fs > 9)
     {
         fs--;
-        tw = MeasureText(label.c_str(), fs);
+        tw = measureText(label.c_str(), fs);
     }
-    DrawText(label.c_str(), int(r.x + r.width / 2) - tw / 2 + 1, int(r.y + r.height / 2) - fs / 2 + 1, fs,
+    drawText(label.c_str(), int(r.x + r.width / 2) - tw / 2 + 1, int(r.y + r.height / 2) - textHeight(fs) / 2, fs,
              rgb(20, 20, 40, 180));
-    DrawText(label.c_str(), int(r.x + r.width / 2) - tw / 2, int(r.y + r.height / 2) - fs / 2, fs,
+    drawText(label.c_str(), int(r.x + r.width / 2) - tw / 2, int(r.y + r.height / 2) - textHeight(fs) / 2 - 1, fs,
              enabled ? WHITE : rgb(200, 200, 200));
 }
 void drawResourceIcon(int r, float x, float y, float s)
@@ -60,11 +60,11 @@ void drawResourceIcon(int r, float x, float y, float s)
 void statBar(float x, float y, float w, float frac, Color c, const std::string &label, const std::string &value,
              const std::string &bonus)
 {
-    DrawText(label.c_str(), int(x), int(y), 12, rgb(70, 45, 30));
+    drawText(label.c_str(), int(x), int(y), 12, rgb(70, 45, 30));
     barRect({x + 56, y + 2, w, 9}, std::max(.04f, frac), c);
-    DrawText(value.c_str(), int(x + 62 + w), int(y), 12, rgb(70, 45, 30));
+    drawText(value.c_str(), int(x + 62 + w), int(y), 12, rgb(70, 45, 30));
     if (!bonus.empty())
-        DrawText(bonus.c_str(), int(x + 62 + w + MeasureText(value.c_str(), 12) + 4), int(y), 11, rgb(30, 130, 50));
+        drawText(bonus.c_str(), int(x + 62 + w + measureText(value.c_str(), 12) + 4), int(y), 11, rgb(30, 130, 50));
 }
 bool textInput(std::string &target, size_t maxLen)
 {
@@ -87,7 +87,7 @@ void textBox(Rectangle r, const std::string &text, const std::string &hint, bool
     DrawRectangleRounded(r, .3f, 6, rgb(255, 250, 235, 235));
     DrawRectangleRoundedLinesEx(r, .3f, 6, 2, focus ? rgb(60, 120, 200) : rgb(120, 90, 60));
     std::string shown = text.empty() && !focus ? hint : text + (focus && int(GetTime() * 2) % 2 == 0 ? "|" : "");
-    DrawText(shown.c_str(), int(r.x) + 8, int(r.y) + 5, 15,
+    drawText(shown.c_str(), int(r.x) + 8, int(r.y) + 5, 15,
              text.empty() && !focus ? rgb(150, 130, 110) : rgb(70, 45, 30));
 }
 void arrowButton(Rectangle a, int dir, bool enabled, bool hover)
@@ -126,7 +126,7 @@ void panelTitle(Rectangle panel, const std::string &title, int fs, float rise, i
     Vector2 ts = mTitle.size();
     Rectangle tr{panel.x + panel.width / 2 - ts.x / 2, panel.y - ts.y * rise, ts.x, ts.y};
     drawTMap(mTitle, tr);
-    textShadow(title, int(tr.x + tr.width / 2) - MeasureText(title.c_str(), fs) / 2, int(tr.y + tr.height / 2) - textDy,
+    textShadow(title, int(tr.x + tr.width / 2) - measureText(title.c_str(), fs) / 2, int(tr.y + tr.height / 2) - textDy,
                fs, WHITE);
 }
 

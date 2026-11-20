@@ -79,7 +79,7 @@ void drawDrop(const DropFx &f, double age)
     }
 
     std::string s = "+" + std::to_string(f.amt);
-    int fs = 20, w = MeasureText(s.c_str(), fs);
+    int fs = 20, w = measureText(s.c_str(), fs);
     float ty = f.y * TILE - 36.f - float(age) * 34.f;
     int a = int(255 * std::clamp((1.f - life) * 2.5f, 0.f, 1.f));
     Color c = txt[f.res];
@@ -128,14 +128,14 @@ void drawNoTerritory(const BuildingView &v, int fh)
     if (!mov)
     {
         std::string s = "No territory";
-        textShadow(s, int(cx) - MeasureText(s.c_str(), 12) / 2, int(y + r + 6), 12, rgb(255, 150, 130));
+        textShadow(s, int(cx) - measureText(s.c_str(), 12) / 2, int(y + r + 6), 12, rgb(255, 150, 130));
     }
 }
 
 void drawRelocating(const BuildingView &v, int fh)
 {
     std::string s = v.i.kind == K_TownHall ? "Moving..." : "Relocating...";
-    textShadow(s, int(v.cx) - MeasureText(s.c_str(), 14) / 2, int(v.bottom - float(fh) * TILE * .5f - 60.f), 14,
+    textShadow(s, int(v.cx) - measureText(s.c_str(), 14) / 2, int(v.bottom - float(fh) * TILE * .5f - 60.f), 14,
                rgb(210, 180, 255));
 }
 } // namespace

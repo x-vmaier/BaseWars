@@ -146,14 +146,14 @@ void Hud::drawBiome()
     if (b < 0 || b >= B_Count)
         return;
     const char *name = BIOME_NAME[b];
-    int fs = 14, tw = MeasureText(name, fs);
+    int fs = 14, tw = measureText(name, fs);
     float h = 20, wdt = float(tw) + 34;
     Rectangle r{float(ui::screenW()) - wdt - 8, float(ui::screenH()) - h - 4, wdt, h};
     // the chat help line runs along the bottom: keep clear of it
     if (app.chat.isOpen)
     {
         float helpEnd = float(ui::screenW()) - std::min(388.f, float(ui::screenW()) - 16) - 8 +
-                        float(MeasureText("Tab: channel   Enter: send   Esc: cancel", 10)) + 8;
+                        float(measureText("Tab: channel   Enter: send   Esc: cancel", 10)) + 8;
         if (r.x < helpEnd)
             return;
     }
@@ -172,7 +172,7 @@ void Hud::drawCoords()
     DrawRectangleRoundedLinesEx(cr, .3f, 6, 2, rgb(20, 12, 8));
     std::string cs =
         TextFormat("X %d    Y %d", int(std::floor(app.cam.target.x / TILE)), int(std::floor(app.cam.target.y / TILE)));
-    DrawText(cs.c_str(), int(cr.x + cr.width / 2) - MeasureText(cs.c_str(), 16) / 2, int(cr.y) + 4, 16,
+    drawText(cs.c_str(), int(cr.x + cr.width / 2) - measureText(cs.c_str(), 16) / 2, int(cr.y) + 4, 16,
              rgb(255, 240, 200));
 }
 
@@ -209,9 +209,9 @@ void Hud::drawHoverLabel()
     const Info &in = W.reg.get<Info>(W.ents[hovered]);
     std::string s =
         std::string(KINFO[in.kind].name) + (in.owner ? " - " + W.nameOf(in.owner) : "") + app.shipPanel.tooltip(in);
-    int w = MeasureText(s.c_str(), 14);
+    int w = measureText(s.c_str(), 14);
     DrawRectangleRounded({m.x + 16, m.y + 18, float(w) + 12, 22}, .3f, 4, rgb(30, 22, 16, 220));
-    DrawText(s.c_str(), int(m.x) + 22, int(m.y) + 22, 14, WHITE);
+    drawText(s.c_str(), int(m.x) + 22, int(m.y) + 22, 14, WHITE);
 }
 
 void Hud::drawCursor()
