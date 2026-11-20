@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 
 int ClientWorld::biomeAt(int x, int y) const
 {
@@ -292,19 +294,42 @@ void ClientWorld::clear()
     snap.reset();
     snapPartial = false;
     serverTick = ackedSeq = 0;
+    clock.reset();
+    stutter.reset();
 }
 
-void ClientWorld::interpolate(float dt)
+void ClientWorld::interpolate(float dt, double now)
 {
-    reg.view<RPos, Goal, Face, Info>().each([&](RPos &p, const Goal &g, Face &f, const Info &in)
+    static const double delayMs = std::getenv("BW_INTERP_MS") ? std::atof(std::getenv("BW_INTERP_MS")) : 0.0;
+    static const bool measure = std::getenv("BW_STUTTER") != nullptr;
+    double rt = clock.advance(now, clock.delay(delayMs));
+    dt = std::max(dt, 1e-4f);
+
+    reg.view<RPos, Motion, Face, Info>().each([&](RPos &p, Motion &m, Face &f, const Info &in)
     {
-        float k = std::min(1.f, 12.f * dt);
-        float dx = g.x - p.x;
-        p.x += dx * k;
-        p.y += (g.y - p.y) * k;
+        Pos np = m.buf.at(rt);
+        float dx = np.x - p.x, dy = np.y - p.y;
+        p.x = np.x;
+        p.y = np.y;
         if ((in.state & 7) == US_Attack || (in.state & 7) == US_Heal)
             f.left = std::cos(float(in.aim) / 255.f * 6.28319f - 3.14159f) < 0;
-        else if (std::abs(dx) > .004f)
+        else if (std::abs(dx) > .0005f)
             f.left = dx < 0;
+
+        if (measure && m.buf.n >= 2)
+        {
+            float vx = dx / dt, vy = dy / dt;
+            stutter.add(std::hypot(vx - m.vx, vy - m.vy), std::hypot(dx, dy));
+            m.vx = vx;
+            m.vy = vy;
+        }
     });
+
+    if (measure && now - lastStutterLog > 10.0)
+    {
+        std::fprintf(stderr, "[stutter] samples=%zu max=%.2f p99=%.2f tiles/s snaps=%d interval=%d\n",
+                     stutter.jitter.size(), stutter.maxJitter, stutter.p99(), stutter.snaps, clock.interval);
+        stutter.reset();
+        lastStutterLog = now;
+    }
 }

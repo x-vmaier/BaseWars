@@ -3,6 +3,7 @@
  * @brief Client-only ECS components (one entity per server entity in the last S_State).
  */
 #pragma once
+#include "common/Interp.hpp"
 #include "common/Shared.hpp"
 
 #include <cstdint>
@@ -29,6 +30,12 @@ struct Goal
 {
     float x, y;
 }; // last authoritative position, tiles
+
+struct Motion
+{
+    PosBuffer buf;
+    float vx = 0, vy = 0; // last rendered velocity, tiles/s (stutter metric)
+}; // snapshot history for interpolation
 
 struct Face
 {

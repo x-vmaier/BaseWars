@@ -43,7 +43,10 @@ struct ClientWorld
     SnapshotTracker snap;     // chunk bookkeeping of the newest S_State tick
     bool snapPartial = false; // the previous tick ended with missing chunks (occupancy still to rebuild)
     uint32_t serverTick = 0;  // tick of the newest snapshot
-    uint32_t ackedSeq = 0;    // last command seq the server had processed in that snapshot (for T19c)
+    InterpClock clock;        // server-tick clock for entity interpolation (T19b)
+    StutterStats stutter;     // BW_STUTTER=1 metric
+    double lastStutterLog = 0;
+    uint32_t ackedSeq = 0; // last command seq the server had processed in that snapshot (for T19c)
 
     // transient effects
     std::vector<Fx> fxs;
@@ -104,6 +107,6 @@ struct ClientWorld
     int buildGateErr(Kind k) const; // GateErr for placing one more building of kind k
     float donateWait() const;       // seconds until the donation cooldown ends (0 = ready)
     const BJob *jobOf(uint32_t id) const;
-    void clear();               // reset on join / leave (keeps the side tables)
-    void interpolate(float dt); // ease rendered positions towards the server's, update facing
+    void clear();                           // reset on join / leave (keeps the side tables)
+    void interpolate(float dt, double now); // sample rendered positions from the snapshot buffers, update facing
 };

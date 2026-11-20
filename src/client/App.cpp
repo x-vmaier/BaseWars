@@ -138,7 +138,7 @@ void App::run(const std::string &autoJoin)
         if (playing)
         {
             input.update(dt);
-            world.interpolate(dt);
+            world.interpolate(dt, GetTime());
             minimap.update();
         }
         else

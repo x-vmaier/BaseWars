@@ -131,6 +131,7 @@ void PacketHandler::onState(Reader &r)
             w.rebuildOcc(); // the previous tick never completed
         ++w.stamp;
         w.serverTick = h.tick;
+        w.clock.onSnapshot(h.tick, GetTime());
         w.ackedSeq = h.ackSeq;
         w.snapPartial = true;
     }
@@ -196,6 +197,7 @@ bool PacketHandler::readEntity(Reader &r)
         reg.emplace<RPos>(e, RPos{x, y});
         reg.emplace<Goal>(e, Goal{x, y});
         reg.emplace<Face>(e);
+        reg.emplace<Motion>(e).buf.push(w.serverTick, x, y);
         reg.emplace<Info>(e, inf);
         reg.emplace<Seen>(e, Seen{w.stamp});
         return true;
@@ -210,6 +212,7 @@ bool PacketHandler::readEntity(Reader &r)
     }
     old = inf;
     reg.get<Goal>(e) = Goal{x, y};
+    reg.get<Motion>(e).buf.push(w.serverTick, x, y);
     reg.get<Seen>(e).stamp = w.stamp;
     reg.remove<Remembered>(e); // seen again: live state replaces the memory
     return true;

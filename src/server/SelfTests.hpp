@@ -71,6 +71,7 @@ void invariantsTest(Ctx &);
 void identityTest(Ctx &);
 void defeatTest(Ctx &);
 void netSnapshotTest(Ctx &);
+void interpTest(Ctx &);
 
 int runCli(const std::string &what);
 

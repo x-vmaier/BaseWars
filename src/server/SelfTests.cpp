@@ -24,6 +24,7 @@ const Scenario SCENARIOS[] = {
     {"identity", "SteamID-only ownership: separate towns, reconnects, forged / unanswered logins", identityTest},
     {"net-snapshot", "chunked unreliable snapshots, lost chunks, command seq ack, protocol version", netSnapshotTest},
     {"defeat", "defeat: burning ruin, resettle offers, blocked commands, timeouts", defeatTest},
+    {"interp", "client interpolation: no snaps, low jitter under latency + loss, stops, teleports", interpTest},
     {"invariants", "invariant checker catches an orphaned job", invariantsTest},
 };
 
