@@ -53,13 +53,14 @@ void CombatSystem::lootStorage(entt::entity e, float amt, int attacker)
         world.say(o, std::string("Your ") + KINFO[k].name + " is being looted by " + world.ownerName(attacker) + "!");
     }
 }
+
 void CombatSystem::damage(entt::entity e, float amt, int attacker, uint32_t by)
 {
     auto &h = reg.get<Health>(e);
     h.hp -= amt;
     h.lastHit = uint8_t(attacker);
     int o = reg.get<Owner>(e).id;
-    s.defense.baseOnDamage(e, o, attacker); // clan alerts / defense dispatch
+    s.defense.baseOnDamage(e, o, attacker);
     if (by)
         reg.emplace_or_replace<Hit>(e, Hit{by, world.clock});
     if (isFactionOwner(o) && isPlayer(attacker))
@@ -77,62 +78,86 @@ void CombatSystem::damage(entt::entity e, float amt, int attacker, uint32_t by)
     if (h.hp <= 0 && world.dying.insert(uid).second)
         world.toKill.push_back({e, attacker});
 }
+
+// A destroyed convoy, hauler or worker: its cargo goes to a hostile killer, the owner is told.
+void CombatSystem::raidCargo(const float *cargo, int owner, int killer)
+{
+    float tot = 0;
+    for (int r = 0; r < R_Count; r++)
+        tot += cargo[r];
+    if (tot <= 0)
+        return;
+
+    if (isPlayer(killer) && killer != owner && !world.sameClan(killer, owner))
+    {
+        for (int r = 0; r < R_Count; r++)
+            world.pl[killer].res[r] += cargo[r];
+        world.say(killer, "You raided a supply party: +" + std::to_string(int(tot)) + " resources!");
+    }
+    world.say(owner, "Your convoy was destroyed!");
+}
+
+void CombatSystem::killRewards(entt::entity e, Kind k, int owner, int killer, Pos p)
+{
+    if (const Worker *w = reg.try_get<Worker>(e))
+        raidCargo(w->cargo, owner, killer);
+    if (const Convoy *c = reg.try_get<Convoy>(e))
+        raidCargo(c->cargo, owner, killer);
+    if (const Haul *hl = reg.try_get<Haul>(e))
+        raidCargo(hl->cargo, owner, killer);
+
+    if (hasTag(k, KT_Animal) && isPlayer(killer) && !s.hunt.huntKill(e, killer))
+    {
+        world.pl[killer].res[R_Meat] += 12;
+        world.say(killer, "Hunted a sheep: +12 meat.");
+    }
+    s.patrol.worldOnKill(e, k, owner, killer, p); // patrol loot + retaliation
+    if (isFactionOwner(owner) && isPlayer(killer))
+        s.faction.addRep(killer, owner - FACTION_BASE, k == K_TownHall ? -40.f : (isBuilding(k) ? -10.f : -4.f));
+}
+
+// A fallen faction Town Hall ends the town; a player's last Town Hall is a defeat.
+void CombatSystem::townHallFell(int owner, int killer, uint16_t town)
+{
+    if (isFactionOwner(owner))
+    {
+        s.town.townDestroyed(town, killer);
+        return;
+    }
+    if (!isPlayer(owner))
+        return;
+
+    bool other = false;
+    reg.view<Info, Owner>().each([&](const Info &i, const Owner &o)
+    {
+        if (i.kind == K_TownHall && o.id == owner)
+            other = true;
+    });
+    if (!other)
+        defeat(owner, killer);
+}
+
 void CombatSystem::processKills()
 {
+    // toKill may grow while it is processed (defeat, destroyNow), so index instead of iterating.
     for (size_t n = 0; n < world.toKill.size(); n++)
     {
         auto [e, killer] = world.toKill[n];
         if (!reg.valid(e))
             continue;
+
         Kind k = reg.get<Info>(e).kind;
         int owner = reg.get<Owner>(e).id;
         Pos p = world.posOf(e);
         if (isBuilding(k))
             world.fx(E_Explosion, p.x, p.y);
-        auto raid = [&](const float *cargo)
-        {
-            float tot = 0;
-            for (int r = 0; r < R_Count; r++)
-                tot += cargo[r];
-            if (tot <= 0)
-                return;
-            if (isPlayer(killer) && killer != owner && !world.sameClan(killer, owner))
-            {
-                for (int r = 0; r < R_Count; r++)
-                    world.pl[killer].res[r] += cargo[r];
-                world.say(killer, "You raided a supply party: +" + std::to_string(int(tot)) + " resources!");
-            }
-            world.say(owner, "Your convoy was destroyed!");
-        };
-        if (const Worker *w = reg.try_get<Worker>(e))
-            raid(w->cargo);
-        if (const Convoy *c = reg.try_get<Convoy>(e))
-            raid(c->cargo);
-        if (const Haul *hl = reg.try_get<Haul>(e))
-            raid(hl->cargo);
-        if (hasTag(k, KT_Animal) && isPlayer(killer) && !s.hunt.huntKill(e, killer))
-        {
-            world.pl[killer].res[R_Meat] += 12;
-            world.say(killer, "Hunted a sheep: +12 meat.");
-        }
-        s.patrol.worldOnKill(e, k, owner, killer, p); // [world] patrol loot + retaliation
-        if (isFactionOwner(owner) && isPlayer(killer))
-            s.faction.addRep(killer, owner - FACTION_BASE, k == K_TownHall ? -40.f : (isBuilding(k) ? -10.f : -4.f));
+
+        killRewards(e, k, owner, killer, p);
+
         uint16_t town = reg.all_of<TownTag>(e) ? reg.get<TownTag>(e).town : uint16_t(0);
         world.destroyNow(e);
-        if (k == K_TownHall && isFactionOwner(owner))
-            s.town.townDestroyed(town, killer);
-        else if (k == K_TownHall && isPlayer(owner))
-        {
-            bool other = false;
-            reg.view<Info, Owner>().each([&](const Info &i, const Owner &o)
-            {
-                if (i.kind == K_TownHall && o.id == owner)
-                    other = true;
-            });
-            if (!other)
-                defeat(owner, killer);
-        }
+        if (k == K_TownHall)
+            townHallFell(owner, killer, town);
     }
     world.toKill.clear();
 }
@@ -152,20 +177,21 @@ void CombatSystem::defeat(int victim, int killer)
                               " resources.");
     }
     if (s.clan.baseDefeat(victim))
-        return; // clan members become homeless
+        return; // clan members become homeless instead of respawning
     world.removeOwner(victim);
     world.resetProfile(victim);
-    s.spawn.spawnBase(victim, world.bp[victim].friends); // respawn near Steam friends / allies
+    s.spawn.spawnBase(victim, world.bp[victim].friends);
     world.pl[victim].sentFog.clear();
     world.pl[victim].sentTerr.clear();
     world.say(victim, "Your Town Hall fell! You rebuild at a fresh clearing elsewhere in the world.");
     std::printf("%s was defeated\n", world.pl[victim].name.c_str());
 }
 
-void CombatSystem::fight(entt::entity e, Unit &u, Kind k, int ow, Pos &p, float dt)
+// Explicit Attack orders are dropped when the target is gone, allied or aboard a ship.
+entt::entity CombatSystem::pickTarget(entt::entity e, int ow, bool &explicitOrder)
 {
     entt::entity tg = entt::null;
-    bool explicitOrder = false;
+    explicitOrder = false;
     if (auto *a = reg.try_get<Attack>(e))
     {
         tg = world.find(a->target);
@@ -178,6 +204,30 @@ void CombatSystem::fight(entt::entity e, Unit &u, Kind k, int ow, Pos &p, float 
             explicitOrder = false;
         }
     }
+    return tg;
+}
+
+void CombatSystem::strike(entt::entity e, Unit &u, Kind k, int ow, Pos p, entt::entity tg, Pos tp, float dt)
+{
+    u.path.clear();
+    u.i = 0;
+    u.state = US_Attack;
+    damage(tg,
+           KINFO[k].dps * unitDmgMul(world.ulv(ow, k)) * damageVs(k, reg.get<Info>(tg).kind) *
+               armorOf(reg.get<Info>(tg).kind) * dt,
+           ow, reg.get<Uid>(e).id);
+    if (k == K_Archer && u.cd <= 0)
+    {
+        u.cd = .8f;
+        s.fire.archerShot(ow, p, tp, tg);
+    }
+}
+
+void CombatSystem::fight(entt::entity e, Unit &u, Kind k, int ow, Pos &p, float dt)
+{
+    bool explicitOrder = false;
+    entt::entity tg = pickTarget(e, ow, explicitOrder);
+
     bool amove = reg.all_of<AMove>(e);
     if (tg == entt::null && (isArmy(k) || amove) && u.repath <= 0)
     {
@@ -188,34 +238,20 @@ void CombatSystem::fight(entt::entity e, Unit &u, Kind k, int ow, Pos &p, float 
     }
     if (tg == entt::null)
         return;
+
     Pos tp = world.posOf(tg);
     float d = world.rectDist(p, tg);
     u.aim = uint8_t(int((std::atan2(tp.y - p.y, tp.x - p.x) + 3.14159f) / 6.28319f * 255.f));
     if (d <= KINFO[k].range)
-    {
-        u.path.clear();
-        u.i = 0;
-        u.state = US_Attack;
-        damage(tg,
-               KINFO[k].dps * unitDmgMul(world.ulv(ow, k)) * damageVs(k, reg.get<Info>(tg).kind) *
-                   armorOf(reg.get<Info>(tg).kind) * dt,
-               ow, reg.get<Uid>(e).id);
-        if (k == K_Archer && u.cd <= 0)
-        {
-            u.cd = .8f;
-            s.fire.archerShot(ow, p, tp, tg);
-        } // fire arrows at troop level 3
-    }
+        strike(e, u, k, ow, p, tg, tp, dt);
     else if (u.repath <= 0 || u.path.empty())
     {
         u.repath = 1.f;
         bool bld = isBuilding(reg.get<Info>(tg).kind);
         if (!world.order(e, tp, bld ? reg.get<Uid>(tg).id : 0) && explicitOrder)
             reg.remove<Attack>(e);
-        if (!explicitOrder && !reg.all_of<Attack>(e))
-        { /* auto-acquired targets are re-evaluated each pass */
-        }
     }
-    if (!explicitOrder && tg != entt::null && !reg.all_of<Attack>(e) && d > KINFO[k].range && !u.path.empty())
+
+    if (!explicitOrder && !reg.all_of<Attack>(e) && d > KINFO[k].range && !u.path.empty())
         u.state = US_Move;
 }

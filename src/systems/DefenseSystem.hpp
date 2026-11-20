@@ -32,6 +32,12 @@ class DefenseSystem
     void supportSecond();
 
   private:
+    std::vector<entt::entity> pickDefenders(int m, int victim, Pos at, int &need);
+    void announceDefense(int m, int victim, int attacker, size_t n, bool boat, float eta);
+    void supportOutbound(entt::entity e, Support &sp, Unit &u, float dDest, int &budget);
+    void supportFight(entt::entity e, Support &sp, Unit &u, bool hostileNear, float dDest, int &budget);
+    void supportReturn(entt::entity e, Support &sp, Unit &u, float dHome, int &budget);
+
     World &world;
     entt::registry &reg;
     Systems &s;

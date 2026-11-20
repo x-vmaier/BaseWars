@@ -65,6 +65,12 @@ class ClearingSystem
     std::vector<Source> dropSrc[MAX_PLAYERS + 1];
     uint32_t dropSrcTick[MAX_PLAYERS + 1]{};
 
+    bool readClear(int id, Reader &r, std::vector<IV> &ts, std::vector<uint32_t> &want);
+    void planClear(int id, const std::vector<IV> &ts, float *cost, std::vector<IV> &ok, bool &far);
+    void releasePicked(const std::vector<uint32_t> &want);
+    void dropLostPawns(bool *busy);
+    void sortJobs(const bool *busy, std::vector<int64_t> &done, std::vector<int64_t> &stale);
+    void assignPawns();
     bool freePawn(entt::entity e, int owner, bool explicitPick);
     entt::entity pickPawn(const ClearJob &j, Pos at);
     void assign(int64_t key, ClearJob &j, entt::entity pawn);

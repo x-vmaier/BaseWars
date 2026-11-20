@@ -91,8 +91,8 @@ void App::drawUI(float dt)
     if (social.isOpen)
     {
         social.draw();
-        buildMenu.draw(dt);
-    } // both can be open: the build menu stays above the dimming
+        buildMenu.draw(dt); // both can be open: the build menu stays above the dimming
+    }
 
     if (training.isOpen)
         training.draw();
@@ -147,48 +147,58 @@ void App::run(const std::string &autoJoin)
         hooks.update();
         float t = float(GetTime());
         if (playing)
-        {
-            post.beginScene();
-            water.draw(t);
-            BeginMode2D(cam);
-            worldRenderer.draw(t);
-            EndMode2D();
-            post.endScene();
-        }
+            drawScene(t);
 
         BeginDrawing();
         ClearBackground(rgb(20, 22, 30));
         if (playing)
-        {
-            HideCursor();
-            post.present(t);
-            ui::begin();
-            if (context.isOpen)
-                context.rebuild();
-            drawUI(dt);
-            if (pause.isOpen)
-                pause.draw();
-            hud.drawCursor();
-            ui::end();
-        }
+            drawPlayingFrame(t, dt);
         else
-        {
-            ShowCursor();
-            backdrop.draw(t);
-            ui::begin();
-            mainMenu.draw();
-            ui::end();
-        }
+            drawMenuFrame(t);
 
+        // BW_SHOT saves a frame and quits
         if (hooks.captureIfDue())
         {
             EndDrawing();
             break;
-        } // test hook: BW_SHOT=<file.png> saves a frame and quits
+        }
         EndDrawing();
     }
 
     settings.save(std::string(GetApplicationDirectory()));
     session.cnet.close();
     session.steam.shutdown();
+}
+
+void App::drawScene(float t)
+{
+    post.beginScene();
+    water.draw(t);
+    BeginMode2D(cam);
+    worldRenderer.draw(t);
+    EndMode2D();
+    post.endScene();
+}
+
+void App::drawPlayingFrame(float t, float dt)
+{
+    HideCursor();
+    post.present(t);
+    ui::begin();
+    if (context.isOpen)
+        context.rebuild();
+    drawUI(dt);
+    if (pause.isOpen)
+        pause.draw();
+    hud.drawCursor();
+    ui::end();
+}
+
+void App::drawMenuFrame(float t)
+{
+    ShowCursor();
+    backdrop.draw(t);
+    ui::begin();
+    mainMenu.draw();
+    ui::end();
 }

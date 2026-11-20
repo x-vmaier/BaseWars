@@ -21,6 +21,9 @@ class FireSystem
     bool extinguishTick(entt::entity e, Unit &u, Pos &p, float dt); // true while the unit is busy firefighting
 
   private:
+    void burnDamage(const std::vector<entt::entity> &burning);
+    void dispatchFirefighters(entt::entity b, std::vector<entt::entity> &cand, int already);
+
     World &world;
     entt::registry &reg;
     Systems &s;

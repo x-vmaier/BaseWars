@@ -20,6 +20,7 @@ class ClanSystem
     void homelessBuild(int id, int tx, int ty); // C_Build K_TownHall
 
   private:
+    void emergencyDonations(int victim, const std::vector<int> &mates);
     World &world;
     entt::registry &reg;
     Systems &s;

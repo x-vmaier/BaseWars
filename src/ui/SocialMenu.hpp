@@ -9,6 +9,8 @@
 #include <vector>
 
 class App;
+struct Peer;
+struct FacTown;
 
 class SocialMenu
 {
@@ -47,6 +49,22 @@ class SocialMenu
     };
     static constexpr float SROW = 30.f;
     std::vector<SRow> rows();
+    static SBtn friendBtn(const Peer &p);
+    SRow peerRow(const Peer &p);
+    SRow memberRow(const Peer &p, int myClan);
+    void addPeerRows(std::vector<SRow> &rows, bool friendsOnly);
+    void addClanRows(std::vector<SRow> &rows);
+    void addMyClanRows(std::vector<SRow> &rows);
+    void addFactionRows(std::vector<SRow> &rows);
+    const FacTown *nearestTown(int faction) const;
+    void typeSearch();
+    void click(Vector2 m);
+    void clickRows(Vector2 m);
+    void drawSearchBox();
+    std::string drawRows(Vector2 m);
+    void drawRowButtons(const SRow &row, const Rectangle &rr, Vector2 m, std::string &tip);
+    void drawBottom(Vector2 m, const Rectangle &sr);
+    static void drawTip(Vector2 m, const std::string &tip);
     void run(const SBtn &b);
     bool bottomBtn(SBtn &out);
     float scale() const;

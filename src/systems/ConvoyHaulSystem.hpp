@@ -23,6 +23,15 @@ class ConvoyHaulSystem
     World &world;
     entt::registry &reg;
     Systems &s;
+    entt::entity recipientHall(const Convoy &cv, Pos p);
+    void deliverConvoy(entt::entity e, const Convoy &cv, Pos p);
+    void arriveHaul(entt::entity e, Unit &u, Haul &h, entt::entity st, entt::entity th, int ow);
+    void walkHaul(entt::entity e, Unit &u, Haul &h, entt::entity target, float d, float dt);
+    void noteHallFull(int ow, uint32_t storageUid);
+    bool workerToward(entt::entity e, entt::entity b);
+    entt::entity nearestStorageWithRoom(Pos p, int owner);
+    void workerCollect(entt::entity e, Unit &u, Worker &w, entt::entity home, Pos p);
+    void workerDeliver(entt::entity e, Unit &u, Worker &w, Pos p);
     void refundConvoy(entt::entity e, const Convoy &cv, const std::string &why);
     void endHaul(entt::entity e, Haul &h, bool ok); // returns any cargo to the owner and puts the storage on cooldown
     float hallRoom(int owner);                      // free capacity of the owner's Town Hall (0 when there is none)

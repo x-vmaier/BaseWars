@@ -14,6 +14,37 @@
 #include <cstring>
 #include <string>
 
+namespace
+{
+std::string sanitizeName(std::string name)
+{
+    for (char &c : name)
+        if (c < 32 || c == 127)
+            c = '?';
+    if (name.empty())
+        name = "Player";
+    if (name.size() > 20)
+        name.resize(20);
+    return name;
+}
+} // namespace
+
+void NetSession::bindConnection(uint64_t conn, int id, const std::string &name, uint64_t steamId,
+                                const std::vector<uint64_t> &friends)
+{
+    Profile &p = world.pl[id];
+    p.name = name;
+    p.online = true;
+    p.conn = conn;
+    p.steamId = steamId;
+    p.lastSeen = nowSec();
+    p.sentFog.clear();
+    p.sentTerr.clear();
+
+    world.bp[id].friends = friends;
+    world.connPlayer[conn] = id;
+}
+
 void NetSession::onHello(uint64_t conn, Reader &r)
 {
     std::string uuid = r.str(), name = r.str();
@@ -27,13 +58,8 @@ void NetSession::onHello(uint64_t conn, Reader &r)
         world.net.kick(conn, false);
         return;
     }
-    for (char &c : name)
-        if (c < 32 || c == 127)
-            c = '?';
-    if (name.empty())
-        name = "Player";
-    if (name.size() > 20)
-        name.resize(20);
+    name = sanitizeName(name);
+
     int id = 0;
     for (int i = 1; i <= MAX_PLAYERS; i++)
         if (world.pl[i].used && world.pl[i].uuid == uuid)
@@ -47,82 +73,114 @@ void NetSession::onHello(uint64_t conn, Reader &r)
         world.net.kick(conn, true);
         return;
     }
+
     bool fresh = false;
     if (!id)
     {
-        for (int i = 1; i <= MAX_PLAYERS && !id; i++)
-            if (!world.pl[i].used)
-                id = i;
+        id = claimSlot();
         if (!id)
-        { // recycle the longest-offline profile
-            uint64_t oldest = UINT64_MAX;
-            for (int i = 1; i <= MAX_PLAYERS; i++)
-                if (!world.pl[i].online && world.pl[i].lastSeen < oldest)
-                {
-                    oldest = world.pl[i].lastSeen;
-                    id = i;
-                }
-            if (!id)
-            {
-                world.net.kick(conn, false);
-                return;
-            }
-            s.clan.leaveClan(id);
-            world.removeOwner(id);
-            for (int a = 0; a <= MAX_PLAYERS; a++)
-                world.pl[a].allied[id] = world.pl[a].pending[id] = false;
-            world.pl[id] = Profile{};
-            world.bp[id] = BaseProf{};
+        {
+            world.net.kick(conn, false);
+            return;
         }
         fresh = true;
-        world.pl[id].used = true;
-        world.pl[id].uuid = uuid;
-        world.resetProfile(id);
-        for (int f = 0; f < FACTION_COUNT;
-             f++) // a configurable share of the factions are aggressive towards each newcomer
-            if (hash2(int(std::hash<std::string>{}(uuid) & 0x7fffffff), f, world.seed + 71) % 100 <
-                uint32_t(cfg().hostileFactionPercent))
-                world.pl[id].rep[f] = -50.f;
-        if (const char *ag = std::getenv("BW_AGGRO"))
-        {
-            int v = std::atoi(ag);
-            for (int f = 0; f < FACTION_COUNT; f++)
-                if (v >= FACTION_COUNT || v == f)
-                    world.pl[id].rep[f] = -50.f;
-        } // test hook
+        initNewProfile(id, uuid);
     }
+
+    bindConnection(conn, id, name, steamId, friends);
     Profile &p = world.pl[id];
-    p.name = name;
-    p.online = true;
-    p.conn = conn;
-    p.steamId = steamId;
-    world.bp[id].friends = friends;
-    world.connPlayer[conn] = id;
-    p.lastSeen = nowSec();
-    p.sentFog.clear();
-    p.sentTerr.clear();
+
     if (fresh)
         s.spawn.spawnBase(id, friends);
     else
-    {
-        bool hasTH = false;
-        reg.view<Info, Owner>().each([&](const Info &i, const Owner &o)
-        {
-            if (i.kind == K_TownHall && o.id == id)
-                hasTH = true;
-        });
-        if (!hasTH && !world.bp[id].homeless)
-        {
-            world.resetProfile(id);
-            s.spawn.spawnBase(id, friends);
-            world.say(id, "Your base was destroyed while you were away. You start over.");
-        }
-    }
+        respawnIfDestroyed(id, friends);
+
     if (const char *rv = std::getenv("BW_REVEAL"))
-    { // test hook: reveal a large disc around the base
+    {
         Pos c = p.cam;
         world.reveal(id, int(c.x), int(c.y), std::atoi(rv));
     }
+
+    sendWelcome(conn, id);
+    s.repl.sendFog(id);
+    s.clearing.sendClearedFull(id);
+    s.spawn.worldTestSpawn(id, fresh);
+    s.repl.sendRoster();
+    world.say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu."
+                        : "Welcome back, " + p.name + "! Your base is just as you left it.");
+    std::printf("%s (%d) %s\n", p.name.c_str(), id, fresh ? "joined" : "rejoined");
+}
+
+int NetSession::claimSlot()
+{
+    int id = 0;
+    for (int i = 1; i <= MAX_PLAYERS && !id; i++)
+        if (!world.pl[i].used)
+            id = i;
+    if (id)
+        return id;
+
+    // All slots are taken: recycle the longest-offline profile.
+    uint64_t oldest = UINT64_MAX;
+    for (int i = 1; i <= MAX_PLAYERS; i++)
+        if (!world.pl[i].online && world.pl[i].lastSeen < oldest)
+        {
+            oldest = world.pl[i].lastSeen;
+            id = i;
+        }
+    if (!id)
+        return 0;
+
+    s.clan.leaveClan(id);
+    world.removeOwner(id);
+    for (int a = 0; a <= MAX_PLAYERS; a++)
+        world.pl[a].allied[id] = world.pl[a].pending[id] = false;
+    world.pl[id] = Profile{};
+    world.bp[id] = BaseProf{};
+    return id;
+}
+
+void NetSession::initNewProfile(int id, const std::string &uuid)
+{
+    world.pl[id].used = true;
+    world.pl[id].uuid = uuid;
+    world.resetProfile(id);
+
+    // A configurable share of the factions is aggressive towards each newcomer.
+    for (int f = 0; f < FACTION_COUNT; f++)
+        if (hash2(int(std::hash<std::string>{}(uuid) & 0x7fffffff), f, world.seed + 71) % 100 <
+            uint32_t(cfg().hostileFactionPercent))
+            world.pl[id].rep[f] = -50.f;
+
+    // Test hook.
+    if (const char *ag = std::getenv("BW_AGGRO"))
+    {
+        int v = std::atoi(ag);
+        for (int f = 0; f < FACTION_COUNT; f++)
+            if (v >= FACTION_COUNT || v == f)
+                world.pl[id].rep[f] = -50.f;
+    }
+}
+
+void NetSession::respawnIfDestroyed(int id, const std::vector<uint64_t> &friends)
+{
+    bool hasTH = false;
+    reg.view<Info, Owner>().each([&](const Info &i, const Owner &o)
+    {
+        if (i.kind == K_TownHall && o.id == id)
+            hasTH = true;
+    });
+    if (hasTH || world.bp[id].homeless)
+        return;
+
+    world.resetProfile(id);
+    s.spawn.spawnBase(id, friends);
+    world.say(id, "Your base was destroyed while you were away. You start over.");
+}
+
+void NetSession::sendWelcome(uint64_t conn, int id)
+{
+    const Profile &p = world.pl[id];
     Writer w;
     w.put<uint8_t>(S_Welcome)
         .put<uint8_t>(uint8_t(id))
@@ -130,16 +188,10 @@ void NetSession::onHello(uint64_t conn, Reader &r)
         .put<float>(p.cam.x)
         .put<float>(p.cam.y);
     w.str(p.name);
-    putRules(w); // progression / food / donation tunables (common/Progression.hpp)
+    putRules(w);
     world.net.send(conn, w);
-    s.repl.sendFog(id);
-    s.clearing.sendClearedFull(id); // [world] cleared surface features
-    s.spawn.worldTestSpawn(id, fresh);
-    s.repl.sendRoster();
-    world.say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu."
-                        : "Welcome back, " + p.name + "! Your base is just as you left it.");
-    std::printf("%s (%d) %s\n", p.name.c_str(), id, fresh ? "joined" : "rejoined");
 }
+
 void NetSession::onDisconnect(uint64_t conn)
 {
     auto it = world.connPlayer.find(conn);

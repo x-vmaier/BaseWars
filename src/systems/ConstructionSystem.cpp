@@ -28,7 +28,6 @@ bool ConstructionSystem::needsPawn(entt::entity e) const
     return !(reg.get<Info>(e).kind == K_TownHall && !reg.all_of<RelocNew>(e)); // a newly founded hall raises itself
 }
 
-// pawns
 bool ConstructionSystem::freePawn(entt::entity e, int owner) const
 {
     if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || !hasTag(reg.get<Info>(e).kind, KT_Worker) ||
@@ -43,6 +42,7 @@ bool ConstructionSystem::freePawn(entt::entity e, int owner) const
         return w->phase == 0 || w->phase == 3; // never pull a worker away while it carries goods
     return true;
 }
+
 entt::entity ConstructionSystem::pickPawn(int owner, Pos at)
 {
     entt::entity best = entt::null;
@@ -62,6 +62,7 @@ entt::entity ConstructionSystem::pickPawn(int owner, Pos at)
     });
     return best;
 }
+
 void ConstructionSystem::assign(entt::entity site, SiteJob &j, entt::entity e)
 {
     auto &u = reg.get<Unit>(e);
@@ -86,6 +87,7 @@ void ConstructionSystem::assign(entt::entity site, SiteJob &j, entt::entity e)
     j.phase = SP_Walking;
     j.since = world.clock;
 }
+
 void ConstructionSystem::releasePawn(entt::entity e, bool manual)
 {
     const BuildTask *bt = reg.try_get<BuildTask>(e);
@@ -116,6 +118,7 @@ void ConstructionSystem::releasePawn(entt::entity e, bool manual)
     else if (c.hadDest && !manual)
         world.order(e, c.dest);
 }
+
 // per unit and tick: walk to the site, then work there (only then does the job timer run)
 void ConstructionSystem::pawnTick(entt::entity e, Unit &u, BuildTask &bt, Pos &p, float dt)
 {
@@ -160,7 +163,6 @@ void ConstructionSystem::pawnTick(entt::entity e, Unit &u, BuildTask &bt, Pos &p
         bt.stuck += 2;
 }
 
-// jobs
 void ConstructionSystem::work(entt::entity site, SiteJob &j, float dt)
 {
     dt *= baseTestSpeed();
@@ -195,6 +197,7 @@ void ConstructionSystem::work(entt::entity site, SiteJob &j, float dt)
     }
     endJob(site);
 }
+
 void ConstructionSystem::finishUpgrade(entt::entity site)
 {
     auto &in = reg.get<Info>(site);
@@ -208,6 +211,7 @@ void ConstructionSystem::finishUpgrade(entt::entity site)
     world.say(reg.get<Owner>(site).id,
               std::string(KINFO[in.kind].name) + " upgraded to level " + std::to_string(in.level) + ".");
 }
+
 void ConstructionSystem::endJob(entt::entity site)
 {
     SiteJob j = reg.get<SiteJob>(site);
@@ -216,88 +220,104 @@ void ConstructionSystem::endJob(entt::entity site)
         releasePawn(e, false);
 }
 
-void ConstructionSystem::tick(float dt)
+// Sites that need a pawn get a job record; everything else raises itself in BuildSystem.
+void ConstructionSystem::createBuildJobs()
 {
-    (void)dt; // job timers advance in pawnTick (only while a pawn works)
     std::vector<entt::entity> fresh;
-    if (world.tick % 5 == 0)
+    reg.view<Building, Owner>().each([&](entt::entity e, const Building &b, const Owner &)
     {
-        reg.view<Building, Owner>().each([&](entt::entity e, const Building &b, const Owner &)
-        {
-            if (b.progress < 1.f && !reg.all_of<SiteJob>(e) && needsPawn(e))
-                fresh.push_back(e);
-        });
-        for (auto e : fresh)
-        {
-            SiteJob j;
-            j.kind = SJ_Build;
-            j.total = s.build.buildTimeFor(e, reg.get<Info>(e).kind);
-            j.since = world.clock;
-            reg.emplace<SiteJob>(e, j);
-        }
+        if (b.progress < 1.f && !reg.all_of<SiteJob>(e) && needsPawn(e))
+            fresh.push_back(e);
+    });
+    for (auto e : fresh)
+    {
+        SiteJob j;
+        j.kind = SJ_Build;
+        j.total = s.build.buildTimeFor(e, reg.get<Info>(e).kind);
+        j.since = world.clock;
+        reg.emplace<SiteJob>(e, j);
     }
-    if (world.tick % 10 == 0)
-    { // pawn validation and assignment, twice a second
-        std::vector<entt::entity> sites;
-        reg.view<SiteJob>().each([&](entt::entity e, SiteJob &j)
+}
+
+void ConstructionSystem::assignPawns()
+{
+    std::vector<entt::entity> sites;
+    reg.view<SiteJob>().each([&](entt::entity e, SiteJob &j)
+    {
+        if (j.pawn)
         {
-            if (j.pawn)
+            auto pe = world.find(j.pawn);
+            const BuildTask *bt = pe == entt::null ? nullptr : reg.try_get<BuildTask>(pe);
+            if (!bt || bt->site != reg.get<Uid>(e).id)
             {
-                auto pe = world.find(j.pawn);
-                const BuildTask *bt = pe == entt::null ? nullptr : reg.try_get<BuildTask>(pe);
-                if (!bt || bt->site != reg.get<Uid>(e).id)
-                {
-                    j.pawn = 0;
-                    j.phase = SP_Waiting;
-                    j.since = world.clock;
-                }
+                j.pawn = 0;
+                j.phase = SP_Waiting;
+                j.since = world.clock;
             }
-            if (!j.pawn)
-                sites.push_back(e);
-        });
-        for (auto e : sites)
-        {
-            auto pawn = pickPawn(reg.get<Owner>(e).id, world.posOf(e));
-            if (pawn != entt::null)
-                assign(e, reg.get<SiteJob>(e), pawn);
         }
-        std::erase_if(manualUntil, [&](auto &kv) { return kv.second < world.clock; });
+        if (!j.pawn)
+            sites.push_back(e);
+    });
+    for (auto e : sites)
+    {
+        auto pawn = pickPawn(reg.get<Owner>(e).id, world.posOf(e));
+        if (pawn != entt::null)
+            assign(e, reg.get<SiteJob>(e), pawn);
     }
+    std::erase_if(manualUntil, [&](auto &kv) { return kv.second < world.clock; });
+}
+
+void ConstructionSystem::tick(float)
+{
+    // Job timers advance in pawnTick, only while a pawn works.
+    if (world.tick % 5 == 0)
+        createBuildJobs();
+    if (world.tick % 10 == 0)
+        assignPawns(); // twice a second
     if (world.tick % 5 == 2)
         for (int id = 1; id <= MAX_PLAYERS; id++)
             if (world.pl[id].online)
                 sendJobs(id);
 }
 
-// commands
-void ConstructionSystem::upgrade(int id, entt::entity be)
+// Says why the building cannot be upgraded right now, if it cannot.
+bool ConstructionSystem::upgradeRefused(int id, entt::entity be, const Info &in)
 {
-    if (be == entt::null || !reg.all_of<Building>(be) || reg.get<Owner>(be).id != id || !world.complete(be))
-        return;
-    auto &in = reg.get<Info>(be);
     std::string nm = KINFO[in.kind].name;
     if (reg.all_of<SiteJob>(be))
     {
         world.say(id, "The " + nm + " is already being " +
                           (reg.get<SiteJob>(be).kind == SJ_Repair ? "repaired." : "upgraded."));
-        return;
+        return true;
     }
     if (world.outOfTerritory(be) || reg.all_of<Moving>(be))
     {
         world.say(id, "This building is not functional.");
-        return;
+        return true;
     }
     if (world.crippled(be))
     {
         world.say(id, "The " + nm + " is too badly damaged: repair it first.");
-        return;
+        return true;
     }
     std::string why = upgradeBlock(in.kind, in.level, world.thLevel(id));
     if (!why.empty())
     {
         world.say(id, "Cannot upgrade the " + nm + ": " + why + ".");
-        return;
+        return true;
     }
+    return false;
+}
+
+void ConstructionSystem::upgrade(int id, entt::entity be)
+{
+    if (be == entt::null || !reg.all_of<Building>(be) || reg.get<Owner>(be).id != id || !world.complete(be))
+        return;
+    auto &in = reg.get<Info>(be);
+    if (upgradeRefused(id, be, in))
+        return;
+
+    std::string nm = KINFO[in.kind].name;
     float cost[R_Count];
     upgradeCost(in.kind, in.level, cost);
     if (!world.afford(id, cost))
@@ -321,6 +341,7 @@ void ConstructionSystem::upgrade(int id, entt::entity be)
                       std::to_string(int(j.total)) +
                       " s of work). A pawn is on the way; production and training pause meanwhile.");
 }
+
 void ConstructionSystem::repair(int id, entt::entity be)
 {
     auto &in = reg.get<Info>(be);
@@ -366,6 +387,7 @@ void ConstructionSystem::repair(int id, entt::entity be)
     world.say(id, "Repair of the " + nm + " ordered (" + std::to_string(int(j.total)) +
                       " s of work). A pawn is on the way.");
 }
+
 void ConstructionSystem::cancel(int id, entt::entity be)
 {
     SiteJob *j = reg.try_get<SiteJob>(be);
@@ -382,6 +404,7 @@ void ConstructionSystem::cancel(int id, entt::entity be)
     world.say(id, "The " + what + " was cancelled; " + std::to_string(int(std::lround(keep * 100.f))) +
                       "% of its cost was refunded.");
 }
+
 void ConstructionSystem::repairCmd(int id, Reader &r)
 {
     auto be = world.find(r.get<uint32_t>());

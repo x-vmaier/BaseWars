@@ -17,6 +17,9 @@ class UnitSystem
 
   private:
     void healTick(entt::entity e, Unit &u, Kind k, int ow, Pos p, const std::vector<entt::entity> &units, float dt);
+    void wander(entt::entity e, Unit &u, Pos p, float dt);
+    void runDuty(entt::entity e, Unit &u, Kind k, int ow, Pos &p, const std::vector<entt::entity> &units, float dt);
+
     World &world;
     entt::registry &reg;
     Systems &s;

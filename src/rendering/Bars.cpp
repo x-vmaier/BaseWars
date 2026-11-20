@@ -24,14 +24,14 @@ Color healthColor(float f)
 void barRect(Rectangle r, float frac, Color fill)
 {
     float x = std::round(r.x), y = std::round(r.y), w = std::round(r.width), h = std::max(3.f, std::round(r.height));
-    DrawRectangleRec({x - 1, y - 1, w + 2, h + 2}, rgb(235, 235, 240, 235)); // 1px light outline
-    DrawRectangleRec({x, y, w, h}, rgb(14, 12, 18));                         // dark opaque backdrop
+    DrawRectangleRec({x - 1, y - 1, w + 2, h + 2}, rgb(235, 235, 240, 235));
+    DrawRectangleRec({x, y, w, h}, rgb(14, 12, 18));
     float fw = std::round(w * std::clamp(frac, 0.f, 1.f));
     if (fw <= 0)
         return;
     DrawRectangleRec({x, y, fw, h}, fill);
-    DrawRectangleRec({x, y, fw, std::max(1.f, std::floor(h / 3))}, rgb(255, 255, 255, 90)); // top highlight
-    DrawRectangleRec({x, y + h - 1, fw, 1}, rgb(0, 0, 0, 70));                              // bottom shade
+    DrawRectangleRec({x, y, fw, std::max(1.f, std::floor(h / 3))}, rgb(255, 255, 255, 90));
+    DrawRectangleRec({x, y + h - 1, fw, 1}, rgb(0, 0, 0, 70));
 }
 
 void drawBar(Vector2 c, float w, float frac, Color fill)

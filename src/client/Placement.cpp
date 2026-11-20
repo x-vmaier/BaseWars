@@ -36,7 +36,8 @@ struct PlaceWorld
         return hit;
     }
     bool inClanRadius(Pos c)
-    { // clan towns we know of (roster locations of clan mates)
+    {
+        // clan towns we know of (roster locations of clan mates)
         for (auto &p : a.roster)
             if (p.id != a.me && p.hasLoc && p.clan && p.clan == a.myClan() &&
                 std::max(std::abs(p.lx - c.x), std::abs(p.ly - c.y)) <= CLAN_TOWN_RADIUS)
@@ -93,7 +94,7 @@ void Placement::place(Kind k, IV t)
         break;
     default:
         app.cmd.build(k, t);
-        break; // normal build / homeless Town Hall (the server tells them apart)
+        break;
     }
 }
 
@@ -148,11 +149,12 @@ void Placement::click(Vector2 w, bool shift)
         !err && effMode() != Normal && clearClick(k, t); // special placements: clear exactly the blocking tiles first
     if (!err && !clearing)
         place(k, t);
+    // special placements stay in their mode until a valid site was chosen
     if (effMode() != 0)
     {
         if (!err && !clearing)
             buildKind = -1;
-    } // special placements: stay in the mode until a valid site was chosen
+    }
     else if (!shift && !clearing)
         buildKind = -1;
 }

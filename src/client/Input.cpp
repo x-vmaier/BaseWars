@@ -19,74 +19,9 @@ void Input::update(float dt)
     cam.offset = {sw * .5f, sh * .5f};
     bool ui = app.overUI(m);
 
-    // modal panels own the input while open
-    if (app.pause.isOpen)
-    {
-        app.pause.input();
+    if (modalInput(m))
         return;
-    }
-    if (app.chat.isOpen)
-    {
-        app.chat.update(m);
-        return;
-    }
-    if (app.baseMenus.input(m))
-        return;
-    if (app.bigMap.isOpen)
-    {
-        app.bigMap.input(m);
-        return;
-    }
-    if (app.training.isOpen)
-    {
-        app.training.input(m);
-        return;
-    }
-    if (app.townHall.isOpen)
-    {
-        app.townHall.input(m);
-        return;
-    }
-    if (app.social.isOpen)
-    {
-        // the build menu stays usable beside the social menu
-        bool lp = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
-        if (lp && app.buildMenu.over(m))
-        {
-            app.buildMenu.click(m);
-            return;
-        }
-        if (lp && CheckCollisionPointRec(m, Hud::socialTabBtn()))
-        {
-            app.social.isOpen = false;
-            app.social.textFocus = false;
-            return;
-        }
-        if (!app.social.textFocus && IsKeyPressed(KEY_B))
-        {
-            app.buildMenu.isOpen = !app.buildMenu.isOpen;
-            return;
-        }
-        if (!app.social.textFocus && app.buildMenu.isOpen)
-            app.buildMenu.hotkeys();
-        app.social.input(m);
-        return;
-    }
-    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER))
-    {
-        app.chat.open();
-        return;
-    }
-    if (IsKeyPressed(KEY_N))
-    {
-        app.bigMap.open();
-        return;
-    }
-    if (IsKeyPressed(KEY_P))
-    {
-        app.social.open();
-        return;
-    }
+
     camera(dt, rm, ui);
     if (hotkeys())
         return;
@@ -109,25 +44,8 @@ void Input::update(float dt)
         app.context.rebuild();
     if (app.context.sliderInput(m, lp, lr))
         return;
-    if (lp)
-    {
-        if (app.context.isOpen && app.context.click(m))
-            return;
-        if (app.buildMenu.click(m))
-            return;
-        if (CheckCollisionPointRec(m, Hud::socialTabBtn()))
-        {
-            app.social.open();
-            return;
-        }
-        if (CheckCollisionPointRec(m, app.minimap.rect()))
-        {
-            app.bigMap.open();
-            return;
-        }
-        if (ui)
-            return;
-    }
+    if (lp && hudClick(m, ui))
+        return;
     if (ui)
     {
         if (rp)
@@ -147,6 +65,109 @@ void Input::update(float dt)
         worldRightClick(rm, m, w);
 }
 
+// Modal panels own the input while open; true when one consumed the frame.
+bool Input::modalInput(Vector2 m)
+{
+    if (app.pause.isOpen)
+    {
+        app.pause.input();
+        return true;
+    }
+    if (app.chat.isOpen)
+    {
+        app.chat.update(m);
+        return true;
+    }
+    if (app.baseMenus.input(m))
+        return true;
+    if (app.bigMap.isOpen)
+    {
+        app.bigMap.input(m);
+        return true;
+    }
+    if (app.training.isOpen)
+    {
+        app.training.input(m);
+        return true;
+    }
+    if (app.townHall.isOpen)
+    {
+        app.townHall.input(m);
+        return true;
+    }
+    if (app.social.isOpen)
+    {
+        socialInput(m);
+        return true;
+    }
+    return panelHotkeys();
+}
+
+// The build menu stays usable beside the social menu.
+void Input::socialInput(Vector2 m)
+{
+    bool lp = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    if (lp && app.buildMenu.over(m))
+    {
+        app.buildMenu.click(m);
+        return;
+    }
+    if (lp && CheckCollisionPointRec(m, Hud::socialTabBtn()))
+    {
+        app.social.isOpen = false;
+        app.social.textFocus = false;
+        return;
+    }
+    if (!app.social.textFocus && IsKeyPressed(KEY_B))
+    {
+        app.buildMenu.isOpen = !app.buildMenu.isOpen;
+        return;
+    }
+    if (!app.social.textFocus && app.buildMenu.isOpen)
+        app.buildMenu.hotkeys();
+    app.social.input(m);
+}
+
+bool Input::panelHotkeys()
+{
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER))
+    {
+        app.chat.open();
+        return true;
+    }
+    if (IsKeyPressed(KEY_N))
+    {
+        app.bigMap.open();
+        return true;
+    }
+    if (IsKeyPressed(KEY_P))
+    {
+        app.social.open();
+        return true;
+    }
+    return false;
+}
+
+// Left press on HUD widgets; true when consumed.
+bool Input::hudClick(Vector2 m, bool ui)
+{
+    if (app.context.isOpen && app.context.click(m))
+        return true;
+    if (app.buildMenu.click(m))
+        return true;
+    if (CheckCollisionPointRec(m, Hud::socialTabBtn()))
+    {
+        app.social.open();
+        return true;
+    }
+    if (CheckCollisionPointRec(m, app.minimap.rect()))
+    {
+        app.bigMap.open();
+        return true;
+    }
+    return ui;
+}
+
 void Input::camera(float dt, Vector2 rm, bool ui)
 {
     Camera2D &cam = app.cam;
@@ -161,7 +182,7 @@ void Input::camera(float dt, Vector2 rm, bool ui)
     if (IsKeyDown(KEY_RIGHT))
         cam.target.x += sp;
     if (IsCursorOnScreen() && !dragging && !ui)
-    { // edge scrolling
+    {
         if (rm.x < 3)
             cam.target.x -= sp;
         if (rm.x > sw - 4)
@@ -288,35 +309,11 @@ void Input::worldRightClick(Vector2 rm, Vector2 m, Vector2 w)
 
     if (it != W.ents.end() && isBuilding(W.reg.get<Info>(it->second).kind))
     {
-        const Info &bi = W.reg.get<Info>(it->second);
-        if (bi.kind == K_Archery && bi.owner == W.me && bi.prog >= 100 && !(bi.state & (BLD_DISABLED | BLD_MOVING)))
-        {
-            app.training.openFor(id);
-            app.context.close();
-        }
-        else if (app.townHall.openFor(id))
-            app.context.close(); // own completed Town Hall only
-        else
-            app.context.open(id, m);
+        rightClickBuilding(id, it->second, m);
         return;
     }
-    if (!id && hasFeat)
-    { // obstacle: selected pawns (or the nearest free pawn) clear it
-        std::vector<uint32_t> pawns;
-        for (auto s : selUnits())
-        {
-            auto e = W.ents.find(s);
-            if (e != W.ents.end() && hasTag(W.reg.get<Info>(e->second).kind, KT_Worker))
-                pawns.push_back(s);
-        }
-
-        if (sel.empty() || !pawns.empty())
-        {
-            app.cmd.clear({hoverFeat}, pawns);
-            W.markers.push_back({(float(hoverFeat.x) + .5f) * TILE, (float(hoverFeat.y) + .5f) * TILE, GetTime()});
-            return;
-        }
-    }
+    if (!id && hasFeat && clearFeature())
+        return;
 
     if (!selUnits().empty())
     {
@@ -325,6 +322,40 @@ void Input::worldRightClick(Vector2 rm, Vector2 m, Vector2 w)
         else
             app.cmd.move(w);
     }
+}
+
+void Input::rightClickBuilding(uint32_t id, entt::entity e, Vector2 m)
+{
+    const Info &bi = app.world.reg.get<Info>(e);
+    if (bi.kind == K_Archery && bi.owner == app.world.me && bi.prog >= 100 && !(bi.state & (BLD_DISABLED | BLD_MOVING)))
+    {
+        app.training.openFor(id);
+        app.context.close();
+    }
+    else if (app.townHall.openFor(id))
+        app.context.close(); // own completed Town Hall only
+    else
+        app.context.open(id, m);
+}
+
+// Obstacle: selected pawns (or the nearest free pawn) clear it. True when the order was issued.
+bool Input::clearFeature()
+{
+    ClientWorld &W = app.world;
+    std::vector<uint32_t> pawns;
+    for (auto s : selUnits())
+    {
+        auto e = W.ents.find(s);
+        if (e != W.ents.end() && hasTag(W.reg.get<Info>(e->second).kind, KT_Worker))
+            pawns.push_back(s);
+    }
+
+    if (!sel.empty() && pawns.empty())
+        return false;
+
+    app.cmd.clear({hoverFeat}, pawns);
+    W.markers.push_back({(float(hoverFeat.x) + .5f) * TILE, (float(hoverFeat.y) + .5f) * TILE, GetTime()});
+    return true;
 }
 
 uint32_t Input::pick(Vector2 mouse, bool includeBuildings)

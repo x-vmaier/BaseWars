@@ -33,11 +33,13 @@ void drawButton(Rectangle r, const std::string &label, bool enabled, bool red, b
     const TMap &m = red ? (pressed ? mBtnRP : mBtnR) : (pressed ? mBtnP : mBtn);
     drawTMap(m, r, enabled ? (hover ? rgb(255, 255, 255) : rgb(238, 238, 238)) : rgb(140, 140, 140, 220));
     int tw = MeasureText(label.c_str(), fs);
+
+    // shrink long labels to fit
     while (tw > int(r.width) - 12 && fs > 9)
     {
         fs--;
         tw = MeasureText(label.c_str(), fs);
-    } // shrink long labels to fit
+    }
     DrawText(label.c_str(), int(r.x + r.width / 2) - tw / 2 + 1, int(r.y + r.height / 2) - fs / 2 + 1, fs,
              rgb(20, 20, 40, 180));
     DrawText(label.c_str(), int(r.x + r.width / 2) - tw / 2, int(r.y + r.height / 2) - fs / 2, fs,

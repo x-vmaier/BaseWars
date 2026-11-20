@@ -22,7 +22,7 @@ namespace
 {
 constexpr Color INK = {70, 45, 30, 255}, SOFT = {110, 80, 50, 255}, WARN = {170, 60, 30, 255},
                 GOOD = {30, 110, 40, 255};
-// cost row right of a button, centred on it, wrapping up to `right`; a reason replaces the costs (red, wrapped)
+// Cost row right of a button, centred on it, wrapping up to `right`; a reason replaces the costs (red, wrapped).
 void costBeside(Rectangle b, float right, const float *cost, const float *have, const std::string &reason)
 {
     float x = b.x + b.width + 10, w = right - x;
@@ -65,7 +65,7 @@ bool TownHallWindow::openFor(uint32_t id)
         return false;
     const Info &in = W.reg.get<Info>(it->second);
     if (in.kind != K_TownHall || in.owner != W.me || in.prog < 100)
-        return false; // never for other players' towns
+        return false;
     if (target != id)
         tab = T_Main;
     target = id;
@@ -84,7 +84,7 @@ const Info *TownHallWindow::hall() const
     return in.kind == K_TownHall && in.owner == W.me ? &in : nullptr;
 }
 
-// layout (panel space, scaled to fit the screen)
+// Panel space, scaled to fit the screen.
 TownHallWindow::PanelXf TownHallWindow::xf() const
 {
     Vector2 s = mPanel.size();
@@ -111,7 +111,6 @@ Rectangle TownHallWindow::content() const
     Vector2 s = mPanel.size();
     return {30, 76, s.x - 60, s.y - 76 - 30};
 }
-// main tab: workers on the left, the hall on the right
 Rectangle TownHallWindow::pawnCard() const
 {
     Rectangle c = content();
@@ -143,7 +142,6 @@ Rectangle TownHallWindow::repairBtn() const
     return {c.x + 382 + 10, c.y + c.height - 44, 170, 30};
 }
 
-// input
 void TownHallWindow::input(Vector2 mouse)
 {
     const Info *in = hall();
@@ -159,7 +157,7 @@ void TownHallWindow::input(Vector2 mouse)
     }
     Vector2 m = toPanel(mouse);
     if (tab == T_Storage)
-        inputStorage(m); // slider drags run while the button is held
+        inputStorage(m);
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         return;
     Vector2 sz = mPanel.size();
@@ -231,34 +229,21 @@ void TownHallWindow::inputMain(Vector2 m, const Info &in)
     }
 }
 
-// drawing
 void TownHallWindow::draw()
 {
     const Info *inp = hall();
     if (!inp)
         return;
     const Info &in = *inp;
+
     DrawRectangle(0, 0, ui::screenW(), ui::screenH(), rgb(0, 0, 0, 120));
     PanelXf x = xf();
     Vector2 m = toPanel(ui::mouse());
+
     rlPushMatrix();
     rlTranslatef(x.ox, x.oy, 0);
     rlScalef(x.sc, x.sc, 1);
-    Vector2 sz = mPanel.size();
-    drawTMap(mPanel, {0, 0, sz.x, sz.y});
-    const TMap &mTitle = ui::titleMap();
-    Rectangle tr{sz.x / 2 - mTitle.size().x / 2, -30, mTitle.size().x, mTitle.size().y};
-    drawTMap(mTitle, tr);
-    std::string title = TextFormat("Town Hall - Level %d", in.aux);
-    textShadow(title, int(tr.x + tr.width / 2) - MeasureText(title.c_str(), 20) / 2, int(tr.y + tr.height / 2) - 12, 20,
-               WHITE);
-    Rectangle closeR{sz.x - 52, 20, 26, 20};
-    ui::drawButton(closeR, "X", true, true, CheckCollisionPointRec(m, closeR), false, 12);
-    static const char *names[T_Count] = {"Main", "Storage", "Clan"};
-    Rectangle tabs[T_Count];
-    for (int i = 0; i < T_Count; i++)
-        tabs[i] = tabRect(i);
-    ui::tabStrip(tabs, names, T_Count, tab, nullptr, m, 15);
+    drawFrame(m, in);
     if (tab == T_Main)
         drawMain(m, in);
     else if (tab == T_Storage)
@@ -268,14 +253,47 @@ void TownHallWindow::draw()
     rlPopMatrix();
 }
 
+void TownHallWindow::drawFrame(Vector2 m, const Info &in)
+{
+    Vector2 sz = mPanel.size();
+    drawTMap(mPanel, {0, 0, sz.x, sz.y});
+
+    const TMap &mTitle = ui::titleMap();
+    Rectangle tr{sz.x / 2 - mTitle.size().x / 2, -30, mTitle.size().x, mTitle.size().y};
+    drawTMap(mTitle, tr);
+    std::string title = TextFormat("Town Hall - Level %d", in.aux);
+    textShadow(title, int(tr.x + tr.width / 2) - MeasureText(title.c_str(), 20) / 2, int(tr.y + tr.height / 2) - 12, 20,
+               WHITE);
+    Rectangle closeR{sz.x - 52, 20, 26, 20};
+    ui::drawButton(closeR, "X", true, true, CheckCollisionPointRec(m, closeR), false, 12);
+
+    static const char *names[T_Count] = {"Main", "Storage", "Clan"};
+    Rectangle tabs[T_Count];
+    for (int i = 0; i < T_Count; i++)
+        tabs[i] = tabRect(i);
+    ui::tabStrip(tabs, names, T_Count, tab, nullptr, m, 15);
+}
+
 void TownHallWindow::drawMain(Vector2 m, const Info &in)
 {
-    const ClientWorld &W = app.world;
     Rectangle c = content(), L{c.x, c.y, 370, c.height};
     section(L, "Workers");
     double now = GetTime();
+
+    drawWorkers(m, L, in);
+    drawQueue(m, L, now);
+    drawMoveTown(m, L, in);
+    DrawText("Tip: right-click your Town Hall to open this window.", int(L.x) + 10, int(L.y + L.height) - 22, 12, SOFT);
+    drawHallSection(m, in);
+}
+
+// Pawn card, its text, and the train button with cost row and queue-blocked notice.
+void TownHallWindow::drawWorkers(Vector2 m, Rectangle L, const Info &in)
+{
+    const ClientWorld &W = app.world;
     Rectangle pc = pawnCard();
     card(pc, K_Pawn, false, CheckCollisionPointRec(m, pc), false, 0);
+
     int pawns = 0, units = 0;
     W.reg.view<Info>().each([&](const Info &i)
     {
@@ -286,12 +304,34 @@ void TownHallWindow::drawMain(Vector2 m, const Info &in)
                 pawns++;
         }
     });
+
     float tx = pc.x + pc.width + 12, tw = L.x + L.width - 10 - tx;
     TroopText tt = troopText(K_Pawn);
     DrawText("Pawn", int(tx), int(pc.y), 17, INK);
     DrawText(tt.role, int(tx), int(pc.y) + 20, 12, SOFT);
     DrawText(TextFormat("Pawns %d   Units %d / %d", pawns, units, UNIT_CAP), int(tx), int(pc.y) + 38, 13,
              units >= UNIT_CAP ? WARN : INK);
+    drawPawnBlurb(pc, tx, tw);
+
+    bool blocked = in.state & (BLD_DISABLED | BLD_MOVING | BLD_CRIPPLED);
+    float cost[R_Count];
+    unitCost(K_Pawn, cost);
+    Rectangle tb = trainBtn();
+    ui::drawButton(tb, "Train Pawn", !blocked && W.affordable(cost), false, CheckCollisionPointRec(m, tb), false, 14);
+    costBeside(tb, L.x + L.width - 10, cost, W.res, blocked ? "The hall is not functional" : "");
+
+    const BJob *job = W.jobOf(target);
+    std::string why =
+        units >= UNIT_CAP
+            ? "Unit cap reached: training waits for room"
+            : (job && job->kind != SJ_Build ? "Training paused while the hall is upgraded / repaired" : "");
+    if (!why.empty())
+        DrawText(why.c_str(), int(tb.x), int(tb.y + tb.height) + 6, 12, WARN);
+}
+
+// Wrapped description; the last line that fits the card is cut with "..." when more text follows.
+void TownHallWindow::drawPawnBlurb(Rectangle pc, float tx, float tw)
+{
     float ty = pc.y + 58;
     auto desc =
         wrapText("Builds, repairs, clears obstacles, hauls resources and hunts sheep. Weak in a fight.", int(tw), 12);
@@ -305,25 +345,17 @@ void TownHallWindow::drawMain(Vector2 m, const Info &in)
         DrawText(desc[i].c_str(), int(tx), int(ty), 12, INK);
         ty += 14;
     }
-    // train button + cost row
-    bool blocked = in.state & (BLD_DISABLED | BLD_MOVING | BLD_CRIPPLED);
-    float cost[R_Count];
-    unitCost(K_Pawn, cost);
-    Rectangle tb = trainBtn();
-    ui::drawButton(tb, "Train Pawn", !blocked && W.affordable(cost), false, CheckCollisionPointRec(m, tb), false, 14);
-    costBeside(tb, L.x + L.width - 10, cost, W.res, blocked ? "The hall is not functional" : "");
-    const BJob *job = W.jobOf(target);
-    std::string why =
-        units >= UNIT_CAP
-            ? "Unit cap reached: training waits for room"
-            : (job && job->kind != SJ_Build ? "Training paused while the hall is upgraded / repaired" : "");
-    if (!why.empty())
-        DrawText(why.c_str(), int(tb.x), int(tb.y + tb.height) + 6, 12, WARN);
-    // queue strip (click to cancel and refund)
+}
+
+// Click a queued unit to cancel and refund it.
+void TownHallWindow::drawQueue(Vector2 m, Rectangle L, double now)
+{
+    const ClientWorld &W = app.world;
     auto q = W.queues.find(target);
     size_t n = q == W.queues.end() ? 0 : q->second.kinds.size();
     DrawText(TextFormat("Training queue %d/5%s", int(n), n ? "  (click to cancel)" : ""), int(L.x) + 10,
              int(queueSlot(0).y) - 18, 13, INK);
+
     for (int i = 0; i < 5; i++)
     {
         Rectangle r = queueSlot(i);
@@ -334,15 +366,21 @@ void TownHallWindow::drawMain(Vector2 m, const Info &in)
                                     i == 0 && filled ? rgb(60, 140, 220) : rgb(120, 90, 60));
         if (!filled)
             continue;
+
         Anim a = unitAnim(Kind(q->second.kinds[size_t(i)]), W.me, US_Idle, 0, 0, false, 1, now);
         drawAnim(a, frameFor(a, now, float(i) * .6f), r.x + r.width / 2, r.y + 50, false, .46f,
                  i == 0 ? WHITE : rgb(200, 200, 215));
         if (i == 0)
             barRect({r.x + 5, r.y + r.height - 11, r.width - 10, 6}, float(q->second.pct) / 100.f, BAR_TRAIN);
     }
-    // move town
+}
+
+void TownHallWindow::drawMoveTown(Vector2 m, Rectangle L, const Info &in)
+{
+    const ClientWorld &W = app.world;
     Rectangle mb = moveBtn();
     DrawText("Move town", int(L.x) + 10, int(mb.y) - 58, 16, INK);
+
     float my = mb.y - 38;
     for (auto &l : wrapText("Rebuild the Town Hall on a new site. It keeps its level; building stops until it is done.",
                             int(L.width) - 20, 12))
@@ -350,6 +388,7 @@ void TownHallWindow::drawMain(Vector2 m, const Info &in)
         DrawText(l.c_str(), int(L.x) + 10, int(my), 12, SOFT);
         my += 14;
     }
+
     if (W.townMoving || (in.state & BLD_MOVING))
     {
         ui::drawButton(mb, "Moving...", false, false, false, false, 14);
@@ -361,16 +400,15 @@ void TownHallWindow::drawMain(Vector2 m, const Info &in)
         ui::drawButton(mb, "Move town", W.affordable(TOWN_MOVE_COST), false, CheckCollisionPointRec(m, mb), false, 14);
         costBeside(mb, L.x + L.width - 10, TOWN_MOVE_COST, W.res, "");
     }
-    DrawText("Tip: right-click your Town Hall to open this window.", int(L.x) + 10, int(L.y + L.height) - 22, 12, SOFT);
-    drawHallSection(m, in);
 }
 
-// right column: level, health, job state, next level's effects, upgrade / cancel and repair with their cost rows
+// Right column: level, health, job state, next level's effects, upgrade / cancel and repair with their cost rows.
 void TownHallWindow::drawHallSection(Vector2 m, const Info &in)
 {
     const ClientWorld &W = app.world;
     Rectangle c = content(), R{c.x + 382, c.y, c.width - 382, c.height};
     section(R, TextFormat("Town Hall  Lv%d / %d", in.aux, MAX_LEVEL));
+
     float x = R.x + 12, w = R.width - 24, y = R.y + 36;
     float hpf = in.hp / std::max(1.f, in.maxhp);
     DrawText(TextFormat("Health %d / %d", int(in.hp), int(in.maxhp)), int(x), int(y), 14, INK);
@@ -380,8 +418,15 @@ void TownHallWindow::drawHallSection(Vector2 m, const Info &in)
     DrawText(TextFormat("Storage %d / %d", int(W.res[0] + W.res[1] + W.res[2] + W.res[3]), int(cap)), int(x), int(y),
              14, INK);
     y += 22;
+
     const BJob *job = W.jobOf(target);
-    std::string why = upgradeBlock(K_TownHall, in.aux, W.thLevel());
+    y = drawJobState(in, job, x, y, w);
+    drawNextLevel(in, x, y, w, upgradeBtn().y - 10);
+    drawHallButtons(m, in, R, job, hpf);
+}
+
+float TownHallWindow::drawJobState(const Info &in, const BJob *job, float x, float y, float w)
+{
     if (job && job->kind != SJ_Build)
     {
         static const char *phase[3] = {"Waiting for a pawn", "A pawn is on the way", "A pawn is at work"};
@@ -400,35 +445,44 @@ void TownHallWindow::drawHallSection(Vector2 m, const Info &in)
         DrawText("CRITICAL DAMAGE: repair the hall", int(x), int(y), 14, WARN);
         y += 20;
     }
-    // next level
-    Rectangle ub = upgradeBtn();
-    float stop = ub.y - 10;
+    return y;
+}
+
+// Effects of the next level, clipped above the upgrade button (`stop`).
+void TownHallWindow::drawNextLevel(const Info &in, float x, float y, float w, float stop)
+{
     if (in.aux >= MAX_LEVEL)
     {
         DrawText("Maximum level reached.", int(x), int(y), 14, GOOD);
+        return;
     }
-    else
-    {
-        std::vector<std::string> info;
-        std::vector<Kind> units;
-        nextLevelInfo(in, info, units);
-        townHallUnlocks(in.aux + 1, info);
-        DrawText(TextFormat("Next level (Lv%d):", in.aux + 1), int(x), int(y), 15, rgb(30, 90, 40));
-        y += 20;
-        for (auto &t : info)
-            for (auto &l : wrapText(t, int(w) - 8, 13))
-            {
-                if (y + 13 > stop)
-                    break;
-                DrawText(l.c_str(), int(x) + 6, int(y), 13, INK);
-                y += 15;
-            }
-    }
-    // upgrade / cancel
+
+    std::vector<std::string> info;
+    std::vector<Kind> units;
+    nextLevelInfo(in, info, units);
+    townHallUnlocks(in.aux + 1, info);
+    DrawText(TextFormat("Next level (Lv%d):", in.aux + 1), int(x), int(y), 15, rgb(30, 90, 40));
+    y += 20;
+    for (auto &t : info)
+        for (auto &l : wrapText(t, int(w) - 8, 13))
+        {
+            if (y + 13 > stop)
+                break;
+            DrawText(l.c_str(), int(x) + 6, int(y), 13, INK);
+            y += 15;
+        }
+}
+
+void TownHallWindow::drawHallButtons(Vector2 m, const Info &in, Rectangle R, const BJob *job, float hpf)
+{
+    const ClientWorld &W = app.world;
+    Rectangle ub = upgradeBtn();
     bool blocked = in.state & (BLD_DISABLED | BLD_MOVING | BLD_CRIPPLED);
+    std::string why = upgradeBlock(K_TownHall, in.aux, W.thLevel());
     float uc[R_Count];
     upgradeCost(K_TownHall, in.aux, uc);
     bool hov = CheckCollisionPointRec(m, ub);
+
     if (job && job->kind != SJ_Build)
     {
         ui::drawButton(ub, job->kind == SJ_Upgrade ? "Cancel upgrade" : "Cancel repair", true, true, hov, false, 14);
@@ -443,7 +497,7 @@ void TownHallWindow::drawHallSection(Vector2 m, const Info &in)
                        reason.empty() && W.affordable(uc), false, hov, false, 14);
         costBeside(ub, R.x + R.width - 10, uc, W.res, reason);
     }
-    // repair
+
     Rectangle rb = repairBtn();
     if (!job && in.hp < in.maxhp - .5f)
     {

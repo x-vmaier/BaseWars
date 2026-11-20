@@ -3,8 +3,6 @@
  * @brief Ferry planner: decides whether one of the owner's idle ships beats walking, and starts the transport.
  */
 #pragma once
-// Ferry planner: decides whether one of the owner's idle ships beats walking, and starts the transport.
-//
 //   TransportPlan planTransport(int owner, const std::vector<entt::entity>& group, Pos to, uint32_t destUid = 0, float
 //   boatFactor = .75f);
 //       Estimates the best way for `group` (troop units of `owner`, all walking together) to reach `to` and decides
@@ -59,6 +57,24 @@ class FerryPlanner
     World &world;
     entt::registry &reg;
     Systems &s;
+    struct GroupInfo
+    {
+        Pos from{0, 0}; // centroid of the walking group
+        int n = 0;
+        float speed = 0, cargo = 0; // slowest unit speed (tiles/s), total cargo weight
+    };
+    struct ShipCand
+    {
+        entt::entity e;
+        Pos p;
+        float shipSpeed;
+    };
+    GroupInfo summarizeGroup(int owner, const std::vector<entt::entity> &group);
+    std::vector<ShipCand> idleShips(int owner, const GroupInfo &gi);
+    float bestBoatRoute(const GroupInfo &gi, const std::vector<ShipCand> &ships, const std::vector<IV> &bCands,
+                        const std::vector<IV> &lCands, IV toT, uint32_t destUid, TransportPlan &plan);
+    void bestLanding(const GroupInfo &gi, const ShipCand &sc, IV bs, IV bw, float gather, const std::vector<IV> &lCands,
+                     IV toT, uint32_t destUid, float &bestBoat, TransportPlan &plan);
     struct RouteKey
     {
         int ax, ay, bx, by;

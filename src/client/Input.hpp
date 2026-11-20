@@ -5,6 +5,7 @@
 #pragma once
 #include "common/Shared.hpp"
 
+#include <entt/entt.hpp>
 #include <raylib.h>
 
 #include <cstdint>
@@ -47,6 +48,12 @@ class Input
     }
 
   private:
+    bool modalInput(Vector2 m); // true: a modal panel consumed the frame
+    void socialInput(Vector2 m);
+    bool panelHotkeys(); // opens chat / map / social
+    bool hudClick(Vector2 m, bool ui);
+    void rightClickBuilding(uint32_t id, entt::entity e, Vector2 m);
+    bool clearFeature();
     void camera(float dt, Vector2 rm, bool ui);
     bool hotkeys(); // true: stop processing this frame
     void doSelect(Vector2 a, Vector2 b, bool add);

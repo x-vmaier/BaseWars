@@ -6,7 +6,9 @@
 #include "client/Components.hpp"
 #include "common/Shared.hpp"
 #include "rendering/Assets.hpp"
+#include "ui/CostRow.hpp"
 
+#include <entt/entt.hpp>
 #include <string>
 #include <utility>
 #include <vector>
@@ -46,6 +48,20 @@ class ContextPanel
     void baseContext(const Info &in, bool mine, bool done); // fire / territory / queue lines, move town, relocate
     void siteLines(const Info &in, bool friendly);          // site job progress, damage efficiency, paused production
     bool baseRun(const MenuAct &a);
+    void ownerLines(const Info &in, bool mine);
+    void factionLines(const Info &in);
+    void statLines(entt::entity e, const Info &in, bool mine, bool done);
+    void outputLines(const Info &in, Pos c, int biome);
+    void storageLines(const Info &in, bool mine, bool done);
+    void ownActs(const Info &in);
+    void trainActs(const Info &in);
+    void upgradeActs(const Info &in);
+    void foreignActs(const Info &in);
+    void giftActs(int faction);
+    void allianceAct(int owner);
+    void drawSlider(float x, float y) const;
+    void drawAct(int i, Vector2 m, const ui::CostStyle &st) const;
+    void drawNextLevel(Rectangle cr, float x) const;
     void addAct(MenuAct a, const float *cost = nullptr, const std::string &note = "");
     void layout(); // row heights of the action list and the panel height
     Rectangle rect() const;

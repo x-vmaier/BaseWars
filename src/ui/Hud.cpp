@@ -48,17 +48,24 @@ bool Hud::over(Vector2 m) const
 
 void Hud::drawTop()
 {
+    drawResources();
+    drawNameBanner();
+}
+
+void Hud::drawResources()
+{
     const ClientWorld &W = app.world;
-    // resource ribbon
     Rectangle h = hudRect();
     drawTMap(mHud, h);
+
     float slot = (h.width - 2 * float(mHud.padding) - 60) / 4.f;
     for (int r = 0; r < R_Count; r++)
     {
         float x = h.x + float(mHud.padding) + 22 + float(r) * slot;
         ui::drawResourceIcon(r, x, h.y + h.height * .5f - 14, .45f);
-        bool food = r == R_Meat,
-             low = food && W.res[r] < 60.f; // food (meat) pays for every unit, building, upgrade and repair
+
+        // food (meat) pays for every unit, building, upgrade and repair
+        bool food = r == R_Meat, low = food && W.res[r] < 60.f;
         Color c = low ? (std::fmod(GetTime(), 1.0) < .5 ? rgb(255, 110, 90) : rgb(255, 200, 120)) : WHITE;
         textShadow(std::to_string(int(W.res[r])), int(x) + 30, int(h.y + h.height * .5f) - 13, 18, c);
         textShadow(food ? "Food" : RES_NAME[r], int(x) + 30, int(h.y + h.height * .5f) + 5, 10,
@@ -68,9 +75,14 @@ void Hud::drawTop()
         textShadow(
             "Low food! Free pawns hunt sheep; Harbours fish. Food pays for units, buildings, upgrades and repairs.",
             int(h.x) + 8, int(h.y + h.height) + 2, 12, rgb(255, 160, 130));
-    // name banner
+}
+
+void Hud::drawNameBanner()
+{
+    const ClientWorld &W = app.world;
     Rectangle nr = nameRect();
     drawTMap(ui::titleMap(), nr);
+
     int units = 0, bld = 0;
     W.reg.view<Info>().each([&](const Info &i)
     {
@@ -137,8 +149,9 @@ void Hud::drawBiome()
     int fs = 14, tw = MeasureText(name, fs);
     float h = 20, wdt = float(tw) + 34;
     Rectangle r{float(ui::screenW()) - wdt - 8, float(ui::screenH()) - h - 4, wdt, h};
+    // the chat help line runs along the bottom: keep clear of it
     if (app.chat.isOpen)
-    { // the chat help line runs along the bottom: keep clear of it
+    {
         float helpEnd = float(ui::screenW()) - std::min(388.f, float(ui::screenW()) - 16) - 8 +
                         float(MeasureText("Tab: channel   Enter: send   Esc: cancel", 10)) + 8;
         if (r.x < helpEnd)
@@ -151,7 +164,7 @@ void Hud::drawBiome()
     textShadow(name, int(r.x) + 24, int(r.y) + 3, fs, rgb(240, 235, 220));
 }
 
-// camera coordinates (so players can tell each other where they are)
+// Camera coordinates, so players can tell each other where they are.
 void Hud::drawCoords()
 {
     Rectangle cr = coordRect();
@@ -163,7 +176,6 @@ void Hud::drawCoords()
              rgb(255, 240, 200));
 }
 
-// social menu button under the build tab
 void Hud::drawSocialTab()
 {
     Rectangle t = socialTabBtn();

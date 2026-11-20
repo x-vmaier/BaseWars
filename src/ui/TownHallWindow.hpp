@@ -18,6 +18,7 @@
 
 class App;
 struct Info;
+struct BJob;
 
 class TownHallWindow
 {
@@ -76,7 +77,15 @@ class TownHallWindow
     Rectangle repairBtn() const;
     Rectangle moveBtn() const;
     void inputMain(Vector2 m, const Info &in);
+    void drawFrame(Vector2 m, const Info &in);
     void drawMain(Vector2 m, const Info &in);
+    void drawWorkers(Vector2 m, Rectangle left, const Info &in);
+    void drawPawnBlurb(Rectangle pawnCard, float x, float w);
+    void drawQueue(Vector2 m, Rectangle left, double now);
+    void drawMoveTown(Vector2 m, Rectangle left, const Info &in);
+    float drawJobState(const Info &in, const BJob *job, float x, float y, float w);
+    void drawNextLevel(const Info &in, float x, float y, float w, float stop);
+    void drawHallButtons(Vector2 m, const Info &in, Rectangle right, const BJob *job, float hpFraction);
     void drawHallSection(Vector2 m, const Info &in);
     // storage + clan tabs (TownHallTabs.cpp)
     Rectangle slot(int r) const;
@@ -84,9 +93,13 @@ class TownHallWindow
     Rectangle troopCard(int t) const;
     void inputStorage(Vector2 m);
     void drawStorage(Vector2 m, const Info &in);
+    void drawStorageSummary(Rectangle top, const Info &in, float cap, float hpFraction);
+    void drawStorageSlot(int r, Vector2 m, float cap);
     void drawCapacityChart(Rectangle r, int level);
     void inputClan(Vector2 m);
     void drawClan(Vector2 m);
+    void drawClanMembership(Vector2 m, Rectangle top);
+    void drawQuotaCard(int t, Vector2 m);
     void card(Rectangle c, Kind k, bool selected, bool hover, bool dim,
               float phase); // Archery-style animated troop card
     void sendQuotas();

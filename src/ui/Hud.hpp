@@ -40,6 +40,8 @@ class Hud
         std::string text;
         double t;
     };
+    void drawResources();
+    void drawNameBanner();
     App &app;
     std::vector<LogLine> logs;
     TMap mHud, mRoster;

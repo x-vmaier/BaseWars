@@ -21,19 +21,18 @@ void FireSystem::ignite(entt::entity b, int byOwner)
         return;
     int o = reg.get<Owner>(b).id;
     if (!world.hostile(byOwner, o))
-        return; // guard: only an enemy can set a building on fire
+        return;
     auto &f = reg.get_or_emplace<BFlags>(b);
     bool fresh = f.burn <= 0;
-    f.burn = BURN_TIME; // each fire arrow refreshes (never stacks) the timer
+    f.burn = BURN_TIME; // each fire arrow refreshes the timer, never stacks
     f.burnBy = uint8_t(byOwner);
     if (fresh && isPlayer(o))
     {
-        Pos p = world.posOf(b);
         world.say(o, std::string("Your ") + KINFO[k].name + " is on fire! Idle units will try to extinguish it.");
-        (void)p;
     }
 }
-// archers shoot fire arrows from troop level 3 (player level); returns after emitting the projectile effect
+
+// Archers shoot fire arrows from troop level 3.
 void FireSystem::archerShot(int ow, Pos from, Pos to, entt::entity tg)
 {
     bool fire = isPlayer(ow) && world.pl[ow].ulevel[K_Archer] >= 3 && isBuilding(reg.get<Info>(tg).kind) &&
@@ -46,6 +45,7 @@ void FireSystem::archerShot(int ow, Pos from, Pos to, entt::entity tg)
     else
         world.fx(E_Arrow, from.x, from.y - .4f, to.x, to.y);
 }
+
 bool FireSystem::canExtinguish(entt::entity e)
 {
     if (reg.any_of<Attack, AMove, Convoy, Haul, Raider, Support, Extinguish, ClearTask, BuildTask>(e))
@@ -60,6 +60,60 @@ bool FireSystem::canExtinguish(entt::entity e)
     }
     return reg.get<Unit>(e).path.empty();
 }
+
+void FireSystem::burnDamage(const std::vector<entt::entity> &burning)
+{
+    for (auto e : burning)
+    {
+        if (!reg.valid(e))
+            continue;
+        auto &f = reg.get<BFlags>(e);
+        f.burn = std::max(0.f, f.burn - 1.f);
+
+        // Arson credit (loot, kill) only while the arsonist is still an enemy.
+        int ow = reg.get<Owner>(e).id;
+        int by = world.hostile(f.burnBy, ow) ? int(f.burnBy) : 0;
+        if (!by)
+            f.burnBy = 0;
+        if (world.dying.count(reg.get<Uid>(e).id))
+            continue;
+        s.combat.damage(e, reg.get<Health>(e).maxhp * BURN_FRAC_PER_SEC, by);
+    }
+}
+
+// Sends the nearest free firefighters (up to 3 per fire, counting those already on it).
+void FireSystem::dispatchFirefighters(entt::entity b, std::vector<entt::entity> &cand, int already)
+{
+    int ow = reg.get<Owner>(b).id;
+    uint32_t buid = reg.get<Uid>(b).id;
+    int need = 3 - already;
+    Pos bc = world.posOf(b);
+
+    std::vector<std::pair<float, size_t>> near2;
+    for (size_t i = 0; i < cand.size(); i++)
+    {
+        if (!reg.valid(cand[i]) || reg.get<Owner>(cand[i]).id != ow)
+            continue;
+        Pos q = reg.get<Pos>(cand[i]);
+        float d = std::hypot(q.x - bc.x, q.y - bc.y);
+        if (d <= 26.f)
+            near2.push_back({d, i});
+    }
+    std::sort(near2.begin(), near2.end());
+
+    for (auto &[d, i] : near2)
+    {
+        if (need <= 0)
+            break;
+        auto e = cand[i];
+        if (!world.order(e, bc, buid, 4000))
+            continue;
+        reg.emplace_or_replace<Extinguish>(e, Extinguish{buid, 0.f});
+        cand[i] = entt::null;
+        need--;
+    }
+}
+
 void FireSystem::burnSecond()
 {
     std::vector<entt::entity> burning;
@@ -70,25 +124,14 @@ void FireSystem::burnSecond()
     });
     if (burning.empty())
         return;
+
     std::unordered_map<uint32_t, int> cnt;
     reg.view<Extinguish>().each([&](const Extinguish &x) { cnt[x.target]++; });
-    std::vector<entt::entity> cand;
-    for (auto e : burning)
-    { // damage over time
-        if (!reg.valid(e))
-            continue;
-        auto &f = reg.get<BFlags>(e);
-        f.burn = std::max(0.f, f.burn - 1.f);
-        int ow = reg.get<Owner>(e).id;
-        int by = world.hostile(f.burnBy, ow) ? int(f.burnBy)
-                                             : 0; // arson credit (loot, kill) only while the arsonist is still an enemy
-        if (!by)
-            f.burnBy = 0;
-        if (world.dying.count(reg.get<Uid>(e).id))
-            continue;
-        s.combat.damage(e, reg.get<Health>(e).maxhp * BURN_FRAC_PER_SEC, by);
-    }
+
+    burnDamage(burning);
     s.combat.processKills();
+
+    std::vector<entt::entity> cand;
     reg.view<Owner, Unit, Info, Pos>().each([&](entt::entity e, const Owner &o, const Unit &, const Info &, const Pos &)
     {
         if (isPlayer(o.id) && canExtinguish(e))
@@ -96,39 +139,12 @@ void FireSystem::burnSecond()
     });
     for (auto b : burning)
     {
-        if (!reg.valid(b) || reg.get<BFlags>(b).burn <= 0)
+        if (!reg.valid(b) || reg.get<BFlags>(b).burn <= 0 || !isPlayer(reg.get<Owner>(b).id))
             continue;
-        int ow = reg.get<Owner>(b).id;
-        if (!isPlayer(ow))
-            continue;
-        uint32_t buid = reg.get<Uid>(b).id;
-        int need = 3 - cnt[buid];
-        Pos bc = world.posOf(b);
-        std::vector<std::pair<float, size_t>> near2;
-        for (size_t i = 0; i < cand.size(); i++)
-        {
-            if (!reg.valid(cand[i]) || reg.get<Owner>(cand[i]).id != ow)
-                continue;
-            Pos q = reg.get<Pos>(cand[i]);
-            float d = std::hypot(q.x - bc.x, q.y - bc.y);
-            if (d <= 26.f)
-                near2.push_back({d, i});
-        }
-        std::sort(near2.begin(), near2.end());
-        for (auto &[d, i] : near2)
-        {
-            if (need <= 0)
-                break;
-            auto e = cand[i];
-            if (!world.order(e, bc, buid, 4000))
-                continue;
-            reg.emplace_or_replace<Extinguish>(e, Extinguish{buid, 0.f});
-            cand[i] = entt::null;
-            need--;
-        }
+        dispatchFirefighters(b, cand, cnt[reg.get<Uid>(b).id]);
     }
 }
-// per unit and tick: units on firefighting duty (returns true while the unit is busy with it)
+
 bool FireSystem::extinguishTick(entt::entity e, Unit &u, Pos &p, float dt)
 {
     auto *ex = reg.try_get<Extinguish>(e);

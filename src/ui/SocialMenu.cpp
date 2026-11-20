@@ -33,110 +33,148 @@ void SocialMenu::load()
     mSocial = loadTMap("social_menu");
 }
 
-// rows per tab: players / friends / clans / my clan / factions
 std::vector<SocialMenu::SRow> SocialMenu::rows()
 {
-    const ClientWorld &W = app.world;
     std::vector<SRow> rows;
-    int mc = W.myClan();
-    auto friendBtn = [&](const Peer &p)
-    {
-        if (p.flags & 2)
-            return SBtn{"Unfriend", 3, 0, 0, p.id, true, true, 70};
-        if (p.flags & 4)
-            return SBtn{"Accept", 2, 0, 0, p.id, true, false, 70};
-        if (p.flags & 8)
-            return SBtn{"Sent", 0, 0, 0, p.id, false, false, 70};
-        return SBtn{"Friend", 2, 0, 0, p.id, true, false, 70};
-    };
-    auto peerRow = [&](const Peer &p)
-    {
-        std::string cn = p.clan ? W.clanName(p.clan) : "";
-        SRow r{p.name + (cn.empty() ? "" : "  [" + cn + "]"),
-               std::string(p.flags & 1 ? "online" : "offline") +
-                   (p.hasLoc ? TextFormat("  (%d, %d)", int(p.lx), int(p.ly)) : "  location unknown"),
-               teamColor(p.id),
-               {}};
-        r.btns.push_back({"Travel", 1, p.lx, p.ly, 0, p.hasLoc, false, 60});
-        r.btns.push_back(friendBtn(p));
-        return r;
-    };
     switch (tab)
     {
     case 0:
-        for (auto &p : W.roster)
-            if (p.id != W.me && containsNoCase(p.name, searchText))
-                rows.push_back(peerRow(p));
+        addPeerRows(rows, false);
         break;
     case 1:
-        for (auto &p : W.roster)
-            if (p.id != W.me && (p.flags & (2 | 4 | 8)) && containsNoCase(p.name, searchText))
-                rows.push_back(peerRow(p));
+        addPeerRows(rows, true);
         break;
     case 2:
-        for (auto &c : W.clansList)
-        {
-            if (!containsNoCase(c.name, searchText))
-                continue;
-            SRow r{c.name, TextFormat("%d member%s", c.members, c.members == 1 ? "" : "s"), clanColor(c.id), {}};
-            r.btns.push_back({c.id == mc ? "Yours" : "Join", 4, 0, 0, c.id, mc == 0, false, 60});
-            rows.push_back(r);
-        }
+        addClanRows(rows);
         break;
     case 3:
-        if (!mc)
-            rows.push_back({"You are not in a clan.", "Create one or join one in the Clans tab.", rgb(90, 60, 40), {}});
-        else
-            for (auto &p : W.roster)
-            {
-                if (p.clan != mc)
-                    continue;
-                int leader = 0;
-                for (auto &c : W.clansList)
-                    if (c.id == mc)
-                        leader = c.leader;
-                SRow r{p.name + (p.id == leader ? "  (leader, clan hall)" : ""),
-                       std::string(p.flags & 1 ? "online" : "offline") +
-                           (p.hasLoc ? TextFormat("  (%d, %d)", int(p.lx), int(p.ly)) : ""),
-                       teamColor(p.id),
-                       {}};
-                r.btns.push_back({"Travel", 1, p.lx, p.ly, 0, p.hasLoc, false, 56});
-                if (p.id != W.me)
-                {
-                    if (leader == W.me)
-                        r.btns.push_back({"Lead", 8, 0, 0, p.id, true, false, 38});
-                    float wait = W.donateWait(); // shared donation / transfer cooldown
-                    for (int k = 0; k < R_Count; k++)
-                        r.btns.push_back({"", 5, float(k), 50.f, p.id, W.res[k] >= 50.f && wait <= 0, false, 30, k});
-                    r.sub += wait > 0 ? TextFormat("  - send again in %d s", int(std::ceil(wait))) : "  - send 50:";
-                }
-                rows.push_back(r);
-            }
+        addMyClanRows(rows);
         break;
     default:
-        for (int f = 0; f < FACTION_COUNT; f++)
-        {
-            int rp = W.facRep[f];
-            SRow r{FACTION_NAME[f], TextFormat("%s (%d)", repTier(rp), rp), teamColor(FACTION_BASE + f), {}};
-            const FacTown *best = nullptr;
-            float bd = 1e9f;
-            for (auto &t : W.facTowns)
-                if (t.faction == f)
-                {
-                    float d = std::hypot(t.x - app.cam.target.x / TILE, t.y - app.cam.target.y / TILE);
-                    if (d < bd)
-                    {
-                        bd = d;
-                        best = &t;
-                    }
-                }
-            r.btns.push_back({best ? "Nearest town" : "None found", 1, best ? best->x : 0.f, best ? best->y : 0.f, 0,
-                              best != nullptr, false, 104});
-            rows.push_back(r);
-        }
+        addFactionRows(rows);
         break;
     }
     return rows;
+}
+
+SocialMenu::SBtn SocialMenu::friendBtn(const Peer &p)
+{
+    if (p.flags & 2)
+        return SBtn{"Unfriend", 3, 0, 0, p.id, true, true, 70};
+    if (p.flags & 4)
+        return SBtn{"Accept", 2, 0, 0, p.id, true, false, 70};
+    if (p.flags & 8)
+        return SBtn{"Sent", 0, 0, 0, p.id, false, false, 70};
+    return SBtn{"Friend", 2, 0, 0, p.id, true, false, 70};
+}
+
+SocialMenu::SRow SocialMenu::peerRow(const Peer &p)
+{
+    const ClientWorld &W = app.world;
+    std::string cn = p.clan ? W.clanName(p.clan) : "";
+    SRow r{p.name + (cn.empty() ? "" : "  [" + cn + "]"),
+           std::string(p.flags & 1 ? "online" : "offline") +
+               (p.hasLoc ? TextFormat("  (%d, %d)", int(p.lx), int(p.ly)) : "  location unknown"),
+           teamColor(p.id),
+           {}};
+    r.btns.push_back({"Travel", 1, p.lx, p.ly, 0, p.hasLoc, false, 60});
+    r.btns.push_back(friendBtn(p));
+    return r;
+}
+
+// friendsOnly: friends, pending invites and sent invites (flag bits 2 | 4 | 8).
+void SocialMenu::addPeerRows(std::vector<SRow> &rows, bool friendsOnly)
+{
+    const ClientWorld &W = app.world;
+    for (auto &p : W.roster)
+        if (p.id != W.me && (!friendsOnly || (p.flags & (2 | 4 | 8))) && containsNoCase(p.name, searchText))
+            rows.push_back(peerRow(p));
+}
+
+void SocialMenu::addClanRows(std::vector<SRow> &rows)
+{
+    const ClientWorld &W = app.world;
+    int mc = W.myClan();
+    for (auto &c : W.clansList)
+    {
+        if (!containsNoCase(c.name, searchText))
+            continue;
+        SRow r{c.name, TextFormat("%d member%s", c.members, c.members == 1 ? "" : "s"), clanColor(c.id), {}};
+        r.btns.push_back({c.id == mc ? "Yours" : "Join", 4, 0, 0, c.id, mc == 0, false, 60});
+        rows.push_back(r);
+    }
+}
+
+void SocialMenu::addMyClanRows(std::vector<SRow> &rows)
+{
+    const ClientWorld &W = app.world;
+    int mc = W.myClan();
+    if (!mc)
+    {
+        rows.push_back({"You are not in a clan.", "Create one or join one in the Clans tab.", rgb(90, 60, 40), {}});
+        return;
+    }
+    for (auto &p : W.roster)
+        if (p.clan == mc)
+            rows.push_back(memberRow(p, mc));
+}
+
+SocialMenu::SRow SocialMenu::memberRow(const Peer &p, int mc)
+{
+    const ClientWorld &W = app.world;
+    int leader = 0;
+    for (auto &c : W.clansList)
+        if (c.id == mc)
+            leader = c.leader;
+
+    SRow r{p.name + (p.id == leader ? "  (leader, clan hall)" : ""),
+           std::string(p.flags & 1 ? "online" : "offline") +
+               (p.hasLoc ? TextFormat("  (%d, %d)", int(p.lx), int(p.ly)) : ""),
+           teamColor(p.id),
+           {}};
+    r.btns.push_back({"Travel", 1, p.lx, p.ly, 0, p.hasLoc, false, 56});
+    if (p.id == W.me)
+        return r;
+
+    if (leader == W.me)
+        r.btns.push_back({"Lead", 8, 0, 0, p.id, true, false, 38});
+    // Donations and leader transfers share one cooldown.
+    float wait = W.donateWait();
+    for (int k = 0; k < R_Count; k++)
+        r.btns.push_back({"", 5, float(k), 50.f, p.id, W.res[k] >= 50.f && wait <= 0, false, 30, k});
+    r.sub += wait > 0 ? TextFormat("  - send again in %d s", int(std::ceil(wait))) : "  - send 50:";
+    return r;
+}
+
+void SocialMenu::addFactionRows(std::vector<SRow> &rows)
+{
+    const ClientWorld &W = app.world;
+    for (int f = 0; f < FACTION_COUNT; f++)
+    {
+        int rp = W.facRep[f];
+        SRow r{FACTION_NAME[f], TextFormat("%s (%d)", repTier(rp), rp), teamColor(FACTION_BASE + f), {}};
+        const FacTown *best = nearestTown(f);
+        r.btns.push_back({best ? "Nearest town" : "None found", 1, best ? best->x : 0.f, best ? best->y : 0.f, 0,
+                          best != nullptr, false, 104});
+        rows.push_back(r);
+    }
+}
+
+const FacTown *SocialMenu::nearestTown(int faction) const
+{
+    const FacTown *best = nullptr;
+    float bd = 1e9f;
+    for (auto &t : app.world.facTowns)
+        if (t.faction == faction)
+        {
+            float d = std::hypot(t.x - app.cam.target.x / TILE, t.y - app.cam.target.y / TILE);
+            if (d < bd)
+            {
+                bd = d;
+                best = &t;
+            }
+        }
+    return best;
 }
 
 void SocialMenu::run(const SBtn &b)
@@ -190,8 +228,8 @@ bool SocialMenu::bottomBtn(SBtn &out)
     return false;
 }
 
-// layout: natural size, shrunk to fit small windows
-// Centred; while the build menu is out it moves (and if needed narrows) to stay right of it, so both can be open.
+// Natural size, shrunk to fit small windows. Centred; while the build menu is out it moves (and if needed narrows)
+// to stay right of it, so both can be open.
 Rectangle SocialMenu::rect() const
 {
     Vector2 s = mSocial.size();
@@ -206,7 +244,8 @@ Rectangle SocialMenu::rect() const
     float x = std::max((sw - w) / 2, left);
     if (x + w > sw - 4)
         x = std::max(4.f, sw - 4 - w);
-    float k = std::min(w / s.x, 1.f); // keep the paper's aspect when narrowed
+    // Keep the paper's aspect when narrowed.
+    float k = std::min(w / s.x, 1.f);
     h = std::min(h, std::max(s.y * k, 260.f));
     return {x, (float(ui::screenH()) - h) / 2, w, h};
 }
@@ -253,22 +292,10 @@ Rectangle SocialMenu::rowBtnRect(const Rectangle &row, const std::vector<SBtn> &
     return {x, row.y + 3, btns[i].w, SROW - 8};
 }
 
-// input / drawing
 void SocialMenu::input(Vector2 m)
 {
     if (textFocus)
-    {
-        for (int ch = GetCharPressed(); ch > 0; ch = GetCharPressed())
-            if (ch >= 32 && ch < 127 && searchText.size() < 24)
-            {
-                searchText.push_back(char(ch));
-                scroll = 0;
-            }
-        if ((IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) && !searchText.empty())
-            searchText.pop_back();
-        if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER))
-            textFocus = false;
-    }
+        typeSearch();
     else if (IsKeyPressed(KEY_P))
     {
         isOpen = false;
@@ -282,19 +309,31 @@ void SocialMenu::input(Vector2 m)
             isOpen = false;
         return;
     }
-    Rectangle sr = rect(), ls = list();
+
     float wheel = GetMouseWheelMove();
-    if (wheel != 0 && CheckCollisionPointRec(m, sr))
+    if (wheel != 0 && CheckCollisionPointRec(m, rect()))
         scroll = std::max(0, scroll - int(wheel));
-    if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-        return;
-    if (!CheckCollisionPointRec(m, sr))
-    {
-        isOpen = false;
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+        click(m);
+}
+
+void SocialMenu::typeSearch()
+{
+    for (int ch = GetCharPressed(); ch > 0; ch = GetCharPressed())
+        if (ch >= 32 && ch < 127 && searchText.size() < 24)
+        {
+            searchText.push_back(char(ch));
+            scroll = 0;
+        }
+    if ((IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) && !searchText.empty())
+        searchText.pop_back();
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER))
         textFocus = false;
-        return;
-    }
-    if (CheckCollisionPointRec(m, closeRect()))
+}
+
+void SocialMenu::click(Vector2 m)
+{
+    if (!CheckCollisionPointRec(m, rect()) || CheckCollisionPointRec(m, closeRect()))
     {
         isOpen = false;
         textFocus = false;
@@ -307,6 +346,7 @@ void SocialMenu::input(Vector2 m)
             scroll = 0;
             return;
         }
+
     textFocus = CheckCollisionPointRec(m, search());
     SBtn bb;
     if (bottomBtn(bb) && CheckCollisionPointRec(m, bottomBtnRect()) && bb.enabled)
@@ -314,9 +354,16 @@ void SocialMenu::input(Vector2 m)
         run(bb);
         return;
     }
+    clickRows(m);
+}
+
+void SocialMenu::clickRows(Vector2 m)
+{
+    Rectangle ls = list();
     auto rs = rows();
     int vis = int(ls.height / SROW);
     scroll = std::clamp(scroll, 0, std::max(0, int(rs.size()) - vis));
+
     for (int i = 0; i < vis && i + scroll < int(rs.size()); i++)
     {
         Rectangle rr{ls.x, ls.y + float(i) * SROW, ls.width, SROW};
@@ -336,25 +383,42 @@ void SocialMenu::draw()
     DrawRectangle(0, 0, ui::screenW(), ui::screenH(), rgb(0, 0, 0, 110));
     Rectangle sr = rect();
     drawTMap(mSocial, sr);
-    float pad = float(mSocial.padding) * scale();
-    Color ink = rgb(70, 45, 30);
+
     static const char *tabs[5] = {"Players", "Friends", "Clans", "My Clan", "Factions"};
     for (int i = 0; i < 5; i++)
         ui::drawButton(tabRect(i), tabs[i], true, false, CheckCollisionPointRec(m, tabRect(i)), tab == i, 12);
     ui::drawButton(closeRect(), "X", true, true, CheckCollisionPointRec(m, closeRect()), false, 12);
+
+    drawSearchBox();
+    std::string tip = drawRows(m);
+    drawBottom(m, sr);
+    if (!tip.empty())
+        drawTip(m, tip);
+}
+
+void SocialMenu::drawSearchBox()
+{
     Rectangle sb = search();
     DrawRectangleRounded(sb, .3f, 6, rgb(255, 250, 235, 235));
     DrawRectangleRoundedLinesEx(sb, .3f, 6, 2, textFocus ? rgb(60, 120, 200) : rgb(120, 90, 60));
+
     std::string shown = searchText.empty() && !textFocus
                             ? (tab == 2 ? "Search clans or type a new clan name..." : "Search by name...")
                             : searchText + (textFocus && int(GetTime() * 2) % 2 == 0 ? "|" : "");
     DrawText(shown.c_str(), int(sb.x) + 8, int(sb.y) + 5, 15,
-             searchText.empty() && !textFocus ? rgb(150, 130, 110) : ink);
+             searchText.empty() && !textFocus ? rgb(150, 130, 110) : rgb(70, 45, 30));
+}
+
+// Returns the tooltip of the hovered resource-transfer button, if any.
+std::string SocialMenu::drawRows(Vector2 m)
+{
+    Color ink = rgb(70, 45, 30);
     auto rs = rows();
     Rectangle ls = list();
     int vis = int(ls.height / SROW);
     std::string tip;
     scroll = std::clamp(scroll, 0, std::max(0, int(rs.size()) - vis));
+
     if (rs.empty())
         DrawText(tab == 1 ? "No friends yet. Add players from the Players tab." : "Nothing to show.", int(ls.x) + 6,
                  int(ls.y) + 8, 14, rgb(120, 90, 60));
@@ -366,28 +430,44 @@ void SocialMenu::draw()
         DrawText(row.text.c_str(), int(rr.x) + 6, int(rr.y) + 2, 15,
                  row.col.r > 200 && row.col.g > 200 ? ink : row.col);
         DrawText(row.sub.c_str(), int(rr.x) + 6, int(rr.y) + 17, 10, rgb(110, 85, 60));
-        for (size_t k = 0; k < row.btns.size(); k++)
-        {
-            Rectangle b = rowBtnRect(rr, row.btns, k);
-            const SBtn &bt = row.btns[k];
-            bool hov = CheckCollisionPointRec(m, b);
-            ui::drawButton(b, bt.label, bt.enabled, bt.red, hov, false, 11);
-            if (bt.icon < 0)
-                continue; // resource transfer: icon only, the amount is in the tooltip / sub line
-            ui::resourceIcon(bt.icon, {b.x + b.width / 2 - 8, b.y + b.height / 2 - 9, 16, 16},
-                             bt.enabled ? WHITE : rgb(150, 150, 150));
-            if (hov)
-                tip = TextFormat("Send %d %s by convoy (can be raided)", int(bt.b), RES_NAME[bt.icon]);
-        }
+        drawRowButtons(row, rr, m, tip);
     }
+
     if (int(rs.size()) > vis)
         DrawText(TextFormat("%d-%d of %d  (mouse wheel)", scroll + 1, std::min(int(rs.size()), scroll + vis),
                             int(rs.size())),
                  int(ls.x) + 6, int(ls.y + ls.height) + 2, 10, ink);
+    return tip;
+}
+
+void SocialMenu::drawRowButtons(const SRow &row, const Rectangle &rr, Vector2 m, std::string &tip)
+{
+    for (size_t k = 0; k < row.btns.size(); k++)
+    {
+        Rectangle b = rowBtnRect(rr, row.btns, k);
+        const SBtn &bt = row.btns[k];
+        bool hov = CheckCollisionPointRec(m, b);
+        ui::drawButton(b, bt.label, bt.enabled, bt.red, hov, false, 11);
+
+        // Resource transfer: icon only, the amount is in the tooltip / sub line.
+        if (bt.icon < 0)
+            continue;
+        ui::resourceIcon(bt.icon, {b.x + b.width / 2 - 8, b.y + b.height / 2 - 9, 16, 16},
+                         bt.enabled ? WHITE : rgb(150, 150, 150));
+        if (hov)
+            tip = TextFormat("Send %d %s by convoy (can be raided)", int(bt.b), RES_NAME[bt.icon]);
+    }
+}
+
+void SocialMenu::drawBottom(Vector2 m, const Rectangle &sr)
+{
+    Color ink = rgb(70, 45, 30);
+    float pad = float(mSocial.padding) * scale();
     SBtn bb;
     if (bottomBtn(bb))
         ui::drawButton(bottomBtnRect(), bb.label, bb.enabled, bb.red, CheckCollisionPointRec(m, bottomBtnRect()), false,
                        13);
+
     int mc = app.world.myClan();
     if (tab == 3 && mc)
         DrawText("Resources travel by convoy and can be raided.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28),
@@ -395,11 +475,12 @@ void SocialMenu::draw()
     if (tab == 2 && mc == 0)
         DrawText("Type a name above, then press Create.", int(sr.x + pad) + 6, int(sr.y + sr.height - pad - 28), 11,
                  ink);
-    if (!tip.empty())
-    {
-        int w = MeasureText(tip.c_str(), 13);
-        float tx = std::min(m.x + 14, float(ui::screenW()) - float(w) - 20);
-        DrawRectangleRounded({tx, m.y + 18, float(w) + 12, 20}, .3f, 4, rgb(30, 22, 16, 235));
-        DrawText(tip.c_str(), int(tx) + 6, int(m.y) + 22, 13, WHITE);
-    }
+}
+
+void SocialMenu::drawTip(Vector2 m, const std::string &tip)
+{
+    int w = MeasureText(tip.c_str(), 13);
+    float tx = std::min(m.x + 14, float(ui::screenW()) - float(w) - 20);
+    DrawRectangleRounded({tx, m.y + 18, float(w) + 12, 20}, .3f, 4, rgb(30, 22, 16, 235));
+    DrawText(tip.c_str(), int(tx) + 6, int(m.y) + 22, 13, WHITE);
 }

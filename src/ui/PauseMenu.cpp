@@ -71,7 +71,6 @@ Rectangle PauseMenu::arrow(int dir) const
 
 void PauseMenu::input()
 {
-    Settings &s = app.settings;
     Vector2 m = ui::mouse();
     bool lp = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
     if (IsKeyPressed(KEY_ESCAPE))
@@ -80,22 +79,34 @@ void PauseMenu::input()
         sliderDrag = false;
         return;
     }
+
     Rectangle sl = slider();
     if (lp && CheckCollisionPointRec(m, {sl.x - 12, sl.y - 12, sl.width + 24, sl.height + 24}))
         sliderDrag = true;
     if (sliderDrag)
     {
-        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
-        { // note: the slider rectangle is in scaled space
-            float k = std::clamp((::GetMousePosition().x / ui::scale() - sl.x) / sl.width, 0.f, 1.f);
-            s.uiScale = std::clamp(std::round((0.6f + 1.4f * k) * 20.f) / 20.f, 0.6f, 2.0f);
-        }
-        else
-            sliderDrag = false;
+        dragSlider(sl);
         return;
     }
-    if (!lp)
+    if (lp)
+        onClick(m);
+}
+
+void PauseMenu::dragSlider(const Rectangle &sl)
+{
+    if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+    {
+        sliderDrag = false;
         return;
+    }
+    // The slider rectangle is in scaled UI space, the raw mouse position is not.
+    float k = std::clamp((::GetMousePosition().x / ui::scale() - sl.x) / sl.width, 0.f, 1.f);
+    app.settings.uiScale = std::clamp(std::round((0.6f + 1.4f * k) * 20.f) / 20.f, 0.6f, 2.0f);
+}
+
+void PauseMenu::onClick(Vector2 m)
+{
+    Settings &s = app.settings;
     if (CheckCollisionPointRec(m, arrow(-1)))
     {
         setWindowMode(s.windowMode - 1);
@@ -136,15 +147,24 @@ void PauseMenu::input()
 
 void PauseMenu::draw()
 {
-    const Settings &s = app.settings;
     Vector2 m = ui::mouse();
-    DrawRectangle(0, 0, ui::screenW(), ui::screenH(), rgb(0, 0, 0, 150)); // darken the game
+    DrawRectangle(0, 0, ui::screenW(), ui::screenH(), rgb(0, 0, 0, 150));
     Rectangle r = rect();
     drawTMap(mPause, r);
     ui::panelTitle(r, "Paused", 22, .55f, 13);
+
+    drawScaleRow();
+    drawWindowRow(m);
+    drawButtons(m);
+}
+
+void PauseMenu::drawScaleRow()
+{
+    const Settings &s = app.settings;
     Color ink = rgb(70, 45, 30);
     Rectangle row0 = row(0), sl = slider();
     DrawText("UI scale", int(row0.x), int(row0.y) + 14, 15, ink);
+
     float k = (s.uiScale - 0.6f) / 1.4f;
     DrawRectangleRounded(sl, .5f, 6, rgb(60, 40, 28, 220));
     DrawRectangleRounded({sl.x, sl.y, std::max(8.f, sl.width * k), sl.height}, .5f, 6, rgb(80, 170, 220));
@@ -152,10 +172,17 @@ void PauseMenu::draw()
     DrawCircleLines(int(sl.x + sl.width * k), int(sl.y + sl.height / 2), 11, rgb(60, 40, 28));
     DrawText(TextFormat("%d%%", int(std::lround(s.uiScale * 100.f))), int(row0.x + row0.width) - 46, int(row0.y) + 14,
              15, ink);
+}
+
+void PauseMenu::drawWindowRow(Vector2 m)
+{
+    const Settings &s = app.settings;
+    Color ink = rgb(70, 45, 30);
     Rectangle row1 = row(1);
     DrawText("Window", int(row1.x), int(row1.y) + 9, 15, ink);
+
     for (int d = -1; d <= 1; d += 2)
-    { // left / right arrows
+    {
         Rectangle a = arrow(d);
         ui::drawButton(a, "", true, false, CheckCollisionPointRec(m, a), false, 14);
         float cx = a.x + a.width / 2, cy = a.y + a.height / 2;
@@ -164,9 +191,14 @@ void PauseMenu::draw()
         else
             DrawTriangle({cx - 5, cy - 8}, {cx - 5, cy + 8}, {cx + 7, cy}, rgb(255, 245, 210));
     }
+
     const char *mn = Settings::modeName(s.windowMode);
     DrawText(mn, int(row1.x + 96 + (row1.width - 96 - 0) / 2) - 15 - MeasureText(mn, 14) / 2 + 0, int(row1.y) + 10, 14,
              ink);
+}
+
+void PauseMenu::drawButtons(Vector2 m)
+{
     bool saved = GetTime() - savedAt < 2.0;
     ui::drawButton(row(2), saved ? "Saved!" : "Save settings", true, false, CheckCollisionPointRec(m, row(2)), false,
                    15);

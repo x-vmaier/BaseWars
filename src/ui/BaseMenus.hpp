@@ -23,6 +23,9 @@ class BaseMenus
   private:
     Rectangle toastRect(int i) const;
     Rectangle homelessBanner() const;
+    void drawToast(int i, Vector2 m, double now);
+    void drawHomeless(Vector2 m);
+    void drawPlacementBanner();
     App &app;
     std::vector<Toast> toasts;
 };

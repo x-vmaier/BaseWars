@@ -15,43 +15,49 @@
 #include <cstring>
 #include <string>
 
-void TerritorySystem::evalFunctional()
+// Working Town Halls and Outposts per player; buildings must sit within their reach.
+struct Anchors
 {
     std::vector<Pos> ths[MAX_PLAYERS + 1], ops[MAX_PLAYERS + 1];
-    std::vector<entt::entity> mine;
-    reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info &i, const Building &b, const Owner &o)
-    {
-        if (!isPlayer(o.id))
-            return;
-        mine.push_back(e);
-        if (i.kind == K_TownHall && !(b.progress < 1.f && reg.all_of<RelocNew>(e)))
-            ths[o.id].push_back(footCenter(i.kind, b.tx, b.ty));
-    });
-    auto within = [](const std::vector<Pos> &v, Pos c, float r)
-    {
-        for (auto &a : v)
-            if (std::max(std::abs(a.x - c.x), std::abs(a.y - c.y)) <= r)
-                return true;
-        return false;
-    };
-    auto center = [&](entt::entity e)
-    {
-        const auto &b = reg.get<Building>(e);
-        return footCenter(reg.get<Info>(e).kind, b.tx, b.ty);
-    };
-    std::vector<uint8_t> want(mine.size(), 0);
+};
+
+namespace
+{
+bool within(const std::vector<Pos> &v, Pos c, float r)
+{
+    for (auto &a : v)
+        if (std::max(std::abs(a.x - c.x), std::abs(a.y - c.y)) <= r)
+            return true;
+    return false;
+}
+
+Pos centerOf(entt::registry &reg, entt::entity e)
+{
+    const auto &b = reg.get<Building>(e);
+    return footCenter(reg.get<Info>(e).kind, b.tx, b.ty);
+}
+} // namespace
+
+// Outposts need a Town Hall within reach; the working ones then extend the territory.
+void TerritorySystem::markOutposts(const std::vector<entt::entity> &mine, Anchors &an, std::vector<uint8_t> &want)
+{
     for (size_t n = 0; n < mine.size(); n++)
-    { // Outposts need a Town Hall within reach
+    {
         auto e = mine[n];
         if (reg.get<Info>(e).kind != K_Outpost)
             continue;
         int o = reg.get<Owner>(e).id;
-        Pos c = center(e);
-        bool ok = within(ths[o], c, OUTPOST_REACH) && !reg.all_of<Moving>(e);
+        Pos c = centerOf(reg, e);
+        bool ok = within(an.ths[o], c, OUTPOST_REACH) && !reg.all_of<Moving>(e);
         want[n] = ok ? 0 : 1;
         if (ok)
-            ops[o].push_back(c);
+            an.ops[o].push_back(c);
     }
+}
+
+void TerritorySystem::applyFunctional(const std::vector<entt::entity> &mine, const Anchors &an,
+                                      std::vector<uint8_t> &want)
+{
     int off[MAX_PLAYERS + 1]{}, on[MAX_PLAYERS + 1]{};
     for (size_t n = 0; n < mine.size(); n++)
     {
@@ -62,12 +68,13 @@ void TerritorySystem::evalFunctional()
             want[n] = 0;
         else if (!hasTag(k, KT_Anchor))
         {
-            Pos c = center(e);
-            want[n] = (reg.all_of<Moving>(e) || !(within(ths[o], c, float(anchorRadius(K_TownHall))) ||
-                                                  within(ops[o], c, float(anchorRadius(K_Outpost)))))
+            Pos c = centerOf(reg, e);
+            want[n] = (reg.all_of<Moving>(e) || !(within(an.ths[o], c, float(anchorRadius(K_TownHall))) ||
+                                                  within(an.ops[o], c, float(anchorRadius(K_Outpost)))))
                           ? 1
                           : 0;
         }
+
         auto *f = reg.try_get<BFlags>(e);
         bool cur = f && f->dis;
         if (bool(want[n]) == cur)
@@ -76,6 +83,7 @@ void TerritorySystem::evalFunctional()
         if (!reg.all_of<Moving>(e))
             (want[n] ? off : on)[o]++;
     }
+
     for (int id = 1; id <= MAX_PLAYERS; id++)
     {
         if (off[id])
@@ -84,6 +92,24 @@ void TerritorySystem::evalFunctional()
         if (on[id])
             world.say(id, std::to_string(on[id]) + " building(s) work again.");
     }
+}
+
+void TerritorySystem::evalFunctional()
+{
+    Anchors an;
+    std::vector<entt::entity> mine;
+    reg.view<Info, Building, Owner>().each([&](entt::entity e, const Info &i, const Building &b, const Owner &o)
+    {
+        if (!isPlayer(o.id))
+            return;
+        mine.push_back(e);
+        if (i.kind == K_TownHall && !(b.progress < 1.f && reg.all_of<RelocNew>(e)))
+            an.ths[o.id].push_back(footCenter(i.kind, b.tx, b.ty));
+    });
+
+    std::vector<uint8_t> want(mine.size(), 0);
+    markOutposts(mine, an, want);
+    applyFunctional(mine, an, want);
 }
 
 void TerritorySystem::doMoveTown(int id, int tx, int ty)
@@ -112,7 +138,7 @@ void TerritorySystem::doMoveTown(int id, int tx, int ty)
         return;
     }
     if (!s.clearing.worldBuildOk(id, K_TownHall, tx, ty))
-        return; // [world]
+        return;
     world.spend(id, TOWN_MOVE_COST);
     auto n = world.makeBuilding(K_TownHall, uint8_t(id), tx, ty, false);
     reg.emplace<RelocNew>(n, RelocNew{reg.get<Uid>(th).id, true, TOWN_MOVE_TIME});
@@ -122,6 +148,7 @@ void TerritorySystem::doMoveTown(int id, int tx, int ty)
     world.say(id, "Your new town is under construction (" + std::to_string(int(TOWN_MOVE_TIME)) +
                       " s). Troops and pawns will move in when it is finished.");
 }
+
 void TerritorySystem::doRelocate(int id, uint32_t uid, int tx, int ty)
 {
     auto be = world.find(uid);
@@ -153,7 +180,7 @@ void TerritorySystem::doRelocate(int id, uint32_t uid, int tx, int ty)
         return;
     }
     if (!s.clearing.worldBuildOk(id, k, tx, ty))
-        return; // [world]
+        return;
     world.spend(id, KINFO[k].cost);
     auto n = world.makeBuilding(k, uint8_t(id), tx, ty, false);
     float total = 60.f + 30.f * float(reg.get<Info>(be).level - 1);
@@ -164,8 +191,10 @@ void TerritorySystem::doRelocate(int id, uint32_t uid, int tx, int ty)
     world.say(id, std::string("Relocating your ") + KINFO[k].name + " (" + std::to_string(int(total)) +
                       " s). Level and stock are kept.");
 }
+
 void TerritorySystem::migrateTown(int ow, entt::entity nth)
-{ // every troop and pawn walks into the new town (teleport with dust)
+{
+    // Every troop and pawn teleports into the new town (with dust).
     std::vector<IV> spots;
     const auto &nb = reg.get<Building>(nth);
     Kind k = reg.get<Info>(nth).kind;
@@ -210,6 +239,7 @@ void TerritorySystem::migrateTown(int ow, entt::entity nth)
     }
     world.say(ow, std::to_string(n) + " troops and pawns moved into your new town.");
 }
+
 void TerritorySystem::finishReloc(entt::entity n)
 {
     RelocNew rn = reg.get<RelocNew>(n);
@@ -259,6 +289,7 @@ void TerritorySystem::finishReloc(entt::entity n)
         world.say(ow, std::string("Your ") + KINFO[in.kind].name + " was relocated.");
     evalFunctional();
 }
+
 void TerritorySystem::relocSecond()
 {
     std::vector<entt::entity> done, stale;

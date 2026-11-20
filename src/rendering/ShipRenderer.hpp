@@ -17,5 +17,6 @@ class ShipRenderer
     void queuePathLines(DrawList &items);
 
   private:
+    void drawPathLines();
     App &app;
 };

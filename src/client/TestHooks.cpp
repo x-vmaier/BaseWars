@@ -10,6 +10,7 @@
 #include <rlgl.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -25,8 +26,33 @@ void TestHooks::update()
     if (!shotPath || !app.session.welcomed)
         return;
 
-    ClientWorld &W = app.world;
+    scriptedCommands();
+    siteCommands();
+    if (shotFrames < 20)
+        return;
 
+    if (const char *mp = std::getenv("BW_MOUSE"))
+    {
+        float dx = 0, dy = 0;
+        if (std::sscanf(mp, "%f,%f", &dx, &dy) == 2)
+            SetMousePosition(::GetScreenWidth() / 2 + int(dx), ::GetScreenHeight() / 2 + int(dy));
+    }
+
+    const char *u = std::getenv("BW_UI");
+    if (!u)
+        return;
+
+    std::string ui = u;
+    panelHooks(ui);
+    trainingHook(ui);
+    if (ui.find("townhall") != std::string::npos)
+        townHallHook();
+    contextHooks(ui);
+}
+
+// BW_CMD
+void TestHooks::scriptedCommands()
+{
     if (shotFrames == 25)
         if (const char *c = std::getenv("BW_CMD"))
         {
@@ -49,23 +75,10 @@ void TestHooks::update()
             if (p != std::string::npos)
                 app.cmd.transfer(std::atoi(cm.c_str() + p + 5), R_Wood, 60.f);
         }
+}
 
-    siteCommands();
-    if (shotFrames < 20)
-        return;
-
-    if (const char *mp = std::getenv("BW_MOUSE"))
-    {
-        float dx = 0, dy = 0;
-        if (std::sscanf(mp, "%f,%f", &dx, &dy) == 2)
-            SetMousePosition(::GetScreenWidth() / 2 + int(dx), ::GetScreenHeight() / 2 + int(dy));
-    }
-
-    const char *u = std::getenv("BW_UI");
-    if (!u)
-        return;
-
-    std::string ui = u;
+void TestHooks::panelHooks(const std::string &ui)
+{
     if (ui.find("build") != std::string::npos)
         app.buildMenu.isOpen = true;
     if (ui.find("place") != std::string::npos)
@@ -88,9 +101,12 @@ void TestHooks::update()
         app.pause.isOpen = true;
     if (ui.find("chatbox") != std::string::npos && shotFrames == 20)
         app.chat.open();
+}
 
+void TestHooks::trainingHook(const std::string &ui)
+{
+    ClientWorld &W = app.world;
     TrainingPanel &tp = app.training;
-    ContextPanel &cp = app.context;
 
     if (ui.find("train") != std::string::npos && !tp.isOpen)
         W.reg.view<NetId, Info>().each([&](const NetId &n, const Info &i)
@@ -103,10 +119,14 @@ void TestHooks::update()
                     tp.sel = std::atoi(ts);
             }
         });
-    if (ui.find("townhall") != std::string::npos)
-        townHallHook();
+}
 
+void TestHooks::contextHooks(const std::string &ui)
+{
+    ClientWorld &W = app.world;
+    ContextPanel &cp = app.context;
     float sw = float(ui::screenW()), sh = float(ui::screenH());
+
     if (ui.find("ctxop") != std::string::npos && !cp.isOpen)
         W.reg.view<NetId, Info>().each([&](const NetId &n, const Info &i)
         {
@@ -170,23 +190,23 @@ void TestHooks::townHallHook()
         th.armDisposeForTest(std::atoi(h.c_str() + 7));
 }
 
+uint32_t TestHooks::firstOwn(int kind)
+{
+    ClientWorld &W = app.world;
+    uint32_t id = 0;
+    W.reg.view<NetId, Info>().each([&](const NetId &n, const Info &i)
+    {
+        if (!id && i.owner == W.me && i.kind == kind)
+            id = n.id;
+    });
+    return id;
+}
+
 void TestHooks::siteCommands()
 {
     const char *env = std::getenv("BW_SITE");
     if (!env)
         return;
-
-    ClientWorld &W = app.world;
-    auto firstOf = [&](int k)
-    {
-        uint32_t id = 0;
-        W.reg.view<NetId, Info>().each([&](const NetId &n, const Info &i)
-        {
-            if (!id && i.owner == W.me && i.kind == k)
-                id = n.id;
-        });
-        return id;
-    };
 
     std::string all = env;
     size_t p = 0;
@@ -199,46 +219,56 @@ void TestHooks::siteCommands()
         if (at == std::string::npos || c1 == std::string::npos || std::atoi(tok.c_str() + at + 1) != shotFrames)
             continue;
 
-        std::string verb = tok.substr(0, c1), args = tok.substr(c1 + 1, at - c1 - 1);
-        int kind = std::atoi(args.c_str()), dx = 0, dy = 0;
-
-        if (verb == "build" && std::sscanf(args.c_str(), "%d:%d,%d", &kind, &dx, &dy) == 3)
-        {
-            Pos th = W.myTH(app.cam.target);
-            app.cmd.build(Kind(kind), {int(std::floor(th.x)) + dx, int(std::floor(th.y)) + dy});
-        }
-        else if (verb == "alloc" && std::sscanf(args.c_str(), "%d:%d", &dx, &dy) == 2)
-        {
-            app.cmd.setAlloc(dx, dy);
-        }
-        else if (verb == "dispose")
-        {
-            app.cmd.dispose(kind);
-        }
-        else if (verb == "quota")
-        {
-            int q[QUOTA_TYPES]{};
-            if (std::sscanf(args.c_str(), "%d,%d,%d,%d", &q[0], &q[1], &q[2], &q[3]) == 4)
-                app.cmd.quotas(q);
-        }
-        else if (verb == "donate" && std::sscanf(args.c_str(), "%d:%d", &dx, &dy) == 2)
-        {
-            app.cmd.donate(dx, dy, 50.f);
-        }
-        else if (uint32_t id = firstOf(kind); id)
-        {
-            if (verb == "upgrade")
-                app.cmd.upgrade(id);
-            else if (verb == "train" && std::sscanf(args.c_str(), "%d:%d", &kind, &dx) == 2)
-                app.cmd.train(id, Kind(dx));
-            else if (verb == "repair")
-                app.cmd.repair(id, 0);
-            else if (verb == "cancel")
-                app.cmd.repair(id, 1);
-            else if (verb == "ctx")
-                app.context.open(id, {float(ui::screenW()) * .55f, float(ui::screenH()) * .12f});
-        }
+        runSiteVerb(tok.substr(0, c1), tok.substr(c1 + 1, at - c1 - 1));
     }
+}
+
+void TestHooks::runSiteVerb(const std::string &verb, const std::string &args)
+{
+    int kind = std::atoi(args.c_str()), dx = 0, dy = 0;
+
+    if (verb == "build" && std::sscanf(args.c_str(), "%d:%d,%d", &kind, &dx, &dy) == 3)
+    {
+        Pos th = app.world.myTH(app.cam.target);
+        app.cmd.build(Kind(kind), {int(std::floor(th.x)) + dx, int(std::floor(th.y)) + dy});
+    }
+    else if (verb == "alloc" && std::sscanf(args.c_str(), "%d:%d", &dx, &dy) == 2)
+    {
+        app.cmd.setAlloc(dx, dy);
+    }
+    else if (verb == "dispose")
+    {
+        app.cmd.dispose(kind);
+    }
+    else if (verb == "quota")
+    {
+        int q[QUOTA_TYPES]{};
+        if (std::sscanf(args.c_str(), "%d,%d,%d,%d", &q[0], &q[1], &q[2], &q[3]) == 4)
+            app.cmd.quotas(q);
+    }
+    else if (verb == "donate" && std::sscanf(args.c_str(), "%d:%d", &dx, &dy) == 2)
+    {
+        app.cmd.donate(dx, dy, 50.f);
+    }
+    else if (uint32_t id = firstOwn(kind); id)
+    {
+        buildingVerb(verb, args, id);
+    }
+}
+
+void TestHooks::buildingVerb(const std::string &verb, const std::string &args, uint32_t id)
+{
+    int kind = 0, dx = 0;
+    if (verb == "upgrade")
+        app.cmd.upgrade(id);
+    else if (verb == "train" && std::sscanf(args.c_str(), "%d:%d", &kind, &dx) == 2)
+        app.cmd.train(id, Kind(dx));
+    else if (verb == "repair")
+        app.cmd.repair(id, 0);
+    else if (verb == "cancel")
+        app.cmd.repair(id, 1);
+    else if (verb == "ctx")
+        app.context.open(id, {float(ui::screenW()) * .55f, float(ui::screenH()) * .12f});
 }
 
 bool TestHooks::captureIfDue()

@@ -22,7 +22,12 @@ void TrainingPanel::load()
     mTrain = loadTMap("training_panel");
 }
 
-// layout (panel space, scaled to fit the screen)
+namespace
+{
+const Color INK = rgb(70, 45, 30);
+} // namespace
+
+// Panel space, scaled to fit the screen.
 TrainingPanel::PanelXf TrainingPanel::xf() const
 {
     Vector2 s = mTrain.size();
@@ -79,7 +84,6 @@ Rectangle TrainingPanel::queueSlot(int i) const
     return {x0 + float(i) * (w + 2), bb.y + 22, w, 62};
 }
 
-// input
 void TrainingPanel::input(Vector2 mouse)
 {
     const ClientWorld &W = app.world;
@@ -96,6 +100,7 @@ void TrainingPanel::input(Vector2 mouse)
     }
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         return;
+
     Vector2 m = toPanel(mouse);
     Vector2 sz = mTrain.size();
     if (m.x < 0 || m.y < 0 || m.x > sz.x || m.y > sz.y || CheckCollisionPointRec(m, closeBtn()))
@@ -111,19 +116,28 @@ void TrainingPanel::input(Vector2 mouse)
             sel = i;
             return;
         }
+
+    buttonInput(m, W.reg.get<Info>(it->second));
+}
+
+void TrainingPanel::buttonInput(Vector2 m, const Info &in)
+{
+    const ClientWorld &W = app.world;
     Kind k = Kind(K_Pawn + sel);
-    const Info &in = W.reg.get<Info>(it->second);
     int bl = in.aux;
+
     float tc[R_Count];
     unitCost(k, tc);
     if (CheckCollisionPointRec(m, btnTrain()) && lockReason(k, bl).empty() && W.affordable(tc))
         app.cmd.train(target, k);
+
     int lv = troopLevel(k);
     float uc[R_Count];
     troopCost(k, lv + 1, uc);
     if (CheckCollisionPointRec(m, btnTroopUp()) && lv < MAX_UNIT_LEVEL && bl >= troopUpgradeNeedsArchery(lv + 1) &&
         W.affordable(uc))
         app.cmd.upgradeUnit(k);
+
     float bc[R_Count];
     for (int r = 0; r < R_Count; r++)
         bc[r] = float(mapUpgradeCost(in, r));
@@ -133,7 +147,7 @@ void TrainingPanel::input(Vector2 mouse)
         app.cmd.upgrade(target);
 }
 
-// why a troop cannot be trained yet ("" = it can): Town Hall level first, then the Archery level
+// "" when trainable: Town Hall level is checked before the Archery level
 std::string TrainingPanel::lockReason(Kind k, int archeryLevel) const
 {
     if (app.world.thLevel() < unitThLevel(k))
@@ -157,23 +171,36 @@ bool TrainingPanel::queueClick(Vector2 m)
     return false;
 }
 
-// drawing
 void TrainingPanel::draw()
 {
     const ClientWorld &W = app.world;
     auto it = W.ents.find(target);
     if (it == W.ents.end())
         return;
+
     const Info &bin = W.reg.get<Info>(it->second);
     DrawRectangle(0, 0, ui::screenW(), ui::screenH(), rgb(0, 0, 0, 120));
     PanelXf x = xf();
     Vector2 m = toPanel(ui::mouse());
+    double now = GetTime();
+
     rlPushMatrix();
     rlTranslatef(x.ox, x.oy, 0);
     rlScalef(x.sc, x.sc, 1);
+    drawFrame(bin, m);
+    for (int i = 0; i < 5; i++)
+        drawCard(i, bin, m, now);
+    drawTroopDetail(bin, m, now);
+    drawBuildingBlock(bin, m, now);
+    drawQueueStrip(m);
+    rlPopMatrix();
+}
+
+void TrainingPanel::drawFrame(const Info &bin, Vector2 m)
+{
     Vector2 sz = mTrain.size();
-    Color ink = rgb(70, 45, 30);
     drawTMap(mTrain, {0, 0, sz.x, sz.y});
+
     const TMap &mTitle = ui::titleMap();
     Rectangle tr{sz.x / 2 - mTitle.size().x / 2, -26, mTitle.size().x, mTitle.size().y};
     drawTMap(mTitle, tr);
@@ -181,51 +208,79 @@ void TrainingPanel::draw()
     textShadow(title, int(tr.x + tr.width / 2) - MeasureText(title.c_str(), 20) / 2, int(tr.y + tr.height / 2) - 12, 20,
                WHITE);
     ui::drawButton(closeBtn(), "X", true, true, CheckCollisionPointRec(m, closeBtn()), false, 12);
-    double now = GetTime();
-    for (int i = 0; i < 5; i++)
-    { // grid of animated troop cards
-        Kind k = Kind(K_Pawn + i);
-        Rectangle c = card(i);
-        bool locked = !lockReason(k, bin.aux).empty(), selected = sel == i, hov = CheckCollisionPointRec(m, c);
-        DrawRectangleRounded(c, .12f, 6,
-                             selected ? rgb(255, 245, 200) : (hov ? rgb(250, 235, 205) : rgb(238, 222, 190)));
-        DrawRectangleRoundedLinesEx(c, .12f, 6, selected ? 3.f : 2.f, selected ? rgb(60, 140, 220) : rgb(120, 90, 60));
-        Anim a = unitAnim(k, W.me, US_Idle, 0, 0, false, 1, now);
-        float sc = a.fw > 200 ? .36f : .62f;
-        drawAnim(a, frameFor(a, now, float(i) * .7f), c.x + c.width / 2, c.y + 84, false, sc,
-                 locked ? rgb(70, 70, 90, 255) : WHITE);
-        DrawText(KINFO[k].name, int(c.x + c.width / 2) - MeasureText(KINFO[k].name, 14) / 2, int(c.y + c.height - 20),
-                 14, ink);
-        DrawRectangleRounded({c.x + 4, c.y + 4, 34, 18}, .4f, 4, rgb(60, 40, 28, 220));
-        DrawText(TextFormat("Lv%d", troopLevel(k)), int(c.x) + 9, int(c.y) + 7, 12, rgb(255, 235, 160));
-        if (locked)
-        {
-            DrawRectangleRounded(c, .12f, 6, rgb(10, 10, 25, 140));
-            DrawRectangle(int(c.x + c.width / 2) - 9, int(c.y + 40), 18, 14, rgb(230, 190, 70));
-            DrawRectangleLines(int(c.x + c.width / 2) - 9, int(c.y + 40), 18, 14, BLACK);
-            DrawCircleLines(int(c.x + c.width / 2), int(c.y + 40), 7, rgb(230, 230, 240));
-            std::string need = W.thLevel() < unitThLevel(k) ? TextFormat("Town Hall Lv%d", unitThLevel(k))
+}
+
+void TrainingPanel::drawCard(int i, const Info &bin, Vector2 m, double now)
+{
+    const ClientWorld &W = app.world;
+    Kind k = Kind(K_Pawn + i);
+    Rectangle c = card(i);
+    bool locked = !lockReason(k, bin.aux).empty(), selected = sel == i, hov = CheckCollisionPointRec(m, c);
+
+    DrawRectangleRounded(c, .12f, 6, selected ? rgb(255, 245, 200) : (hov ? rgb(250, 235, 205) : rgb(238, 222, 190)));
+    DrawRectangleRoundedLinesEx(c, .12f, 6, selected ? 3.f : 2.f, selected ? rgb(60, 140, 220) : rgb(120, 90, 60));
+    Anim a = unitAnim(k, W.me, US_Idle, 0, 0, false, 1, now);
+    float sc = a.fw > 200 ? .36f : .62f;
+    drawAnim(a, frameFor(a, now, float(i) * .7f), c.x + c.width / 2, c.y + 84, false, sc,
+             locked ? rgb(70, 70, 90, 255) : WHITE);
+    DrawText(KINFO[k].name, int(c.x + c.width / 2) - MeasureText(KINFO[k].name, 14) / 2, int(c.y + c.height - 20), 14,
+             INK);
+    DrawRectangleRounded({c.x + 4, c.y + 4, 34, 18}, .4f, 4, rgb(60, 40, 28, 220));
+    DrawText(TextFormat("Lv%d", troopLevel(k)), int(c.x) + 9, int(c.y) + 7, 12, rgb(255, 235, 160));
+
+    if (locked)
+        drawCardLock(c, k);
+}
+
+void TrainingPanel::drawCardLock(Rectangle c, Kind k)
+{
+    DrawRectangleRounded(c, .12f, 6, rgb(10, 10, 25, 140));
+    DrawRectangle(int(c.x + c.width / 2) - 9, int(c.y + 40), 18, 14, rgb(230, 190, 70));
+    DrawRectangleLines(int(c.x + c.width / 2) - 9, int(c.y + 40), 18, 14, BLACK);
+    DrawCircleLines(int(c.x + c.width / 2), int(c.y + 40), 7, rgb(230, 230, 240));
+
+    std::string need = app.world.thLevel() < unitThLevel(k) ? TextFormat("Town Hall Lv%d", unitThLevel(k))
                                                             : TextFormat("Archery Lv%d", unitUnlockLevel(k));
-            DrawText(need.c_str(), int(c.x + c.width / 2) - MeasureText(need.c_str(), 12) / 2, int(c.y + 60), 12,
-                     WHITE);
-        }
-    }
-    // detail panel for the selected troop
+    DrawText(need.c_str(), int(c.x + c.width / 2) - MeasureText(need.c_str(), 12) / 2, int(c.y + 60), 12, WHITE);
+}
+
+void TrainingPanel::drawTroopDetail(const Info &bin, Vector2 m, double now)
+{
+    const ClientWorld &W = app.world;
     Kind k = Kind(K_Pawn + sel);
     Rectangle d = detail();
+    int lv = troopLevel(k);
+
     DrawRectangleRounded(d, .05f, 6, rgb(255, 250, 235, 200));
     DrawRectangleRoundedLinesEx(d, .05f, 6, 2, rgb(120, 90, 60));
-    int lv = troopLevel(k);
     Anim big = unitAnim(k, W.me, US_Idle, 0, 0, false, 1, now);
     drawAnim(big, frameFor(big, now), d.x + 52, d.y + 106, false, big.fw > 200 ? .5f : .9f);
     TroopText tt = troopText(k);
-    DrawText(TextFormat("%s  Lv%d", KINFO[k].name, lv), int(d.x) + 104, int(d.y) + 8, 17, ink);
+    DrawText(TextFormat("%s  Lv%d", KINFO[k].name, lv), int(d.x) + 104, int(d.y) + 8, 17, INK);
     DrawText(tt.role, int(d.x) + 104, int(d.y) + 28, 12, rgb(110, 80, 50));
+
+    drawTroopStats(k, lv, d);
+    float ty = d.y + 122;
+    for (auto &ln : wrapText(tt.desc, int(d.width) - 18, 12))
+    {
+        // never run into the buttons
+        if (ty + 13 > btnTrain().y - 6)
+            break;
+        DrawText(ln.c_str(), int(d.x) + 9, int(ty), 12, INK);
+        ty += 14;
+    }
+
+    drawTroopButtons(k, lv, bin.aux, m);
+}
+
+void TrainingPanel::drawTroopStats(Kind k, int lv, Rectangle d)
+{
     float w = 52, x0 = d.x + 100;
     auto nxt = [&](float cur, float nv) { return lv < MAX_UNIT_LEVEL ? TextFormat("+%.0f", nv - cur) : ""; };
     float hp = KINFO[k].hp * unitHpMul(lv), hpN = KINFO[k].hp * unitHpMul(lv + 1);
     float dps = KINFO[k].dps * unitDmgMul(lv), dpsN = KINFO[k].dps * unitDmgMul(lv + 1);
     float spd = KINFO[k].speed * unitSpeedMul(lv);
+
     ui::statBar(x0, d.y + 48, w, hp / 300.f, rgb(220, 70, 60), "Health", TextFormat("%.0f", hp), nxt(hp, hpN));
     if (hasTag(k, KT_Healer))
         ui::statBar(x0, d.y + 66, w, dps / 30.f, rgb(90, 200, 110), "Healing", TextFormat("%.0f/s", dps), "");
@@ -235,45 +290,79 @@ void TrainingPanel::draw()
     ui::statBar(x0, d.y + 84, w, KINFO[k].range / 8.f, rgb(110, 160, 230), "Range", TextFormat("%.1f", KINFO[k].range),
                 "");
     ui::statBar(x0, d.y + 102, w, spd / 5.f, rgb(170, 130, 230), "Speed", TextFormat("%.1f", spd), "");
-    float ty = d.y + 122;
-    for (auto &ln : wrapText(tt.desc, int(d.width) - 18, 12))
-    {
-        if (ty + 13 > btnTrain().y - 6)
-            break; // never run into the buttons
-        DrawText(ln.c_str(), int(d.x) + 9, int(ty), 12, ink);
-        ty += 14;
-    }
-    int bl = bin.aux;
-    std::string lock = lockReason(k, bl);
+}
+
+void TrainingPanel::drawTroopButtons(Kind k, int lv, int archeryLevel, Vector2 m)
+{
+    const ClientWorld &W = app.world;
+    std::string lock = lockReason(k, archeryLevel);
     float tc[R_Count];
     unitCost(k, tc);
     Rectangle bt = btnTrain();
     ui::drawButton(bt, lock.empty() ? "Train" : "Locked", lock.empty() && W.affordable(tc), false,
                    CheckCollisionPointRec(m, bt), false, 14);
     sideCosts(bt, lock.empty() ? tc : nullptr, lock.empty() ? "" : "Needs " + lock);
+
     Rectangle bu = btnTroopUp();
     float uc[R_Count];
     troopCost(k, lv + 1, uc);
-    bool maxed = lv >= MAX_UNIT_LEVEL, needB = !maxed && bl < troopUpgradeNeedsArchery(lv + 1);
+    bool maxed = lv >= MAX_UNIT_LEVEL, needB = !maxed && archeryLevel < troopUpgradeNeedsArchery(lv + 1);
     ui::drawButton(bu, maxed ? "Max level" : TextFormat("Upgrade to Lv%d", lv + 1),
                    !maxed && !needB && W.affordable(uc), false, CheckCollisionPointRec(m, bu), false, 13);
     sideCosts(bu, maxed || needB ? nullptr : uc,
               maxed ? "" : (needB ? TextFormat("Needs Archery Lv%d", troopUpgradeNeedsArchery(lv + 1)) : ""));
-    // building block: level, upgrade and a preview of the next level
+}
+
+void TrainingPanel::drawBuildingBlock(const Info &bin, Vector2 m, double now)
+{
+    const ClientWorld &W = app.world;
     Rectangle bb = block();
-    DrawText(TextFormat("Building health %d / %d", int(bin.hp), int(bin.maxhp)), int(bb.x) + 4, int(bb.y) + 4, 14, ink);
+    DrawText(TextFormat("Building health %d / %d", int(bin.hp), int(bin.maxhp)), int(bb.x) + 4, int(bb.y) + 4, 14, INK);
+
+    std::string why = upgradeBlock(bin.kind, bin.aux, W.thLevel());
+    const BJob *job = W.jobOf(target);
+    float iy = drawBuildingUpgrade(bin, m, why, job);
+
+    std::vector<std::string> info;
+    std::vector<Kind> units;
+    if (!job && why.empty())
+        nextLevelInfo(bin, info, units);
+
+    // below the queue strip
+    iy = std::max(iy, bb.y + 104);
+    if (!info.empty())
+    {
+        DrawText("Next level:", int(bb.x) + 6, int(iy), 14, rgb(30, 90, 40));
+        iy += 17;
+        for (auto &t : info)
+        {
+            DrawText(t.c_str(), int(bb.x) + 12, int(iy), 13, INK);
+            iy += 15;
+        }
+    }
+    for (size_t u = 0; u < units.size(); u++)
+    {
+        Anim a = unitAnim(units[u], W.me, US_Idle, 0, 0, false, 1, now);
+        drawAnim(a, frameFor(a, now, float(u)), bb.x + bb.width - 60 - 70 * float(units.size() - 1 - u),
+                 bb.y + bb.height - 8, false, a.fw > 200 ? .4f : .65f);
+    }
+}
+
+// Upgrade button plus the status / cost line under it; returns the next free y.
+float TrainingPanel::drawBuildingUpgrade(const Info &bin, Vector2 m, const std::string &why, const BJob *job)
+{
+    const ClientWorld &W = app.world;
     float bc[R_Count];
     for (int r = 0; r < R_Count; r++)
         bc[r] = float(mapUpgradeCost(bin, r));
     Rectangle bub = btnBuildingUp();
-    std::string why = upgradeBlock(bin.kind, bin.aux, W.thLevel());
-    const BJob *job = W.jobOf(target);
     std::string ul =
         job ? (job->kind == SJ_Upgrade
                    ? TextFormat("Upgrading... %d%%", job->pct)
                    : (job->kind == SJ_Repair ? TextFormat("Repairing... %d%%", job->pct) : "Under construction"))
             : (!why.empty() ? std::string("Upgrade locked") : TextFormat("Upgrade to Lv%d", bin.aux + 1));
     ui::drawButton(bub, ul, !job && why.empty() && W.affordable(bc), false, CheckCollisionPointRec(m, bub), false, 13);
+
     float iy = bub.y + bub.height + 6;
     if (job)
     {
@@ -288,36 +377,14 @@ void TrainingPanel::draw()
         iy += 16;
     }
     else
-    { // cost row below the button, then the work time
+    {
         Vector2 cs = ui::drawCosts(bc, bub.x, iy, 228, W.res, ui::paperCost());
         iy += cs.y + 4;
         std::string tt2 = "Takes " + timeText(upgradeSeconds(bin.kind, bin.aux)) + " of pawn work";
         DrawText(tt2.c_str(), int(bub.x), int(iy), 12, rgb(110, 80, 50));
         iy += 16;
     }
-    std::vector<std::string> info;
-    std::vector<Kind> units;
-    if (!job && why.empty())
-        nextLevelInfo(bin, info, units);
-    iy = std::max(iy, bb.y + 104); // below the queue strip
-    if (!info.empty())
-    {
-        DrawText("Next level:", int(bb.x) + 6, int(iy), 14, rgb(30, 90, 40));
-        iy += 17;
-        for (auto &t : info)
-        {
-            DrawText(t.c_str(), int(bb.x) + 12, int(iy), 13, ink);
-            iy += 15;
-        }
-    }
-    for (size_t u = 0; u < units.size(); u++)
-    { // animated previews of troops the next level unlocks
-        Anim a = unitAnim(units[u], W.me, US_Idle, 0, 0, false, 1, now);
-        drawAnim(a, frameFor(a, now, float(u)), bb.x + bb.width - 60 - 70 * float(units.size() - 1 - u),
-                 bb.y + bb.height - 8, false, a.fw > 200 ? .4f : .65f);
-    }
-    drawQueueStrip(m);
-    rlPopMatrix();
+    return iy;
 }
 
 void TrainingPanel::drawQueueStrip(Vector2 m)
@@ -326,9 +393,8 @@ void TrainingPanel::drawQueueStrip(Vector2 m)
     Rectangle bb = block();
     auto q = W.queues.find(target);
     size_t n = q == W.queues.end() ? 0 : q->second.kinds.size();
-    Color ink = rgb(70, 45, 30);
     DrawText(TextFormat("Training queue %d/5%s", int(n), n ? "  (click to cancel)" : ""), int(bb.x) + 246,
-             int(bb.y) + 4, 13, ink);
+             int(bb.y) + 4, 13, INK);
     double now = GetTime();
     for (int i = 0; i < 5; i++)
     {
@@ -345,9 +411,7 @@ void TrainingPanel::drawQueueStrip(Vector2 m)
         drawAnim(a, frameFor(a, now, float(i) * .6f), r.x + r.width / 2, r.y + 44, false, a.fw > 200 ? .26f : .42f,
                  i == 0 ? WHITE : rgb(200, 200, 215));
         if (i == 0)
-        {
             barRect({r.x + 4, r.y + r.height - 10, r.width - 8, 6}, float(q->second.pct) / 100.f, BAR_TRAIN);
-        }
     }
 }
 

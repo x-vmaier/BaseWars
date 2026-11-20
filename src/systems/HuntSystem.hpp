@@ -25,6 +25,10 @@ class HuntSystem
     World &world;
     entt::registry &reg;
     Systems &s;
+    void carryMeat(entt::entity e, Unit &u, Hunt &h, int ow, Pos p);
+    void huntSheep(entt::entity e, int ow, Pos p);
+    std::unordered_set<int64_t> awakeChunks();
+    void repopulateChunk(int64_t k, const std::unordered_map<int64_t, int> &perChunk);
     struct SheepRec
     {
         uint32_t uid;

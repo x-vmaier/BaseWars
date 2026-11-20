@@ -33,6 +33,17 @@ class MainMenu
     Rectangle addrBox() const;
     Rectangle quitBtn() const;
     void joinDirect();
+    void updateConnecting(Vector2 m, bool click);
+    void updateTextFields();
+    void onClick(Vector2 m);
+    void clickList(Vector2 m);
+    void drawTitle(const Rectangle &r);
+    void drawTopBar(Vector2 m);
+    void drawServerList(Vector2 m);
+    void drawServerRow(int i, const Rectangle &rr, Vector2 m);
+    void drawButtons(Vector2 m);
+    void drawFooter(const Rectangle &r);
+    void drawConnecting(Vector2 m);
 
     App &app;
     TMap mMenu;

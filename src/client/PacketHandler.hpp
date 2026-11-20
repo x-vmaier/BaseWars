@@ -25,7 +25,17 @@ class PacketHandler
     void onMap(Reader &r);
     void onShipsInfo(Reader &r);
     void onShipsPaths(Reader &r);
+    bool readEntity(Reader &r);
+    void removeUnseen();
     void worldPacket(const uint8_t *d, size_t n); // S_Cleared / S_ClearJobs / S_Drop
-    bool basePacket(uint8_t type, Reader &r);     // S_Queue / S_Alert / S_BaseInfo
+    bool basePacket(uint8_t type, Reader &r);     // S_Queue / S_Alert / S_BaseInfo / S_Jobs / S_Econ
+    void onCleared(Reader &r);
+    void onClearJobs(Reader &r);
+    void onDrop(Reader &r);
+    void onQueue(Reader &r);
+    void onAlert(Reader &r);
+    void onBaseInfo(Reader &r);
+    void onJobs(Reader &r);
+    void onEcon(Reader &r);
     App &app;
 };

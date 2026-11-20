@@ -18,7 +18,8 @@
 namespace
 {
 struct WorldAdapter
-{ // adapter for the shared goldNear()
+{
+    // Adapter for the shared goldNear()
     World &s;
     int biome(int x, int y) { return s.biome(x, y); }
     bool cleared(int x, int y) { return s.cleared.count(tkey(x, y)) > 0; }
@@ -38,6 +39,7 @@ std::vector<IV> ClearingSystem::blockedTiles(Kind k, int tx, int ty)
                 v.push_back({x, y});
     return v;
 }
+
 bool ClearingSystem::worldBuildOk(int id, Kind k, int tx, int ty)
 {
     auto v = blockedTiles(k, tx, ty);
@@ -60,6 +62,7 @@ bool ClearingSystem::worldBuildOk(int id, Kind k, int tx, int ty)
     world.say(id, s + " first (right-click them to send a pawn).");
     return false;
 }
+
 void ClearingSystem::queueBuild(int id, Kind k, int tx, int ty, const std::vector<IV> &blocked)
 {
     PendingBuild pb{id, k, tx, ty, {}, blocked};
@@ -94,8 +97,10 @@ void ClearingSystem::queueBuild(int id, Kind k, int tx, int ty, const std::vecto
                       (blocked.size() > 1 ? "s" : "") + " first; the " + KINFO[k].name +
                       " is placed when the site is clear.");
 }
+
 bool ClearingSystem::inClearReach(int id, int x, int y)
-{ // clearing is allowed anywhere the player could place a building
+{
+    // Clearing is allowed anywhere the player could place a building
     bool ok = false;
     reg.view<Info, Building, Owner>().each([&](const Info &i, const Building &b, const Owner &o)
     {
@@ -112,21 +117,21 @@ bool ClearingSystem::inClearReach(int id, int x, int y)
     });
     return ok;
 }
+
 // C_Clear: u8 n, n x (i32 x, i32 y) [, u8 m, m x u32 pawn]  - the optional tail names the pawns to send
-void ClearingSystem::onClear(int id, Reader &r)
+bool ClearingSystem::readClear(int id, Reader &r, std::vector<IV> &ts, std::vector<uint32_t> &want)
 {
     int n = r.get<uint8_t>();
     if (!r.ok || n < 1 || n > MAX_CLEAR_TILES)
-        return;
-    std::vector<IV> ts;
+        return false;
+
     for (int i = 0; i < n; i++)
     {
         int x = r.get<int32_t>(), y = r.get<int32_t>();
         if (!r.ok)
-            return;
+            return false;
         ts.push_back({x, y});
     }
-    std::vector<uint32_t> want;
     if (r.p < r.e)
     {
         int m = r.get<uint8_t>();
@@ -138,15 +143,19 @@ void ClearingSystem::onClear(int id, Reader &r)
                 want.push_back(uid);
         }
         if (!r.ok)
-            return;
+            return false;
     }
+    return true;
+}
+
+// Picks the tiles that may be cleared now and sums their wood cost; `far` flags tiles outside the clear reach.
+void ClearingSystem::planClear(int id, const std::vector<IV> &ts, float *cost, std::vector<IV> &ok, bool &far)
+{
     int mine = 0;
     for (auto &j : clearJobs)
         if (j.second.owner == id)
             mine++;
-    float cost[R_Count]{};
-    std::vector<IV> ok;
-    bool far = false;
+
     for (auto t : ts)
     {
         int64_t key = tkey(t.x, t.y);
@@ -165,6 +174,38 @@ void ClearingSystem::onClear(int id, Reader &r)
         cost[R_Wood] += float(clearCostWood(f));
         ok.push_back(t);
     }
+}
+
+// Explicitly picked pawns leave their current clear job now.
+void ClearingSystem::releasePicked(const std::vector<uint32_t> &want)
+{
+    for (auto uid : want)
+    {
+        auto e = world.find(uid);
+        if (e == entt::null || !reg.all_of<ClearTask>(e))
+            continue;
+        int64_t old = reg.get<ClearTask>(e).tile;
+        if (auto it = clearJobs.find(old); it != clearJobs.end() && it->second.pawn == uid)
+        {
+            it->second.pawn = 0;
+            it->second.state = 0;
+            it->second.since = world.clock;
+        }
+        releasePawn(e, false);
+    }
+}
+
+void ClearingSystem::onClear(int id, Reader &r)
+{
+    std::vector<IV> ts;
+    std::vector<uint32_t> want;
+    if (!readClear(id, r, ts, want))
+        return;
+
+    float cost[R_Count]{};
+    std::vector<IV> ok;
+    bool far = false;
+    planClear(id, ts, cost, ok, far);
     if (ok.empty())
     {
         world.say(id, far ? "That is too far from your Town Hall or Outposts to clear." : "Nothing to clear there.");
@@ -176,6 +217,7 @@ void ClearingSystem::onClear(int id, Reader &r)
         return;
     }
     world.spend(id, cost);
+
     for (auto t : ok)
     {
         uint8_t f = world.featOf(t.x, t.y);
@@ -185,28 +227,14 @@ void ClearingSystem::onClear(int id, Reader &r)
         j.paid = float(clearCostWood(f));
         clearJobs[tkey(t.x, t.y)] = j;
     }
-    for (auto uid : want)
-    { // explicitly picked pawns leave their current job now
-        auto e = world.find(uid);
-        if (e != entt::null && reg.all_of<ClearTask>(e))
-        {
-            int64_t old = reg.get<ClearTask>(e).tile;
-            if (auto it = clearJobs.find(old); it != clearJobs.end() && it->second.pawn == uid)
-            {
-                it->second.pawn = 0;
-                it->second.state = 0;
-                it->second.since = world.clock;
-            }
-            releasePawn(e, false);
-        }
-    }
+    releasePicked(want);
+
     const char *what = ok.size() == 1 ? featName(world.featOf(ok[0].x, ok[0].y)) : "obstacles";
     world.say(id, std::string("Clearing ") + (ok.size() == 1 ? "the " : std::to_string(ok.size()) + " ") + what +
                       " (-" + std::to_string(int(cost[R_Wood])) + " wood)" +
                       (want.empty() ? ": the nearest free pawn goes there." : "."));
 }
 
-// pawns
 bool ClearingSystem::freePawn(entt::entity e, int owner, bool explicitPick)
 {
     if (!reg.valid(e) || !reg.all_of<Unit, Owner, Info>(e) || !hasTag(reg.get<Info>(e).kind, KT_Worker) ||
@@ -225,12 +253,14 @@ bool ClearingSystem::freePawn(entt::entity e, int owner, bool explicitPick)
         return w->phase == 0 || w->phase == 3; // never pull a worker away while it carries goods
     return true;
 }
+
 entt::entity ClearingSystem::pickPawn(const ClearJob &j, Pos at)
 {
     entt::entity best = entt::null;
     float bd = 1e9f;
     for (auto uid : j.want)
-    { // the player's own pick first
+    {
+        // The player's own pick first
         auto e = world.find(uid);
         if (e == entt::null || !freePawn(e, j.owner, true) || reg.all_of<ClearTask>(e))
             continue;
@@ -259,13 +289,15 @@ entt::entity ClearingSystem::pickPawn(const ClearJob &j, Pos at)
     });
     return best;
 }
+
 void ClearingSystem::assign(int64_t key, ClearJob &j, entt::entity e)
 {
     auto &u = reg.get<Unit>(e);
     ClearTask ct;
     ct.tile = key;
     if (const ClearTask *old = reg.try_get<ClearTask>(e))
-    { // chaining: keep the work from before the first job
+    {
+        // Chaining: keep the work from before the first job
         ct.hadWorker = old->hadWorker;
         ct.worker = old->worker;
         ct.hadDest = old->hadDest;
@@ -291,6 +323,7 @@ void ClearingSystem::assign(int64_t key, ClearJob &j, entt::entity e)
     j.state = 1;
     j.since = world.clock;
 }
+
 void ClearingSystem::releasePawn(entt::entity e, bool manual)
 {
     const ClearTask *ct = reg.try_get<ClearTask>(e);
@@ -311,7 +344,8 @@ void ClearingSystem::releasePawn(entt::entity e, bool manual)
     if (manual)
         manualUntil[uid] = world.clock + 30.0;
     if (c.hadWorker && world.find(c.worker.home) != entt::null)
-    { // back to the building it works for
+    {
+        // Back to the building it works for
         Worker w = c.worker;
         if (w.phase == 1)
             w.phase = 2;
@@ -320,6 +354,7 @@ void ClearingSystem::releasePawn(entt::entity e, bool manual)
     else if (c.hadDest && !manual)
         world.order(e, c.dest); // resume the walk it was on
 }
+
 // per unit and tick: walk to the tile, then work on it (only then does the job timer run)
 void ClearingSystem::pawnTick(entt::entity e, Unit &u, ClearTask &ct, Pos &p, float dt)
 {
@@ -354,7 +389,8 @@ void ClearingSystem::pawnTick(entt::entity e, Unit &u, ClearTask &ct, Pos &p, fl
         ct.stuck = 0;
     }
     else if (++ct.stuck >= 6)
-    { // cannot get there: let another pawn try
+    {
+        // Cannot get there: let another pawn try
         j.fails++;
         if (!j.want.empty() && j.fails >= 2)
             j.want.clear();
@@ -365,7 +401,6 @@ void ClearingSystem::pawnTick(entt::entity e, Unit &u, ClearTask &ct, Pos &p, fl
         ct.stuck += 2;
 }
 
-// jobs
 void ClearingSystem::cancelJob(int64_t key, const std::string &why)
 {
     auto it = clearJobs.find(key);
@@ -379,6 +414,7 @@ void ClearingSystem::cancelJob(int64_t key, const std::string &why)
         world.pl[j.owner].res[R_Wood] += j.paid;
     world.say(j.owner, "Clearing cancelled: " + why + " (" + std::to_string(int(j.paid)) + " wood refunded).");
 }
+
 void ClearingSystem::finishJob(int64_t key)
 {
     ClearJob j = clearJobs[key];
@@ -410,6 +446,7 @@ void ClearingSystem::finishJob(int64_t key)
     else
         releasePawn(e, false);
 }
+
 void ClearingSystem::pendingTick()
 {
     std::vector<uint32_t> done;
@@ -451,11 +488,10 @@ void ClearingSystem::pendingTick()
     for (auto pid : done)
         pending.erase(pid);
 }
-void ClearingSystem::clearTick(float dt)
+
+// Drops pawn links whose pawn no longer works the tile; marks owners that still have a pawn at work.
+void ClearingSystem::dropLostPawns(bool *busy)
 {
-    (void)dt; // job timers advance in pawnTick (only while a pawn works)
-    std::vector<int64_t> done, stale;
-    bool busy[256]{}; // owners with a pawn at work: their queued jobs are not stale
     for (auto &[key, j] : clearJobs)
     {
         if (j.pawn)
@@ -472,6 +508,10 @@ void ClearingSystem::clearTick(float dt)
         if (j.pawn)
             busy[uint8_t(j.owner)] = true;
     }
+}
+
+void ClearingSystem::sortJobs(const bool *busy, std::vector<int64_t> &done, std::vector<int64_t> &stale)
+{
     for (auto &[key, j] : clearJobs)
     {
         if (!j.pawn && (busy[uint8_t(j.owner)] || std::any_of(j.want.begin(), j.want.end(),
@@ -482,24 +522,38 @@ void ClearingSystem::clearTick(float dt)
         else if (!j.pawn && world.clock - j.since > NO_PAWN_TIMEOUT)
             stale.push_back(key);
     }
+}
+
+void ClearingSystem::assignPawns()
+{
+    for (auto &[key, j] : clearJobs)
+    {
+        if (j.pawn)
+            continue;
+        auto e = pickPawn(j, tileCenter({keyCx(key), keyCy(key)}));
+        if (e != entt::null)
+            assign(key, j, e);
+    }
+    std::erase_if(manualUntil, [&](auto &kv) { return kv.second < world.clock; });
+}
+
+void ClearingSystem::clearTick(float)
+{
+    // Job timers advance in pawnTick, only while a pawn works.
+    std::vector<int64_t> done, stale;
+    bool busy[256]{}; // owners with a pawn at work: their queued jobs are not stale
+    dropLostPawns(busy);
+    sortJobs(busy, done, stale);
     for (auto key : done)
         finishJob(key);
     for (auto key : stale)
         cancelJob(key, "no free pawn reached the spot");
+
     if (world.tick % 10 == 0)
-    { // pawn assignment, twice a second
-        for (auto &[key, j] : clearJobs)
-        {
-            if (j.pawn)
-                continue;
-            auto e = pickPawn(j, tileCenter({keyCx(key), keyCy(key)}));
-            if (e != entt::null)
-                assign(key, j, e);
-        }
-        std::erase_if(manualUntil, [&](auto &kv) { return kv.second < world.clock; });
-    }
+        assignPawns(); // twice a second
     if (world.tick % 20 == 5)
         pendingTick();
+
     if (!world.clearedNew.empty())
     {
         for (int id = 1; id <= MAX_PLAYERS; id++)
@@ -510,6 +564,7 @@ void ClearingSystem::clearTick(float dt)
     if (world.tick % 4 == 0 && (!clearJobs.empty() || !pending.empty() || jobsWereSent))
         sendJobs();
 }
+
 // S_ClearJobs: u16 n, n x (i32 x, i32 y, u8 pct, u8 state) + u16 m, m x (u8 kind, i32 tx, i32 ty) own buildings waiting
 // for clearing
 void ClearingSystem::sendJobs()
@@ -549,9 +604,9 @@ void ClearingSystem::sendJobs()
     }
 }
 
-// drops
 void ClearingSystem::sendDrop(Pos p, int res, int amt, int credited)
-{ // visible bouncing "+N" drop for everyone who can see the spot
+{
+    // Visible bouncing "+N" drop for everyone who can see the spot
     Writer w;
     w.put<uint8_t>(S_Drop)
         .put<float>(p.x)
@@ -563,7 +618,8 @@ void ClearingSystem::sendDrop(Pos p, int res, int amt, int credited)
         if (!world.pl[id].online)
             continue;
         if (id != credited)
-        { // vision sources are rebuilt at most once per tick per player
+        {
+            // Vision sources are rebuilt at most once per tick per player
             if (dropSrcTick[id] != world.tick)
             {
                 dropSrc[id] = world.sourcesFor(id);
@@ -575,16 +631,19 @@ void ClearingSystem::sendDrop(Pos p, int res, int amt, int credited)
         world.net.send(world.pl[id].conn, w);
     }
 }
+
 void ClearingSystem::creditDrop(int player, Pos p, int res, int amt)
 {
     world.creditRes(player, res, float(amt)); // within the resource's storage share
     sendDrop(p, res, amt, player);
 }
+
 void ClearingSystem::sendClearedList(int id, const std::vector<int64_t> &tiles, bool full)
 {
     size_t i = 0;
     do
-    { // batches keep packets small
+    {
+        // Batches keep packets small
         size_t n = std::min<size_t>(3000, tiles.size() - i);
         Writer w;
         w.put<uint8_t>(S_Cleared)
@@ -596,8 +655,10 @@ void ClearingSystem::sendClearedList(int id, const std::vector<int64_t> &tiles, 
         i += n;
     } while (i < tiles.size());
 }
+
 void ClearingSystem::sendClearedFull(int id)
-{ // hook for onHello
+{
+    // Hook for onHello
     std::vector<int64_t> v(world.cleared.begin(), world.cleared.end());
     sendClearedList(id, v, true);
 }
@@ -613,7 +674,8 @@ int ClearingSystem::pendingOf(int id, Kind k) const
 
 // gold deposits boost mines
 float ClearingSystem::mineMul(entt::entity e, Kind k, Pos c)
-{ // output multiplier from nearby gold deposits (cached per clear-version)
+{
+    // Output multiplier from nearby gold deposits (cached per clear-version)
     if (!hasTag(k, KT_GoldBoosted))
         return 1.f;
     uint32_t uid = reg.get<Uid>(e).id;

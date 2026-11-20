@@ -31,6 +31,9 @@ class BuildMenu
 
   private:
     static ui::CostStyle rowStyle(float maxW, const float *cost);
+    void drawTab();
+    void drawItem(int i, bool hover, int gate);
+    void drawItemIcon(Kind k, Rectangle item, Color dim);
     void tooltip(Kind k, Rectangle item, int gate);
     App &app;
     TMap mBuild;

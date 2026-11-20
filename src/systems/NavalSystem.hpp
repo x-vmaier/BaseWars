@@ -34,5 +34,15 @@ class NavalSystem
     World &world;
     entt::registry &reg;
     Systems &s;
+    void walkToBoard(entt::entity e, Unit &u, Boarding &bd, Pos sp, int ow);
     void tickVoyage(entt::entity ship, Voyage &v);
+    bool voyageGather(entt::entity ship, Voyage &v, Unit &su, Pos sp);
+    void voyageSail(entt::entity ship, Voyage &v, Unit &su, Pos sp);
+    void voyageLand(entt::entity ship, Voyage &v, Pos sp);
+    void tickShip(entt::entity e);
+    void offloadOrphans(entt::entity e, Ship &sh, Pos sp);
+    void boardPacket(int id, Reader &r);
+    void disembarkPacket(int id, Reader &r);
+    bool canBoard(entt::entity e, int owner);
+    bool sendToShip(entt::entity e, entt::entity ship, Pos sp, int owner);
 };

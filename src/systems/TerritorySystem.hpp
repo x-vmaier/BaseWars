@@ -6,6 +6,7 @@
 #include "server/World.hpp"
 
 struct Systems;
+struct Anchors;
 
 class TerritorySystem
 {
@@ -21,6 +22,8 @@ class TerritorySystem
     World &world;
     entt::registry &reg;
     Systems &s;
+    void markOutposts(const std::vector<entt::entity> &mine, Anchors &an, std::vector<uint8_t> &want);
+    void applyFunctional(const std::vector<entt::entity> &mine, const Anchors &an, std::vector<uint8_t> &want);
     void migrateTown(int ow, entt::entity nth);
     void finishReloc(entt::entity n);
 };

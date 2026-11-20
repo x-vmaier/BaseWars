@@ -1,7 +1,7 @@
 # Status and remaining work
 
-Branch `feature/prompt-implementation`. Plan tasks T1-T13 are implemented and committed; T13b and T14-T17 are not started.
-Order matters: **T13b -> T14 -> T15 -> T16 -> T17**. One task per session (see `CLAUDE.md`).
+Branch `feature/prompt-implementation`. Plan tasks T1-T13b are implemented and committed; T14-T17 are not started.
+Order matters: **T14 -> T15 -> T16 -> T17**. One task per session (see `CLAUDE.md`).
 
 ## Done
 
@@ -19,48 +19,16 @@ Order matters: **T13b -> T14 -> T15 -> T16 -> T17**. One task per session (see `
 | T10 | Level cap 10, steep cost/time curves, Town Hall gating table (`Progression.hpp`), Outpost TH3 / Harbour TH4 |
 | T11 | Donation cooldown, shifting faction demand, diminishing gift returns |
 | T12 | `ui::CostRow` (icon left, number right) everywhere; tabbed Town Hall window (Main / Storage / Clan with per-type defense quotas) |
+| T13b | Maintainability refactor: `.clang-format`, draw queue with named drawers, kind registry (`common/KindDefs.hpp`: table + `KT_*` tags, `systems/KindFactories.cpp`, art tables in `rendering/`), Doxygen file headers, functions split, `Shared.hpp` split. Proof: a new building + troop needed 2 files (`KindDefs.hpp`, `rendering/UnitAnims.cpp`), 0 `switch` edits |
 | T13 | Biome label, minimap trees, chat box raised, clan chat disabled outside a clan, build menu shifted, social + build open together, high-contrast bars |
 
 ## Not started
-
-### T13b Maintainability refactor (do FIRST, before T14)
-
-Goal: code a new contributor can read and extend. **No behavior changes.** Verify with a zero-warning build plus before/after screenshots of the same
-scene (fixed `BW_CAM` / `BW_ZOOM`, same seed) for buildings, units, ships and effects; the images must look identical.
-
-Do it in this order, one commit per step:
-
-1. **Formatting baseline.** If `.clang-format` already exists, use it as is; otherwise add one (derive it from the dominant existing style; column limit ~120;
-   make sure it does not produce the odd lambda indentation seen today). Format the whole tree in ONE commit that contains nothing else, so later diffs stay readable.
-2. **Inventory and plan.** List every function over ~50 lines and every multi-line lambda pushed into a container
-   (`grep -rn "push_back({" src | grep "\[=\|\[&"`). Show the plan and the proposed registry design for approval before step 3.
-3. **Draw queue.** Replace the `items.push_back({sortY, [=, this]() { huge body }})` pattern in `src/rendering/` (buildings, units, ships, effects) with a
-   `DrawItem{sortY, callable}` whose callable only calls a named method. Split per-type drawing into `drawXxx()` methods or one drawer per kind,
-   registered in a table.
-4. **Type registries (ECS-style).** One data table per family (buildings, units, ships, NPC types) holding stats, costs, gates, sprite and a factory
-   that attaches the type's components, plus a reference to its drawer. Special behavior is expressed as components handled by systems that iterate views,
-   not as per-type classes or `switch` chains. Remove the existing per-type `switch` chains in server systems and UI (the build menu and context panel
-   are generated from the tables). Keep tables used by both sides in the shared layer (`Shared.hpp` / `Progression.hpp`); do not break the append-only
-   protocol or bump `SAVE_MAGIC` unless the save layout changes. Replace manual dependent-state cleanup with `on_destroy` hooks where it simplifies the code.
-5. **Comments.** Convert every file header from the `// one-line` after the guard to a Doxygen `@file/@brief` block before `#pragma once`.
-   Everywhere else use plain `//` comments only where the *why* is non-obvious; remove comments that restate the code. No Doxygen tags outside the file header.
-6. **Function splitting and blank-line grouping.** Split functions over ~50 lines into named helpers and group code with blank lines by logical step.
-   The owner already added some blank lines by hand in places; review them and regroup logically, do not trust them. Work in disjoint file sets
-   (parallel agents allowed per `CLAUDE.md`); the lead builds and commits per group.
-7. **Extension recipes.** Fill the `<file>` placeholders in the "Extending the game" section of `ARCHITECTURE.md` with the real file names.
-8. **Proof.** Add one small throwaway building type (and one NPC type) using only the documented recipe, confirm it appears in the build menu,
-   works, and renders. Record how many files it needed, then remove it (or keep it if the owner wants it). If the recipe needs more than ~4 files
-   or any `switch` edit, the registry is not done.
-
-Acceptance: zero warnings; screenshots identical to before; every file starts with the Doxygen block and no other Doxygen tags exist in the source
-(`grep -L '@file' $(git ls-files 'src/*.hpp' 'src/*.cpp')` prints nothing; `grep -rn '@brief\|@param' src` shows only file headers); no multi-line lambdas
-pushed into containers; no function over ~50 lines (or an explicit, short justification in the plan).
 
 ### T14 Naval overhaul
 
 * Harbours produce standalone ships (queue + cost rows); a ship cannot move without crew aboard.
 * Troop-focused and cargo-focused ship types, larger tiers at higher harbour levels with their own speed / troop / cargo capacity; timed, paid ship upgrades.
-  Replace `SHIP_TROOP_CAP` / `SHIP_RES_CAP` (3 tiers in `Shared.hpp`) with an entry set in the T13b ship registry.
+  Replace `SHIP_TROOP_CAP` / `SHIP_RES_CAP` (3 tiers in `Shared.hpp`) with ship entries in `common/KindDefs.hpp`.
 * Ship combat only with archers aboard or a crossbow upgrade.
 * Wind direction (server-authoritative, replicated) + wind-rose speed modifier per heading, compass in the HUD.
 * Grid-based Harbour window in the Archery (`TrainingPanel`) style: build ships / fleet / harbour upgrade.
@@ -84,8 +52,6 @@ pushed into containers; no function over ~50 lines (or an explicit, short justif
 
 ## Where to start in the code
 
-* **T13b:** draw queues in `src/rendering/` (building, unit, ship and effect renderers); per-type `switch` chains in `src/systems/`, `src/ui/BuildMenu`,
-  `src/ui/ContextPanel`, `src/ui/TrainingPanel`; type tables in `src/common/Shared.hpp` (`KINFO`) and `Progression.hpp`.
 * **T14:** `src/systems/NavalSystem.*` (ships, boarding, voyages), `FerryPlanner.*` (planTransport/startTransport; used by pawns' haul and
   `DefenseSystem::planDefenseRoute`), `src/components/Naval.hpp` (Ship/Aboard/Boarding/Voyage), ship constants in `src/common/Shared.hpp`,
   harbour gates in `Progression.hpp` (`BUILD_GATE`, `unitThLevel`), `TrainingSystem` (queue + `canTrain`), client `src/ui/ShipPanel.cpp`,
@@ -98,6 +64,14 @@ pushed into containers; no function over ~50 lines (or an explicit, short justif
   hints are inline strings in `ui/`; keybinds: `src/client/Input.cpp` + `Settings.hpp` (persisted in `settings.txt`) + `PauseMenu`.
 
 ## Known gaps / follow-ups from the finished work
+
+* **T13b leftovers:** `onPacket` (75 lines, a flat message dispatch), `SaveSystem::readBaseEntity` (69, field order), `NetSession::onHello` (62), `App::run` (57) and
+  `Input::update` (51) are over ~50 lines; `World.cpp`, `SaveSystem.cpp`, `ClearingSystem.cpp`, `systems/PacketHandler.cpp` are 650-720 lines.
+  A new troop beyond the five existing ones also needs a card in `TrainingPanel` (fixed 5 cards) and unit-level replication (`K_Pawn..K_Monk`); small kind checks
+  remain in `Input.cpp` (hit radius), archer fire arrows and the patrol / raid rosters.
+* **T13b verification:** before/after screenshots were compared on one coastal scene (same window size): static pixels, resource, unit and building counts matched; only moving
+  units and foliage differ (as they do between two runs of the old build). Not compared: raids, combat, save / reload, the Outpost (placement failed in the scene), ship rendering
+  (the two ships were trained but not visible in the frame). Agents' function splits were verified by build + that scene only.
 
 * **Not play-tested in real sessions.** Only short scripted runs with screenshots. Never exercised: save/reload of construction jobs, cancel refund,
   training-queue pausing, efficiency numbers in production/defense, demand rotation, gift diminishing returns, per-type defense dispatch in a real

@@ -36,6 +36,7 @@ bool SpawnSystem::clearingOk(int cx, int cy)
     });
     return !nearBase;
 }
+
 IV SpawnSystem::findClearing(const Pos *anchor)
 {
     if (anchor) // new bases appear close to an existing player, but outside their base
@@ -64,6 +65,7 @@ IV SpawnSystem::findClearing(const Pos *anchor)
         }
     return {0, 0};
 }
+
 // Where should a newcomer (or a player who lost their base) appear? Near Steam friends, then allies / clan mates, then
 // any player.
 bool SpawnSystem::spawnAnchor(int id, const std::vector<uint64_t> &friends, Pos &out)
@@ -84,6 +86,7 @@ bool SpawnSystem::spawnAnchor(int id, const std::vector<uint64_t> &friends, Pos 
     out = pick[world.rng() % pick.size()];
     return true;
 }
+
 void SpawnSystem::spawnBase(int id, const std::vector<uint64_t> &friends)
 {
     Pos anchor;
@@ -146,7 +149,8 @@ void SpawnSystem::worldTestSpawn(int id, bool fresh)
 }
 
 void SpawnSystem::baseTestInit(int id)
-{ // test hook BW_BASETEST: plenty of resources, level 3 troops
+{
+    // Test hook BW_BASETEST: plenty of resources, level 3 troops
     static const bool on = std::getenv("BW_BASETEST") != nullptr;
     if (!on || world.bp[id].testDone)
         return;

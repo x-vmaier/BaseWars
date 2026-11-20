@@ -22,6 +22,9 @@ class ConstructionSystem
     void sendJobs(int id);
 
   private:
+    void createBuildJobs();
+    void assignPawns();
+    bool upgradeRefused(int id, entt::entity be, const Info &in);
     World &world;
     entt::registry &reg;
     Systems &s;

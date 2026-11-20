@@ -31,6 +31,7 @@ SrcGrid::SrcGrid(const std::vector<Source> &s)
                 cells[chunkKey(cx, cy)].push_back(v);
     }
 }
+
 bool SrcGrid::seen(float x, float y, float pad) const
 {
     auto it = cells.find(chunkKey(floorDiv(int(std::floor(x)), 16), floorDiv(int(std::floor(y)), 16)));
@@ -41,6 +42,7 @@ bool SrcGrid::seen(float x, float y, float pad) const
             return true;
     return false;
 }
+
 bool seen(const std::vector<Source> &s, float x, float y, float pad)
 {
     for (auto &v : s)
@@ -65,10 +67,12 @@ int World::biome(int x, int y)
     }
     return it->second[size_t(localIdx(x, y))];
 }
+
 bool World::cliff(int x, int y)
 {
     return isCliffTile(biome(x, y), biome(x, y - 1));
 }
+
 bool World::walkable(int x, int y, bool water, uint32_t ignore)
 {
     int b = biome(x, y);
@@ -84,18 +88,23 @@ bool World::sameClan(int a, int b) const
 {
     return isPlayer(a) && isPlayer(b) && pl[a].clan && pl[a].clan == pl[b].clan;
 }
+
+// Allies and clan mates share vision.
 bool World::shares(int a, int b) const
 {
     return a != b && isPlayer(a) && isPlayer(b) && (pl[a].allied[b] || sameClan(a, b));
-} // shared vision
+}
+
 bool World::allied(int a, int b) const
 {
     return a == b || shares(a, b);
 }
+
 float World::repOf(int player, int owner) const
 {
     return isPlayer(player) && isFactionOwner(owner) ? pl[player].rep[owner - FACTION_BASE] : 0.f;
 }
+
 bool World::hostile(int a, int b) const
 {
     if (a < 1 || b < 1 || a == b)
@@ -108,16 +117,19 @@ bool World::hostile(int a, int b) const
         return repOf(a, b) <= float(HOSTILE_REP);
     return !allied(a, b);
 }
+
 bool World::factionsAtWar(int fa, int fb) const
 {
     if (fa == fb || fa < 0 || fb < 0 || fa >= FACTION_COUNT || fb >= FACTION_COUNT)
         return false;
     return hash2(std::min(fa, fb), std::max(fa, fb), seed + 515) % 100 < uint32_t(cfg().factionWarPercent);
 }
+
 int World::ulv(int owner, Kind k) const
 {
     return isPlayer(owner) ? std::max<int>(1, pl[owner].ulevel[k]) : 1;
 }
+
 float World::totalRes(int id) const
 {
     float t = 0;
@@ -125,8 +137,10 @@ float World::totalRes(int id) const
         t += v;
     return t;
 }
+
 float World::stockOf(entt::entity e) const
-{ // the Town Hall stores the player's resources
+{
+    // The Town Hall stores the player's resources
     const auto &i = reg.get<Info>(e);
     int o = reg.get<Owner>(e).id;
     if (i.kind == K_TownHall && isPlayer(o))
@@ -136,11 +150,14 @@ float World::stockOf(entt::entity e) const
         t += v;
     return t;
 }
+
 float World::capOf(entt::entity e) const
-{ // non-functional storage holds nothing; damaged storage holds less
+{
+    // Non-functional storage holds nothing; damaged storage holds less
     const auto &i = reg.get<Info>(e);
     return inactive(e) ? 0.f : storageCap(i.kind, i.level) * efficiency(e);
 }
+
 // puts as much of `cargo` as fits into storage building `st`; returns the amount stored. At a player's Town Hall each
 // resource is also limited to its storage share (BaseProf::alloc): the part beyond it is discarded, not carried back.
 float World::storeCargo(entt::entity st, float *cargo)
@@ -176,6 +193,7 @@ float World::storeCargo(entt::entity st, float *cargo)
     }
     return stored;
 }
+
 float World::allocRoom(int id, int r)
 {
     if (!isPlayer(id))
@@ -186,6 +204,7 @@ float World::allocRoom(int id, int r)
         return 1e9f; // no working hall: shares are not enforced
     return allocCap(cap, bp[id].alloc[r]) - pl[id].res[r];
 }
+
 float World::creditRes(int id, int r, float amt)
 {
     if (!isPlayer(id) || !pl[id].used || amt <= 0)
@@ -196,6 +215,7 @@ float World::creditRes(int id, int r, float amt)
         noteDiscard(id, r, amt - keep);
     return keep;
 }
+
 void World::noteDiscard(int id, int r, float lost)
 {
     if (!isPlayer(id) || clock < bp[id].allocNote)
@@ -204,6 +224,7 @@ void World::noteDiscard(int id, int r, float lost)
     say(id, std::string(RES_NAME[r]) + " storage share is full: " + std::to_string(int(std::ceil(lost))) + " " +
                 RES_NAME[r] + " discarded (Town Hall > Storage).");
 }
+
 std::string World::ownerName(int o) const
 {
     return isFactionOwner(o) ? FACTION_NAME[o - FACTION_BASE] : (isPlayer(o) ? pl[o].name : std::string("Wildlife"));
@@ -218,6 +239,7 @@ void World::say(int id, const std::string &s)
     w.str(s);
     net.send(pl[id].conn, w);
 }
+
 void World::fx(EffectType t, float x, float y, float x2, float y2)
 {
     effects.push_back({t, x, y, x2, y2});
@@ -228,6 +250,7 @@ entt::entity World::find(uint32_t uid) const
     auto it = byUid.find(uid);
     return it == byUid.end() || !reg.valid(it->second) ? entt::entity(entt::null) : it->second;
 }
+
 Pos World::posOf(entt::entity e) const
 {
     const auto &i = reg.get<Info>(e);
@@ -238,6 +261,7 @@ Pos World::posOf(entt::entity e) const
     }
     return reg.get<Pos>(e);
 }
+
 float World::rectDist(Pos p, entt::entity e) const
 {
     const auto &i = reg.get<Info>(e);
@@ -251,6 +275,7 @@ float World::rectDist(Pos p, entt::entity e) const
     float dy = std::max({float(b.ty) - p.y, 0.f, p.y - float(b.ty + KINFO[i.kind].fh)});
     return std::hypot(dx, dy);
 }
+
 bool World::complete(entt::entity e) const
 {
     return !reg.all_of<Building>(e) || reg.get<Building>(e).progress >= 1.f;
@@ -270,6 +295,7 @@ bool World::afford(int id, const float *cost) const
     }
     return true;
 }
+
 void World::spend(int id, const float *cost)
 {
     for (int r = 0; r < R_Count; r++)
@@ -296,6 +322,7 @@ bool World::bitAt(const std::unordered_map<int64_t, Bits> &m, int x, int y) cons
     int i = localIdx(x, y);
     return it->second[size_t(i >> 3)] >> (i & 7) & 1;
 }
+
 bool World::explored(int id, int x, int y) const
 {
     if (bitAt(pl[id].expl, x, y))
@@ -305,6 +332,7 @@ bool World::explored(int id, int x, int y) const
             return true;
     return false;
 }
+
 void World::reveal(int id, int cx, int cy, int r)
 {
     if (!isPlayer(id))
@@ -334,6 +362,7 @@ entt::entity World::makeBase(Kind k, uint8_t owner, uint32_t uid)
     reg.emplace<Health>(e, Health{KINFO[k].hp, KINFO[k].hp, 0});
     return e;
 }
+
 entt::entity World::makeUnit(Kind k, uint8_t owner, float x, float y)
 {
     auto e = makeBase(k, owner);
@@ -347,6 +376,7 @@ entt::entity World::makeUnit(Kind k, uint8_t owner, float x, float y)
         attach(*this, e, false);
     return e;
 }
+
 entt::entity World::makeBuilding(Kind k, uint8_t owner, int tx, int ty, bool done)
 {
     auto e = makeBase(k, owner);
@@ -354,12 +384,13 @@ entt::entity World::makeBuilding(Kind k, uint8_t owner, int tx, int ty, bool don
     for (int y = ty; y < ty + KINFO[k].fh; y++)
         for (int x = tx; x < tx + KINFO[k].fw; x++)
             occ[tkey(x, y)] = reg.get<Uid>(e).id;
-    markFootprint(k, tx, ty); // [world] a footprint never needs clearing again
+    markFootprint(k, tx, ty); // a footprint never needs clearing again
     if (done)
         reveal(owner, int(std::floor(footCenter(k, tx, ty).x)), int(std::floor(footCenter(k, tx, ty).y)),
                KINFO[k].vision);
     return e;
 }
+
 void World::destroyNow(entt::entity e)
 {
     if (!reg.valid(e))
@@ -371,7 +402,7 @@ void World::destroyNow(entt::entity e)
     {
         const auto &b = reg.get<Building>(e);
         Kind k = reg.get<Info>(e).kind;
-        markFootprint(k, b.tx, b.ty); // [world] rubble does not regrow trees
+        markFootprint(k, b.tx, b.ty); // rubble does not regrow trees
         for (int y = b.ty; y < b.ty + KINFO[k].fh; y++)
             for (int x = b.tx; x < b.tx + KINFO[k].fw; x++)
                 occ.erase(tkey(x, y));
@@ -385,109 +416,6 @@ void World::resetProfile(int id)
 {
     for (int r = 0; r < R_Count; r++)
         pl[id].res[r] = START_RES[r] * (std::getenv("BW_RICH") ? 20.f : 1.f); // BW_RICH: test hook
-}
-
-bool World::findPath(IV s, IV g, bool water, uint32_t ignore, std::vector<Pos> &out, int maxNodes)
-{
-    out.clear();
-    if (!walkable(g.x, g.y, water, ignore))
-    {
-        bool f = false;
-        for (int r = 1; r <= 8 && !f; r++)
-            for (int dy = -r; dy <= r && !f; dy++)
-                for (int dx = -r; dx <= r && !f; dx++)
-                    if (std::max(std::abs(dx), std::abs(dy)) == r && walkable(g.x + dx, g.y + dy, water, ignore))
-                    {
-                        g = {g.x + dx, g.y + dy};
-                        f = true;
-                    }
-        if (!f)
-            return false;
-    }
-    if (s.x == g.x && s.y == g.y)
-        return true;
-    struct PN
-    {
-        float g;
-        int64_t par;
-        bool closed;
-    };
-    std::unordered_map<int64_t, PN> nodes;
-    using QE = std::pair<float, int64_t>;
-    std::priority_queue<QE, std::vector<QE>, std::greater<>> q;
-    auto h = [&](int x, int y)
-    {
-        float dx = float(std::abs(x - g.x)), dy = float(std::abs(y - g.y));
-        return dx + dy - 0.586f * std::min(dx, dy);
-    };
-    int64_t sk = tkey(s.x, s.y), gk = tkey(g.x, g.y), best = sk;
-    float bestH = h(s.x, s.y);
-    nodes[sk] = {0, -1, false};
-    q.push({bestH, sk});
-    int expanded = 0;
-    bool found = false;
-    while (!q.empty() && expanded < maxNodes)
-    {
-        int64_t k = q.top().second;
-        q.pop();
-        PN &cur = nodes[k];
-        if (cur.closed)
-            continue;
-        cur.closed = true;
-        expanded++;
-        if (k == gk)
-        {
-            found = true;
-            break;
-        }
-        int x = keyCx(k), y = keyCy(k);
-        float cg = cur.g;
-        float ch = h(x, y);
-        if (ch < bestH)
-        {
-            bestH = ch;
-            best = k;
-        }
-        for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            {
-                if (!dx && !dy)
-                    continue;
-                int nx = x + dx, ny = y + dy;
-                if (!walkable(nx, ny, water, ignore))
-                    continue;
-                if (dx && dy && (!walkable(x + dx, y, water, ignore) || !walkable(x, y + dy, water, ignore)))
-                    continue;
-                int64_t nk = tkey(nx, ny);
-                float ng = cg + (dx && dy ? 1.414f : 1.f);
-                auto it = nodes.find(nk);
-                if (it == nodes.end() || ng < it->second.g)
-                {
-                    nodes[nk] = {ng, k, false};
-                    q.push({ng + h(nx, ny), nk});
-                }
-            }
-    }
-    int64_t end = found ? gk : best;
-    if (end == sk)
-        return false;
-    for (int64_t k = end; k != sk && k != -1; k = nodes[k].par)
-        out.push_back({float(keyCx(k)) + .5f, float(keyCy(k)) + .5f});
-    std::reverse(out.begin(), out.end());
-    return !out.empty();
-}
-bool World::order(entt::entity e, Pos goal, uint32_t ignore, int maxNodes)
-{
-    auto &u = reg.get<Unit>(e);
-    Pos p = reg.get<Pos>(e);
-    bool water = hasTag(reg.get<Info>(e).kind, KT_Naval);
-    std::vector<Pos> path;
-    if (!findPath({int(std::floor(p.x)), int(std::floor(p.y))}, {int(std::floor(goal.x)), int(std::floor(goal.y))},
-                  water, ignore, path, maxNodes))
-        return false;
-    u.path = std::move(path);
-    u.i = 0;
-    return true;
 }
 
 Town *World::townById(int id)
@@ -548,6 +476,7 @@ int World::unitCount(int id)
     });
     return n;
 }
+
 int World::workersOf(uint32_t home)
 {
     int n = 0;
@@ -618,10 +547,12 @@ uint8_t World::featOf(int x, int y)
         return F_None;
     return featureAt(x, y, b, seed);
 }
+
 bool World::isCleared(int x, int y) const
 {
     return cleared.count(tkey(x, y)) > 0;
 }
+
 void World::markCleared(int x, int y)
 {
     if (cleared.insert(tkey(x, y)).second)
@@ -630,15 +561,18 @@ void World::markCleared(int x, int y)
         clearVer++;
     }
 }
+
 void World::markFootprint(Kind k, int tx, int ty)
-{ // a building's footprint never shows (or demands clearing of) features again
+{
+    // A building's footprint never shows (or demands clearing of) features again
     for (int y = ty; y < ty + KINFO[k].fh; y++)
         for (int x = tx; x < tx + KINFO[k].fw; x++)
             markCleared(x, y);
 }
 
 void World::shipDestroyed(entt::entity ship)
-{ // passengers go down with the ship
+{
+    // Passengers go down with the ship
     auto *sh = reg.try_get<Ship>(ship);
     if (!sh)
         return;
@@ -663,10 +597,13 @@ bool World::outOfTerritory(entt::entity e) const
     auto *b = reg.try_get<BFlags>(e);
     return b && b->dis;
 }
+
+// Non-functional: outside the territory or crippled.
 bool World::inactive(entt::entity e) const
 {
     return outOfTerritory(e) || crippled(e);
-} // non-functional building
+}
+
 bool World::crippled(entt::entity e) const
 {
     const auto *b = reg.try_get<Building>(e);
@@ -675,6 +612,7 @@ bool World::crippled(entt::entity e) const
     const auto &h = reg.get<Health>(e);
     return critical(h.hp / std::max(1.f, h.maxhp));
 }
+
 float World::efficiency(entt::entity e) const
 {
     if (!reg.all_of<Building>(e) || !isPlayer(reg.get<Owner>(e).id))
@@ -682,16 +620,19 @@ float World::efficiency(entt::entity e) const
     const auto &h = reg.get<Health>(e);
     return hpEfficiency(h.hp / std::max(1.f, h.maxhp));
 }
+
 bool World::siteBusy(entt::entity e) const
 {
     const auto *b = reg.try_get<Building>(e);
     return (b && b->progress < 1.f) || reg.all_of<SiteJob>(e);
 }
+
 int World::thLevel(int id)
 {
     auto th = townHallOf(id);
     return th == entt::null ? 0 : reg.get<Info>(th).level;
 }
+
 int World::countKind(int id, Kind k)
 {
     int n = 0;
@@ -702,6 +643,7 @@ int World::countKind(int id, Kind k)
     });
     return n;
 }
+
 uint8_t World::bflagsOf(entt::entity e) const
 {
     uint8_t f = 0;
@@ -722,10 +664,12 @@ uint8_t World::bflagsOf(entt::entity e) const
 }
 
 void World::releaseUnit(entt::entity e)
-{ // a player command takes the unit over
+{
+    // A player command takes the unit over
     reg.remove<Support>(e);
     reg.remove<Extinguish>(e);
 }
+
 bool World::townMoveActive(int id)
 {
     bool a = false;
@@ -748,7 +692,8 @@ void World::sendAlert(int to, uint8_t type, Pos at, const std::string &text)
 }
 
 std::vector<int> World::clanHalls(int victim)
-{ // clan mates that still have a Town Hall
+{
+    // Clan mates that still have a Town Hall
     std::vector<int> v;
     int c = pl[victim].clan;
     if (!c)

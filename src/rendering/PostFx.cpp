@@ -99,25 +99,26 @@ void PostFx::runBloom()
     EndTextureMode();
 }
 
-void PostFx::uniforms(float t)
+// Packed x, y, radius triples of at most 16 on-screen light sources; nearFire reports a campfire in warmth range.
+std::vector<float> PostFx::collectLights(bool &nearFire) const
 {
     const Camera2D &cam = app.cam;
     const ClientWorld &W = app.world;
     float sw = float(::GetScreenWidth()), sh = float(::GetScreenHeight());
-    int ctx2 = int(std::floor(cam.target.x / TILE)), cty = int(std::floor(cam.target.y / TILE));
-    bool snow = W.biomeAt(ctx2, cty) == B_Snow;
-    bool nearFire = false;
     std::vector<float> lights;
     int lc = 0;
+
     W.reg.view<Info, Goal>().each([&](const Info &i, const Goal &g)
     {
         if (!isBuilding(i.kind) || i.prog < 100 || !W.alliedWith(i.owner))
             return;
+
         bool fire = i.kind == K_Campfire;
         if (!fire && i.kind != K_TownHall && i.kind != K_Outpost)
             return;
         if (fire && std::hypot(g.x - cam.target.x / TILE, g.y - cam.target.y / TILE) < WARMTH_RADIUS)
             nearFire = true;
+
         Vector2 s = GetWorldToScreen2D({g.x * TILE, g.y * TILE - (fire ? 20.f : 60.f)}, cam);
         if (lc < 16 && s.x > -300 && s.y > -300 && s.x < sw + 300 && s.y < sh + 300)
         {
@@ -127,12 +128,33 @@ void PostFx::uniforms(float t)
             lc++;
         }
     });
+    return lights;
+}
+
+void PostFx::stepAtmosphere(bool snow, bool nearFire)
+{
     float dt = GetFrameTime();
     float targetCold = snow && !nearFire ? 1.f : 0.f, targetWarm = nearFire && snow ? 1.f : (nearFire ? .45f : 0.f);
+
     cold += (targetCold - cold) * std::min(1.f, 1.5f * dt);
     warm += (targetWarm - warm) * std::min(1.f, 2.f * dt);
     shake = std::max(0.f, shake - 28.f * dt);
     damage = std::max(0.f, damage - .6f * dt);
+}
+
+void PostFx::uniforms(float t)
+{
+    const Camera2D &cam = app.cam;
+    float sw = float(::GetScreenWidth()), sh = float(::GetScreenHeight());
+    int ctx2 = int(std::floor(cam.target.x / TILE)), cty = int(std::floor(cam.target.y / TILE));
+    bool snow = app.world.biomeAt(ctx2, cty) == B_Snow;
+    bool nearFire = false;
+    std::vector<float> lights = collectLights(nearFire);
+    int lc = int(lights.size() / 3);
+
+    stepAtmosphere(snow, nearFire);
+
+    // A full day/night cycle takes 480 real seconds, keyed to the wall clock.
     double ph = std::fmod(double(std::time(nullptr)), 480.0) / 480.0;
     float daylight = std::clamp(.5f + .75f * std::sin(float(ph * 6.28319 - 1.5708)), 0.f, 1.f);
     float blizz = cold * (.75f + .25f * std::sin(t * .7f));
@@ -140,6 +162,7 @@ void PostFx::uniforms(float t)
     float lt[48] = {};
     for (size_t i = 0; i < lights.size(); i++)
         lt[i] = lights[i];
+
     setU(shPost, "resolution", res2, SHADER_UNIFORM_VEC2);
     setU(shPost, "time", &t, SHADER_UNIFORM_FLOAT);
     setU(shPost, "shake", &shake, SHADER_UNIFORM_FLOAT);
@@ -150,6 +173,7 @@ void PostFx::uniforms(float t)
     setU(shPost, "blizzard", &blizz, SHADER_UNIFORM_FLOAT);
     setU(shPost, "lights", lt, SHADER_UNIFORM_VEC3, 16);
     setU(shPost, "lightCount", &lc, SHADER_UNIFORM_INT);
+
     float bloomK = okBloom ? .55f : 0.f, expo = 1.05f;
     setU(shPost, "bloomStrength", &bloomK, SHADER_UNIFORM_FLOAT);
     setU(shPost, "exposure", &expo, SHADER_UNIFORM_FLOAT);

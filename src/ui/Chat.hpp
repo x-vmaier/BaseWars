@@ -33,6 +33,9 @@ class Chat
     Rectangle bar() const;
     Rectangle tab(int i) const;
     bool channelOk(int ch) const; // the clan channel is disabled outside a clan
+    void drawLines(const Rectangle &b, double now);
+    void drawTabs(Vector2 m);
+    void drawInputBar(const Rectangle &b, double now);
 
     App &app;
     int ch = 0;

@@ -68,9 +68,11 @@ void townHallUnlocks(int level, std::vector<std::string> &out)
     if (level < 2 || level > MAX_LEVEL)
         return;
     std::string fresh, more;
-    for (int k = K_Outpost; k <= K_Archery; k++)
+    for (int k = 0; k < K_Count; k++)
     {
         Kind kk = Kind(k);
+        if (!KINDS[k].menuSlot)
+            continue;
         if (thUnlock(kk) == level)
             fresh += (fresh.empty() ? "" : ", ") + std::string(KINFO[k].name);
         else if (thUnlock(kk) < level && maxCount(kk, level) > maxCount(kk, level - 1))

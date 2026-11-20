@@ -31,6 +31,7 @@ int TrainingSystem::queuedUnits(int id)
     });
     return n;
 }
+
 // Creates the unit that a finished queue entry produces (the kind's onTrained hook may adjust it). Null if there is no
 // room.
 entt::entity TrainingSystem::spawnTrained(entt::entity be, Kind k)
@@ -51,7 +52,8 @@ entt::entity TrainingSystem::spawnTrained(entt::entity be, Kind k)
 }
 
 void TrainingSystem::enqueueTrain(int id, entt::entity be, Kind k)
-{ // C_Train: pay now, produce over time
+{
+    // C_Train: pay now, produce over time
     if (reg.get<Owner>(be).id != id || !world.complete(be) || !canTrain(reg.get<Info>(be).kind, k))
         return;
     if (world.crippled(be))
@@ -99,6 +101,7 @@ void TrainingSystem::enqueueTrain(int id, entt::entity be, Kind k)
     if (world.siteBusy(be))
         world.say(id, "Queued: training starts once the building's upgrade / repair is finished.");
 }
+
 void TrainingSystem::dequeueTrain(int id, entt::entity be, int idx)
 {
     auto *tq = reg.try_get<TrainQ>(be);
@@ -112,6 +115,7 @@ void TrainingSystem::dequeueTrain(int id, entt::entity be, int idx)
     tq->q.erase(tq->q.begin() + idx);
     world.say(id, std::string("Training of ") + KINFO[k].name + " cancelled and refunded.");
 }
+
 void TrainingSystem::trainTick(entt::entity e, float dt)
 {
     auto *tq = reg.try_get<TrainQ>(e);

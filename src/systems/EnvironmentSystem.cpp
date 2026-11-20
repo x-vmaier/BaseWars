@@ -14,9 +14,9 @@
 #include <cstring>
 #include <string>
 
-void EnvironmentSystem::coldAndWake(const std::vector<entt::entity> &units, const std::vector<entt::entity> &blds)
+// Snow chills everything except NPC-owned entities, unless an allied campfire warms the spot.
+void EnvironmentSystem::coldAttrition(const std::vector<entt::entity> &all, const std::vector<entt::entity> &blds)
 {
-    // cold attrition in the snow unless a campfire warms the spot
     std::vector<Pos> fires;
     std::vector<int> fireOwner;
     for (auto e : blds)
@@ -32,8 +32,7 @@ void EnvironmentSystem::coldAndWake(const std::vector<entt::entity> &units, cons
                 return true;
         return false;
     };
-    std::vector<entt::entity> all = units;
-    all.insert(all.end(), blds.begin(), blds.end());
+
     for (auto e : all)
     {
         if (!reg.valid(e))
@@ -44,14 +43,18 @@ void EnvironmentSystem::coldAndWake(const std::vector<entt::entity> &units, cons
         Pos p = world.posOf(e);
         if (world.biome(int(std::floor(p.x)), int(std::floor(p.y))) != B_Snow || warm(p, ow))
             continue;
+
         auto &h = reg.get<Health>(e);
         if (isBuilding(reg.get<Info>(e).kind))
             h.hp = std::max(h.maxhp * .25f, h.hp - h.maxhp * COLD_BUILDING_FRAC);
         else
             s.combat.damage(e, COLD_UNIT_DPS, 0);
     }
-    s.combat.processKills();
-    // wake up NPC chunks around every player-owned entity
+}
+
+// Wakes NPC chunks and regions around every player-owned entity.
+void EnvironmentSystem::wakeNpcs(const std::vector<entt::entity> &all)
+{
     for (auto e : all)
     {
         if (!reg.valid(e) || !isPlayer(reg.get<Owner>(e).id))
@@ -61,6 +64,7 @@ void EnvironmentSystem::coldAndWake(const std::vector<entt::entity> &units, cons
         for (int y = cy - 2; y <= cy + 2; y++)
             for (int x = cx - 2; x <= cx + 2; x++)
                 s.hunt.spawnChunkNpcs(x, y);
+
         int rx = floorDiv(cx, REGION_CHUNKS), ry = floorDiv(cy, REGION_CHUNKS);
         for (int y = ry - 1; y <= ry + 1; y++)
             for (int x = rx - 1; x <= rx + 1; x++)
@@ -68,9 +72,19 @@ void EnvironmentSystem::coldAndWake(const std::vector<entt::entity> &units, cons
     }
 }
 
+void EnvironmentSystem::coldAndWake(const std::vector<entt::entity> &units, const std::vector<entt::entity> &blds)
+{
+    std::vector<entt::entity> all = units;
+    all.insert(all.end(), blds.begin(), blds.end());
+
+    coldAttrition(all, blds);
+    s.combat.processKills();
+    wakeNpcs(all);
+}
+
 void EnvironmentSystem::explore(const std::vector<entt::entity> &units, const std::vector<entt::entity> &blds)
 {
-    // exploration by online players' units
+    // Online players' units reveal the map as they move.
     for (auto e : units)
     {
         if (!reg.valid(e))
@@ -87,9 +101,10 @@ void EnvironmentSystem::explore(const std::vector<entt::entity> &units, const st
         world.reveal(ow, t.x, t.y, KINFO[reg.get<Info>(e).kind].vision);
     }
     for (auto e : blds)
-    { // keep building vision fresh for players who just (re)joined
+    {
+        // Refreshed every 40 ticks so players who just (re)joined see their buildings.
         if (!reg.valid(e))
-            continue; // (baseSecond may have removed relocated buildings)
+            continue; // baseSecond may have removed relocated buildings
         int ow = reg.get<Owner>(e).id;
         if (!isPlayer(ow) || !world.pl[ow].online || !world.complete(e))
             continue;

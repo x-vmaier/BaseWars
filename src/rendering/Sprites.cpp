@@ -13,9 +13,8 @@ namespace
 {
 Shader shOutline{}, shDissolve{};
 bool okOutline = false, okDissolve = false;
-int locOut[5]{-1, -1, -1, -1, -1},
-    locDis[4]{-1, -1, -1,
-              -1}; // outline: uvRect/texelSize/outlineColor/thickness/time; dissolve: uvRect/texSize/progress/seed
+// Uniform locations. outline: uvRect/texelSize/outlineColor/thickness/time; dissolve: uvRect/texSize/progress/seed.
+int locOut[5]{-1, -1, -1, -1, -1}, locDis[4]{-1, -1, -1, -1};
 } // namespace
 
 void loadSpriteShaders()

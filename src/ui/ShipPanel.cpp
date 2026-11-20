@@ -93,8 +93,9 @@ bool ShipPanel::input(Vector2 m, bool lp, bool rp)
             ship = 0;
         return true;
     }
+    // clicking elsewhere closes it and still acts on the world
     if (lp && !over)
-        ship = 0; // clicking elsewhere closes it and still acts on the world
+        ship = 0;
     if (rp && over)
         return true;
     return false;
@@ -111,20 +112,34 @@ void ShipPanel::draw()
         ship = 0;
         return;
     }
+
     const Info &in = W.reg.get<Info>(it->second);
     const RPos &rp = W.reg.get<RPos>(it->second);
     Vector2 m = ui::mouse();
     Rectangle r = rect();
-    int tier = shipTier(in.aux ? in.aux : 1), tcap = shipTroopCap(tier), rcap = shipResCap(tier);
+    int tier = shipTier(in.aux ? in.aux : 1);
+    Color ink = rgb(70, 45, 30);
+
     DrawRectangleRounded(r, .06f, 8, rgb(238, 222, 190));
     DrawRectangleRoundedLinesEx(r, .06f, 8, 3.f, rgb(120, 90, 60));
-    Color ink = rgb(70, 45, 30);
     DrawText(TextFormat("%s  (tier %d)", SHIP_NAME[tier - 1], tier), int(r.x) + 16, int(r.y) + 12, 22, ink);
     DrawText(TextFormat("Health %d / %d", int(in.hp), int(in.maxhp)), int(r.x) + 16, int(r.y) + 40, 15, ink);
-    auto bar = [&](float y, float frac, Color c) { barRect({r.x + 16, y, r.width - 32, 14}, frac, c); };
+
+    drawHold(in, r, tier);
+    drawCargo(in, r, tier);
+    drawActions(in, rp, m);
+}
+
+void ShipPanel::drawHold(const Info &in, Rectangle r, int tier)
+{
+    const ClientWorld &W = app.world;
+    int tcap = shipTroopCap(tier);
     auto dit = W.shipDetails.find(ship);
-    DrawText(TextFormat("Troops aboard: %d / %d", int(in.prog), tcap), int(r.x) + 16, int(r.y) + 64, 16, ink);
-    bar(r.y + 84, float(in.prog) / float(tcap), in.prog >= tcap ? BAR_UPGRADE : BAR_TROOPS);
+    DrawText(TextFormat("Troops aboard: %d / %d", int(in.prog), tcap), int(r.x) + 16, int(r.y) + 64, 16,
+             rgb(70, 45, 30));
+    barRect({r.x + 16, r.y + 84, r.width - 32, 14}, float(in.prog) / float(tcap),
+            in.prog >= tcap ? BAR_UPGRADE : BAR_TROOPS);
+
     std::string comp;
     if (dit != W.shipDetails.end())
     {
@@ -134,17 +149,32 @@ void ShipPanel::draw()
                 comp += std::string(comp.empty() ? "" : ", ") + nm[k] + " x" + std::to_string(dit->second.kinds[k]);
     }
     DrawText(comp.empty() ? "Empty hold" : comp.c_str(), int(r.x) + 16, int(r.y) + 104, 14, rgb(100, 70, 50));
-    DrawText(TextFormat("Cargo: %d / %d", int(in.stock), rcap), int(r.x) + 16, int(r.y) + 128, 16, ink);
-    bar(r.y + 148, float(in.stock) / float(rcap), BAR_CARGO);
+}
+
+void ShipPanel::drawCargo(const Info &in, Rectangle r, int tier)
+{
+    const ClientWorld &W = app.world;
+    int rcap = shipResCap(tier);
+    auto dit = W.shipDetails.find(ship);
+    DrawText(TextFormat("Cargo: %d / %d", int(in.stock), rcap), int(r.x) + 16, int(r.y) + 128, 16, rgb(70, 45, 30));
+    barRect({r.x + 16, r.y + 148, r.width - 32, 14}, float(in.stock) / float(rcap), BAR_CARGO);
     if (dit != W.shipDetails.end() && in.stock > 0)
         DrawText(TextFormat("Wood %d  Gold %d  Stone %d  Meat %d", dit->second.res[0], dit->second.res[1],
                             dit->second.res[2], dit->second.res[3]),
                  int(r.x) + 16, int(r.y) + 168, 14, rgb(100, 70, 50));
+}
+
+void ShipPanel::drawActions(const Info &in, const RPos &rp, Vector2 m)
+{
+    const ClientWorld &W = app.world;
+    Rectangle r = rect();
+    auto dit = W.shipDetails.find(ship);
     bool coast = W.coastNearShip(rp), busy = dit != W.shipDetails.end() && dit->second.voyage;
     const char *hint = busy ? "On a supply run for your haulers."
                             : (in.prog > 0 && !coast ? "Sail next to a coastline to disembark."
                                                      : "Select troops, then right-click the ship to embark.");
     DrawText(hint, int(r.x) + 16, int(r.y) + 190, 13, (in.prog > 0 && !coast) ? rgb(170, 60, 40) : rgb(100, 70, 50));
+
     bool can = in.prog > 0 && coast;
     ui::drawButton(btn(0), "Disembark all", can, false, CheckCollisionPointRec(m, btn(0)),
                    CheckCollisionPointRec(m, btn(0)) && IsMouseButtonDown(MOUSE_BUTTON_LEFT));

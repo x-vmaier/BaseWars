@@ -27,5 +27,8 @@ class ShipPanel
   private:
     Rectangle rect() const;
     Rectangle btn(int i) const;
+    void drawHold(const Info &in, Rectangle r, int tier);
+    void drawCargo(const Info &in, Rectangle r, int tier);
+    void drawActions(const Info &in, const RPos &rp, Vector2 m);
     App &app;
 };

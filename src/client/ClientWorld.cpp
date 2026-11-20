@@ -65,7 +65,8 @@ int ClientWorld::clearWoodCost(const std::vector<IV> &v) const
 namespace
 {
 struct GoldAdapter
-{ // adapter for the shared goldNear()
+{
+    // adapter for the shared goldNear()
     const ClientWorld &w;
     int biome(int x, int y) { return w.biomeAt(x, y); }
     bool cleared(int x, int y) { return w.clearedT.count(chunkKey(x, y)) > 0; }

@@ -22,6 +22,7 @@ class WorldRenderer
     void draw(float t); // inside BeginMode2D(cam)
 
   private:
+    void queueEntities(const TerrainView &v, Vector2 tl, Vector2 br, DrawList &items, float t);
     App &app;
 
   public:

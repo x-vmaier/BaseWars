@@ -58,30 +58,8 @@ class Server
         const auto step = std::chrono::milliseconds(1000 / TICK_HZ);
         while (!g_quit)
         {
-            NetEvent ev;
-            while (world.net.poll(ev))
-            {
-                switch (ev.type)
-                {
-                case NetEvent::Connect:
-                    break;
-                case NetEvent::Receive:
-                    sys.packets.onPacket(ev.conn, ev.data);
-                    break;
-                case NetEvent::Disconnect:
-                    sys.session.onDisconnect(ev.conn);
-                    break;
-                }
-            }
-            if (world.clock - world.lastPublish > 5)
-            { // keep the Steam server-browser entry fresh
-                int online = 0;
-                for (int i = 1; i <= MAX_PLAYERS; i++)
-                    if (world.pl[i].online)
-                        online++;
-                world.net.publish(online, MAX_PLAYERS, "Base Wars");
-                world.lastPublish = world.clock;
-            }
+            pollNet();
+            publishPresence();
             update(1.f / TICK_HZ);
             world.net.flush();
             next += step;
@@ -97,8 +75,7 @@ class Server
     World world;
     Systems sys;
 
-    // Base mechanics, once per second: test hook, territory, relocation, fire, support patrols, homeless players, base
-    // info.
+    // Base mechanics, once per second.
     void baseSecond()
     {
         for (int id = 1; id <= MAX_PLAYERS; id++)
@@ -109,26 +86,48 @@ class Server
         sys.fire.burnSecond();
         sys.defense.supportSecond();
         sys.clan.homelessSecond();
-        sys.faction.demandSecond(); // NPC town demand, gift memory, S_Econ
+        sys.faction.demandSecond();
         for (int id = 1; id <= MAX_PLAYERS; id++)
             if (world.pl[id].online)
                 sys.repl.sendBaseInfo(id);
     }
 
-    void update(float dt)
+    void pollNet()
     {
-        auto &reg = world.reg;
-        world.tick++;
-        world.clock += dt;
-        std::vector<entt::entity> units, blds;
-        reg.view<Info>().each([&](entt::entity e, const Info &i) { (isBuilding(i.kind) ? blds : units).push_back(e); });
+        NetEvent ev;
+        while (world.net.poll(ev))
+        {
+            switch (ev.type)
+            {
+            case NetEvent::Connect:
+                break;
+            case NetEvent::Receive:
+                sys.packets.onPacket(ev.conn, ev.data);
+                break;
+            case NetEvent::Disconnect:
+                sys.session.onDisconnect(ev.conn);
+                break;
+            }
+        }
+    }
 
-        sys.build.tick(blds, dt); // construction, production, towers
-        sys.units.behave(units, dt);
-        sys.combat.processKills();
-        sys.units.move(units, dt);
-        sys.naval.shipsTick(dt);
+    // Keeps the Steam server-browser entry fresh.
+    void publishPresence()
+    {
+        if (world.clock - world.lastPublish <= 5)
+            return;
 
+        int online = 0;
+        for (int i = 1; i <= MAX_PLAYERS; i++)
+            if (world.pl[i].online)
+                online++;
+        world.net.publish(online, MAX_PLAYERS, "Base Wars");
+        world.lastPublish = world.clock;
+    }
+
+    // Systems that only need to run a few times per second.
+    void slowSystems(const std::vector<entt::entity> &units, const std::vector<entt::entity> &blds)
+    {
         if (world.tick % 20 == 0)
         {
             sys.env.coldAndWake(units, blds);
@@ -141,15 +140,11 @@ class Server
         }
         if (world.tick % 4 == 0)
             sys.env.explore(units, blds);
+    }
 
-        sys.clearing.clearTick(dt); // clearing jobs
-        sys.construction.tick(dt);  // building sites: pawn assignment, S_Jobs
-        if (world.tick % 20 == 7)
-        {
-            sys.hunt.sheepSecond();
-            sys.patrol.patrolSecond();
-        } // sheep repopulation, patrols
-        sys.defense.flushAlerts();
+    // Staggered ticks spread the per-player packets over the second.
+    void replicate()
+    {
         for (int id = 1; id <= MAX_PLAYERS; id++)
         {
             if (!world.pl[id].online)
@@ -167,6 +162,7 @@ class Server
         }
         if (world.tick % 2 == 0)
             world.effects.clear();
+
         if (world.tick % 20 == 0)
         {
             sys.repl.sendRoster();
@@ -174,6 +170,33 @@ class Server
                 if (world.pl[id].online)
                     sys.repl.sendMap(id);
         }
+    }
+
+    void update(float dt)
+    {
+        auto &reg = world.reg;
+        world.tick++;
+        world.clock += dt;
+        std::vector<entt::entity> units, blds;
+        reg.view<Info>().each([&](entt::entity e, const Info &i) { (isBuilding(i.kind) ? blds : units).push_back(e); });
+
+        sys.build.tick(blds, dt);
+        sys.units.behave(units, dt);
+        sys.combat.processKills();
+        sys.units.move(units, dt);
+        sys.naval.shipsTick(dt);
+        slowSystems(units, blds);
+
+        sys.clearing.clearTick(dt);
+        sys.construction.tick(dt);
+        if (world.tick % 20 == 7)
+        {
+            sys.hunt.sheepSecond();
+            sys.patrol.patrolSecond();
+        }
+        sys.defense.flushAlerts();
+        replicate();
+
         if (world.clock - world.lastSave > 30)
         {
             sys.save.saveGame();

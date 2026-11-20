@@ -17,8 +17,8 @@ enum Res : uint8_t
     R_Count
 };
 
-// The wire / save id of a type: ids are persisted and sent, so never reorder, only append (buildings before K_Pawn are
-// the building group, everything from K_Pawn on is a unit). Each id needs one entry in KINDS below, in the same order.
+// The wire / save id of a type: ids are persisted and sent, so never reorder, only append before K_Count. Each id needs
+// one entry in KINDS below, in the same order; KindInfo::building says which family an id belongs to.
 enum Kind : uint8_t
 {
     K_TownHall,
@@ -28,7 +28,7 @@ enum Kind : uint8_t
     K_Mine,
     K_Lumber,
     K_Campfire,
-    K_Archery, // buildings
+    K_Archery,
     K_Pawn,
     K_Warrior,
     K_Archer,
@@ -37,7 +37,7 @@ enum Kind : uint8_t
     K_Ship,
     K_Sheep,
     K_Count
-}; // units / NPCs
+};
 
 // Behaviour flags. Systems and UI ask for a tag instead of comparing against a kind.
 enum KindTag : uint32_t
@@ -211,15 +211,15 @@ constexpr std::array<Kind, buildMenuCount()> buildMenuKinds()
     return out;
 }
 
-// Every id has an entry, in enum order, and the buildings come first.
+// Every id has an entry, in enum order.
 constexpr bool kindsConsistent()
 {
     for (int k = 0; k < K_Count; k++)
-        if (!KINDS[k].stats.name || KINDS[k].stats.building != (k < K_Pawn))
+        if (!KINDS[k].stats.name)
             return false;
     return true;
 }
-static_assert(kindsConsistent(), "KINDS needs one entry per Kind, buildings first");
+static_assert(kindsConsistent(), "KINDS needs one entry per Kind");
 
 // Compatibility accessor: KINFO[kind] is the stats part of the registry entry.
 struct KindInfoTable

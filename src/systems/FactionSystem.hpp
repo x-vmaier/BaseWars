@@ -27,4 +27,8 @@ class FactionSystem
     World &world;
     entt::registry &reg;
     Systems &s;
+    void fadeGifts();
+    void rotateDemands();
+    void sendEcon();
+    void sendAid(int victim, int f, uint32_t by, Pos victimAt, Pos attackerAt, bool attackerIsBuilding);
 };

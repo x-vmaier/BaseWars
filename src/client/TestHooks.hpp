@@ -14,6 +14,9 @@
 //   BW_MAPZ, BW_TSEL,
 //            BW_THTAB=0..2 Town Hall tab, BW_THHOVER=<control> hover, BW_THCLICK=1 confirm state; see townHallHook)
 // Also read elsewhere: BW_CAM / BW_ZOOM (S_Welcome), BW_SCALE / BW_MENU (main).
+#include <cstdint>
+#include <string>
+
 class App;
 
 class TestHooks
@@ -27,6 +30,13 @@ class TestHooks
     bool captureIfDue(); // after drawing the UI: true when the screenshot was taken (quit)
 
   private:
+    void scriptedCommands();
+    void panelHooks(const std::string &ui);
+    void trainingHook(const std::string &ui);
+    void contextHooks(const std::string &ui);
+    uint32_t firstOwn(int kind); // first own building of a kind, 0 if none
+    void runSiteVerb(const std::string &verb, const std::string &args);
+    void buildingVerb(const std::string &verb, const std::string &args, uint32_t id);
     App &app;
     const char *shotPath;
     int shotFrames = 0, shotAfter;

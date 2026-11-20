@@ -55,86 +55,84 @@ void UnitSystem::healTick(entt::entity e, Unit &u, Kind k, int ow, Pos p, const 
     }
 }
 
+void UnitSystem::wander(entt::entity e, Unit &u, Pos p, float dt)
+{
+    auto &wd = reg.get<Wander>(e);
+    wd.timer -= dt;
+    if (wd.timer > 0 || !u.path.empty())
+        return;
+
+    wd.timer = 2.f + float(world.rng() % 400) / 100.f;
+    int nx = int(std::floor(p.x)) + int(world.rng() % 7) - 3, ny = int(std::floor(p.y)) + int(world.rng() % 7) - 3;
+    if (world.walkable(nx, ny, false, 0) && world.biome(nx, ny) != B_Highlands)
+    {
+        u.path = {{float(nx) + .5f, float(ny) + .5f}};
+        u.i = 0;
+    }
+}
+
+// First matching duty wins; the order is the priority.
+void UnitSystem::runDuty(entt::entity e, Unit &u, Kind k, int ow, Pos &p, const std::vector<entt::entity> &units,
+                         float dt)
+{
+    if (auto *ct = reg.try_get<ClearTask>(e))
+        s.clearing.pawnTick(e, u, *ct, p, dt);
+    else if (auto *bt = reg.try_get<BuildTask>(e))
+        s.construction.pawnTick(e, u, *bt, p, dt);
+    else if (auto *wk = reg.try_get<Worker>(e))
+        s.convoy.runWorker(e, u, *wk, dt);
+    else if (auto *cv = reg.try_get<Convoy>(e))
+        s.convoy.runConvoy(e, u, *cv, dt);
+    else if (auto *hl = reg.try_get<Haul>(e))
+        s.convoy.runHaul(e, u, *hl, dt);
+    else if (auto *bd = reg.try_get<Boarding>(e))
+        s.naval.runBoarding(e, u, *bd, dt);
+    else if (auto *rd = reg.try_get<Raider>(e))
+    {
+        s.raid.runRaider(e, u, *rd, dt);
+        if (reg.valid(e) && KINFO[k].dps > 0)
+            s.combat.fight(e, u, k, ow, p, dt);
+    }
+    else if (hasTag(k, KT_Worker) && isPlayer(ow) && s.hunt.huntTick(e, u, ow, p, dt))
+    {
+        // free pawns hunt sheep
+    }
+    else if (world.isPatrol(e))
+    {
+        s.patrol.runPatrol(e, u, reg.get<Patrol>(e), dt);
+        if (reg.valid(e) && KINFO[k].dps > 0)
+            s.combat.fight(e, u, k, ow, p, dt);
+    }
+    else if (reg.all_of<Healer>(e))
+        healTick(e, u, k, ow, p, units, dt);
+    else if (KINFO[k].dps > 0 && ow > 0)
+        s.combat.fight(e, u, k, ow, p, dt);
+}
+
 void UnitSystem::behave(const std::vector<entt::entity> &units, float dt)
 {
     for (auto e : units)
     {
         if (!reg.valid(e) || world.dying.count(reg.get<Uid>(e).id) || reg.all_of<Aboard>(e))
             continue;
+
         auto &u = reg.get<Unit>(e);
         Kind k = reg.get<Info>(e).kind;
         int ow = reg.get<Owner>(e).id;
         Pos &p = reg.get<Pos>(e);
+
         u.state = US_Idle;
         u.cd -= dt;
         u.repath -= dt;
         if (reg.all_of<Wander>(e))
-        {
-            auto &wd = reg.get<Wander>(e);
-            wd.timer -= dt;
-            if (wd.timer <= 0 && u.path.empty())
-            {
-                wd.timer = 2.f + float(world.rng() % 400) / 100.f;
-                int nx = int(std::floor(p.x)) + int(world.rng() % 7) - 3,
-                    ny = int(std::floor(p.y)) + int(world.rng() % 7) - 3;
-                if (world.walkable(nx, ny, false, 0) && world.biome(nx, ny) != B_Highlands)
-                {
-                    u.path = {{float(nx) + .5f, float(ny) + .5f}};
-                    u.i = 0;
-                }
-            }
-        }
+            wander(e, u, p, dt);
+
         if (s.fire.extinguishTick(e, u, p, dt))
-            continue; // firefighting duty
+            continue;
         if (isFactionOwner(ow))
             s.faction.factionAI(e, u, p, dt);
-        if (auto *ct = reg.try_get<ClearTask>(e))
-        {
-            s.clearing.pawnTick(e, u, *ct, p, dt);
-        } // clearing an obstacle (prior work is restored after)
-        else if (auto *bt = reg.try_get<BuildTask>(e))
-        {
-            s.construction.pawnTick(e, u, *bt, p, dt);
-        } // building / upgrading / repairing a site
-        else if (auto *wk = reg.try_get<Worker>(e))
-        {
-            s.convoy.runWorker(e, u, *wk, dt);
-        }
-        else if (auto *cv = reg.try_get<Convoy>(e))
-        {
-            s.convoy.runConvoy(e, u, *cv, dt);
-        }
-        else if (auto *hl = reg.try_get<Haul>(e))
-        {
-            s.convoy.runHaul(e, u, *hl, dt);
-        }
-        else if (auto *bd = reg.try_get<Boarding>(e))
-        {
-            s.naval.runBoarding(e, u, *bd, dt);
-        }
-        else if (auto *rd = reg.try_get<Raider>(e))
-        {
-            s.raid.runRaider(e, u, *rd, dt);
-            if (reg.valid(e) && KINFO[k].dps > 0)
-                s.combat.fight(e, u, k, ow, p, dt);
-        }
-        else if (hasTag(k, KT_Worker) && isPlayer(ow) && s.hunt.huntTick(e, u, ow, p, dt))
-        {
-        } // [world] free pawns hunt sheep
-        else if (world.isPatrol(e))
-        {
-            s.patrol.runPatrol(e, u, reg.get<Patrol>(e), dt);
-            if (reg.valid(e) && KINFO[k].dps > 0)
-                s.combat.fight(e, u, k, ow, p, dt);
-        } // [world] faction patrol
-        else if (reg.all_of<Healer>(e))
-        {
-            healTick(e, u, k, ow, p, units, dt);
-        }
-        else if (KINFO[k].dps > 0 && ow > 0)
-        {
-            s.combat.fight(e, u, k, ow, p, dt);
-        }
+
+        runDuty(e, u, k, ow, p, units, dt);
     }
 }
 

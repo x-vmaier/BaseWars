@@ -25,6 +25,11 @@ class PauseMenu
     Rectangle row(int i) const;
     Rectangle slider() const;
     Rectangle arrow(int dir) const;
+    void dragSlider(const Rectangle &sl);
+    void onClick(Vector2 m);
+    void drawScaleRow();
+    void drawWindowRow(Vector2 m);
+    void drawButtons(Vector2 m);
 
     App &app;
     TMap mPause;

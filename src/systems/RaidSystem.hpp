@@ -17,6 +17,7 @@ class RaidSystem
     void raidTick();
 
   private:
+    const Town *nearestTown(int f, Pos tp);
     World &world;
     entt::registry &reg;
     Systems &s;

@@ -10,6 +10,7 @@
 #include <vector>
 
 class App;
+struct Peer;
 
 class BigMap
 {
@@ -43,6 +44,15 @@ class BigMap
     Vector2 mapToTile(Vector2 p) const;
     Vector2 tileToMap(float tx, float ty) const;
     void refresh();
+    void fillPixels(const Rectangle &in);
+    void zoomAt(Vector2 m);
+    bool pressLeft(Vector2 m);
+    void updateDrag(Vector2 m);
+    void drawFriendArrows(const Rectangle &in);
+    void drawFriendArrow(const Peer &p, Vector2 sp, const Rectangle &in);
+    void drawCameraBox(const Rectangle &in);
+    void drawCaptions(const Rectangle &fr);
+    void drawCursorTile(Vector2 m);
     std::vector<Cand> candidates();
     Rectangle menuRect() const;
     Rectangle minusBtn() const;

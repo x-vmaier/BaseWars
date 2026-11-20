@@ -16,6 +16,8 @@ class EnvironmentSystem
     void explore(const std::vector<entt::entity> &units, const std::vector<entt::entity> &blds);     // every 4th tick
 
   private:
+    void coldAttrition(const std::vector<entt::entity> &all, const std::vector<entt::entity> &blds);
+    void wakeNpcs(const std::vector<entt::entity> &all);
     World &world;
     entt::registry &reg;
     Systems &s;

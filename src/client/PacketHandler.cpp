@@ -46,10 +46,10 @@ void PacketHandler::handle(const uint8_t *d, size_t n)
         if (app.session.welcomed)
             onShipsInfo(r);
         break;
-    default:
+    default: // the world / base sets each ignore the other's types
         worldPacket(d, n);
         basePacket(ptype, r);
-        break; // [world] / [base] packet sets (each ignores the other's types)
+        break;
     }
 }
 
@@ -87,7 +87,7 @@ void PacketHandler::onWelcome(Reader &r)
         float a = 0, b = 0;
         if (std::sscanf(c, "%f,%f", &a, &b) == 2)
             cam.target = {a * TILE, b * TILE};
-    } // test hooks
+    }
 
     if (const char *z = std::getenv("BW_ZOOM"))
         cam.zoom = float(std::atof(z));
@@ -103,7 +103,6 @@ void PacketHandler::onState(Reader &r)
         return;
 
     ClientWorld &w = app.world;
-    auto &reg = w.reg;
 
     for (float &v : w.res)
         v = r.get<float>();
@@ -116,54 +115,84 @@ void PacketHandler::onState(Reader &r)
     ++w.stamp;
 
     for (int i = 0; i < cnt; i++)
-    {
-        uint32_t id = r.get<uint32_t>();
-        Kind k = Kind(r.get<uint8_t>());
-        uint8_t ow = r.get<uint8_t>();
-        float x = r.get<float>(), y = r.get<float>();
-        float hp = r.get<uint16_t>(), mhp = r.get<uint16_t>();
-        uint8_t st = r.get<uint8_t>(), aux = r.get<uint8_t>(), aim = r.get<uint8_t>(), prog = r.get<uint8_t>();
-        uint16_t stock = r.get<uint16_t>();
-        if (!r.ok || k >= K_Count)
+        if (!readEntity(r))
             return;
 
-        Info inf{k, ow, st, aux, aim, prog, hp, mhp, stock};
-        if (aboardUnit(inf))
-            app.input.forget(id); // embarked: hidden, cannot be selected
+    removeUnseen();
 
-        auto it = w.ents.find(id);
-        if (it == w.ents.end())
-        {
-            auto e = reg.create();
-            w.ents[id] = e;
-            reg.emplace<NetId>(e, NetId{id});
-            reg.emplace<RPos>(e, RPos{x, y});
-            reg.emplace<Goal>(e, Goal{x, y});
-            reg.emplace<Face>(e);
-            reg.emplace<Info>(e, inf);
-            reg.emplace<Seen>(e, Seen{w.stamp});
-        }
-        else
-        {
-            auto e = it->second;
-            auto &old = reg.get<Info>(e);
-            if (ow == w.me && hp < old.hp - .5f)
-            {
-                app.post.damage = std::min(.7f, app.post.damage + .12f);
-                app.post.shake = std::max(app.post.shake, 3.f);
-            }
-            old = inf;
-            reg.get<Goal>(e) = Goal{x, y};
-            reg.get<Seen>(e).stamp = w.stamp;
-            reg.remove<Remembered>(e); // seen again: live state replaces the memory
-        }
+    int ne = r.get<uint16_t>();
+    for (int i = 0; i < ne; i++)
+    {
+        uint8_t t = r.get<uint8_t>();
+        float x = r.get<float>(), y = r.get<float>(), x2 = r.get<float>(), y2 = r.get<float>();
+        if (!r.ok)
+            break;
+        addFx(t, x, y, x2, y2);
     }
+    w.rebuildOcc();
+}
+
+// False when the packet is malformed (the rest of the state is dropped).
+bool PacketHandler::readEntity(Reader &r)
+{
+    ClientWorld &w = app.world;
+    auto &reg = w.reg;
+
+    uint32_t id = r.get<uint32_t>();
+    Kind k = Kind(r.get<uint8_t>());
+    uint8_t ow = r.get<uint8_t>();
+    float x = r.get<float>(), y = r.get<float>();
+    float hp = r.get<uint16_t>(), mhp = r.get<uint16_t>();
+    uint8_t st = r.get<uint8_t>(), aux = r.get<uint8_t>(), aim = r.get<uint8_t>(), prog = r.get<uint8_t>();
+    uint16_t stock = r.get<uint16_t>();
+    if (!r.ok || k >= K_Count)
+        return false;
+
+    Info inf{k, ow, st, aux, aim, prog, hp, mhp, stock};
+    if (aboardUnit(inf))
+        app.input.forget(id); // embarked: hidden, cannot be selected
+
+    auto it = w.ents.find(id);
+    if (it == w.ents.end())
+    {
+        auto e = reg.create();
+        w.ents[id] = e;
+        reg.emplace<NetId>(e, NetId{id});
+        reg.emplace<RPos>(e, RPos{x, y});
+        reg.emplace<Goal>(e, Goal{x, y});
+        reg.emplace<Face>(e);
+        reg.emplace<Info>(e, inf);
+        reg.emplace<Seen>(e, Seen{w.stamp});
+        return true;
+    }
+
+    auto e = it->second;
+    auto &old = reg.get<Info>(e);
+    if (ow == w.me && hp < old.hp - .5f)
+    {
+        app.post.damage = std::min(.7f, app.post.damage + .12f);
+        app.post.shake = std::max(app.post.shake, 3.f);
+    }
+    old = inf;
+    reg.get<Goal>(e) = Goal{x, y};
+    reg.get<Seen>(e).stamp = w.stamp;
+    reg.remove<Remembered>(e); // seen again: live state replaces the memory
+    return true;
+}
+
+// Entities missing from this state are destroyed, except NPC buildings that left our vision (kept as memories).
+void PacketHandler::removeUnseen()
+{
+    ClientWorld &w = app.world;
+    auto &reg = w.reg;
+
     std::vector<entt::entity> dead;
     reg.view<Seen, NetId>().each([&](entt::entity e, const Seen &s, const NetId &)
     {
         if (s.stamp != w.stamp)
             dead.push_back(e);
     });
+
     for (auto e : dead)
     {
         uint32_t id = reg.get<NetId>(e).id;
@@ -175,7 +204,7 @@ void PacketHandler::onState(Reader &r)
 
         bool vis = w.visibleSource(rp.x, rp.y);
         if (isBuilding(in.kind) && isFactionOwner(in.owner) && !vis)
-        { // NPC town building left our vision: keep its last known state
+        {
             if (!remembered)
             {
                 reg.emplace<Remembered>(e);
@@ -183,6 +212,7 @@ void PacketHandler::onState(Reader &r)
             }
             continue;
         }
+
         bool arrived = !isBuilding(in.kind) && (in.state & UNIT_CONVOY_FLAG) &&
                        w.nearStorage(rp.x, rp.y); // convoys / haulers delivered: no ash ghost
         if (vis && !remembered && !arrived)
@@ -195,16 +225,6 @@ void PacketHandler::onState(Reader &r)
 
         reg.destroy(e);
     }
-    int ne = r.get<uint16_t>();
-    for (int i = 0; i < ne; i++)
-    {
-        uint8_t t = r.get<uint8_t>();
-        float x = r.get<float>(), y = r.get<float>(), x2 = r.get<float>(), y2 = r.get<float>();
-        if (!r.ok)
-            break;
-        addFx(t, x, y, x2, y2);
-    }
-    w.rebuildOcc();
 }
 
 void PacketHandler::onFog(Reader &r)
@@ -351,183 +371,216 @@ void PacketHandler::onShipsPaths(Reader &r)
 
 void PacketHandler::worldPacket(const uint8_t *d, size_t n)
 {
-    ClientWorld &w = app.world;
     Reader r{d, d + n};
     switch (r.get<uint8_t>())
     {
     case S_Cleared:
-    {
-        int mode = r.get<uint8_t>();
-        uint32_t cnt = r.get<uint32_t>();
-        if (!r.ok)
-            return;
-        if (mode == 0)
-            w.clearedT.clear();
-        for (uint32_t i = 0; i < cnt; i++)
-        {
-            int x = r.get<int32_t>(), y = r.get<int32_t>();
-            if (!r.ok)
-                return;
-            w.clearedT.insert(chunkKey(x, y));
-            w.cjobs.erase(chunkKey(x, y));
-        }
+        onCleared(r);
         break;
-    }
     case S_ClearJobs:
-    {
-        int cnt = r.get<uint16_t>();
-        std::unordered_map<int64_t, CJob> v;
-        for (int i = 0; i < cnt; i++)
-        {
-            int x = r.get<int32_t>(), y = r.get<int32_t>();
-            int pct = r.get<uint8_t>(), st = r.get<uint8_t>();
-            if (!r.ok)
-                return;
-            v[chunkKey(x, y)] = CJob{float(pct) / 100.f, uint8_t(st)};
-        }
-        w.cjobs = std::move(v);
-        int np = r.get<uint16_t>();
-        std::vector<PendingSite> ps;
-        for (int i = 0; i < np; i++)
-        {
-            int k = r.get<uint8_t>(), tx = r.get<int32_t>(), ty = r.get<int32_t>();
-            if (!r.ok || k >= K_Count)
-                break;
-            ps.push_back({Kind(k), tx, ty});
-        }
-        w.pendingSites = std::move(ps);
+        onClearJobs(r);
         break;
-    }
     case S_Drop:
-    {
-        DropFx f{};
-        f.x = r.get<float>();
-        f.y = r.get<float>();
-        f.res = r.get<uint8_t>();
-        f.amt = r.get<uint16_t>();
-        f.t = GetTime();
-        if (!r.ok || f.res >= R_Count)
-            return;
-        w.drops.push_back(f);
-        if (w.drops.size() > 80)
-            w.drops.erase(w.drops.begin());
+        onDrop(r);
         break;
-    }
     default:
         break;
     }
 }
 
-bool PacketHandler::basePacket(uint8_t type, Reader &r)
+void PacketHandler::onCleared(Reader &r)
 {
     ClientWorld &w = app.world;
+    int mode = r.get<uint8_t>();
+    uint32_t cnt = r.get<uint32_t>();
+    if (!r.ok)
+        return;
+
+    if (mode == 0)
+        w.clearedT.clear();
+    for (uint32_t i = 0; i < cnt; i++)
+    {
+        int x = r.get<int32_t>(), y = r.get<int32_t>();
+        if (!r.ok)
+            return;
+        w.clearedT.insert(chunkKey(x, y));
+        w.cjobs.erase(chunkKey(x, y));
+    }
+}
+
+void PacketHandler::onClearJobs(Reader &r)
+{
+    ClientWorld &w = app.world;
+    int cnt = r.get<uint16_t>();
+    std::unordered_map<int64_t, CJob> v;
+    for (int i = 0; i < cnt; i++)
+    {
+        int x = r.get<int32_t>(), y = r.get<int32_t>();
+        int pct = r.get<uint8_t>(), st = r.get<uint8_t>();
+        if (!r.ok)
+            return;
+        v[chunkKey(x, y)] = CJob{float(pct) / 100.f, uint8_t(st)};
+    }
+    w.cjobs = std::move(v);
+
+    int np = r.get<uint16_t>();
+    std::vector<PendingSite> ps;
+    for (int i = 0; i < np; i++)
+    {
+        int k = r.get<uint8_t>(), tx = r.get<int32_t>(), ty = r.get<int32_t>();
+        if (!r.ok || k >= K_Count)
+            break;
+        ps.push_back({Kind(k), tx, ty});
+    }
+    w.pendingSites = std::move(ps);
+}
+
+void PacketHandler::onDrop(Reader &r)
+{
+    ClientWorld &w = app.world;
+    DropFx f{};
+    f.x = r.get<float>();
+    f.y = r.get<float>();
+    f.res = r.get<uint8_t>();
+    f.amt = r.get<uint16_t>();
+    f.t = GetTime();
+    if (!r.ok || f.res >= R_Count)
+        return;
+
+    w.drops.push_back(f);
+    if (w.drops.size() > 80)
+        w.drops.erase(w.drops.begin());
+}
+
+bool PacketHandler::basePacket(uint8_t type, Reader &r)
+{
     switch (type)
     {
     case S_Queue:
-    {
-        int n = r.get<uint8_t>();
-        std::unordered_map<uint32_t, QEntry> q;
-        for (int i = 0; i < n; i++)
-        {
-            uint32_t uid = r.get<uint32_t>();
-            int cnt = r.get<uint8_t>();
-            QEntry e;
-            e.pct = r.get<uint8_t>();
-            for (int j = 0; j < cnt; j++)
-                e.kinds.push_back(r.get<uint8_t>());
-            if (!r.ok)
-                return true;
-            q[uid] = e;
-        }
-        w.queues = q;
+        onQueue(r);
         return true;
-    }
     case S_Alert:
-    {
-        Toast t{};
-        t.type = r.get<uint8_t>();
-        t.x = r.get<float>();
-        t.y = r.get<float>();
-        t.text = r.str();
-        t.t = GetTime();
-        if (!r.ok)
-            return true;
-        app.baseMenus.push(t);
-        if (t.type == 2)
-            app.cam.target = {t.x * TILE, t.y * TILE}; // lost our town: look at the clan
+        onAlert(r);
         return true;
-    }
     case S_BaseInfo:
-    {
-        r.get<uint8_t>(); // total quota (the per-type values follow)
-        int hl = r.get<uint8_t>(), mv = r.get<uint8_t>(), pct = r.get<uint8_t>(), q[QUOTA_TYPES], al[R_Count];
-
-        for (int &v : q)
-            v = r.get<uint8_t>();
-        for (int &v : al)
-            v = r.get<uint8_t>();
-
-        if (!r.ok)
-            return true;
-
-        if (GetTime() - w.baseEditAt > 1.5)
-        {
-            for (int t = 0; t < QUOTA_TYPES; t++)
-                w.quota[t] = q[t];
-            for (int k = 0; k < R_Count; k++)
-                w.alloc[k] = al[k];
-        }
-
-        w.homeless = hl != 0;
-        w.townMoving = mv != 0;
-        w.movePct = pct;
-
-        if (w.homeless && !w.wasHomeless)
-            app.placement.begin(Placement::HomelessHall, K_TownHall, 0);
-
-        if (!w.homeless && w.wasHomeless && app.placement.placeMode == Placement::HomelessHall)
-            app.placement.buildKind = -1;
-
-        w.wasHomeless = w.homeless;
+        onBaseInfo(r);
         return true;
-    }
     case S_Jobs:
-    {
-        int n = r.get<uint16_t>();
-        std::unordered_map<uint32_t, BJob> v;
-        for (int i = 0; i < n; i++)
-        {
-            uint32_t uid = r.get<uint32_t>();
-            BJob j;
-            j.kind = r.get<uint8_t>();
-            j.phase = r.get<uint8_t>();
-            j.pct = r.get<uint8_t>();
-            if (!r.ok)
-                return true;
-            v[uid] = j;
-        }
-        w.jobs = std::move(v);
+        onJobs(r);
         return true;
-    }
     case S_Econ:
-    {
-        float cd = r.get<float>();
-        FacDemand d[FACTION_COUNT];
-        for (auto &f : d)
-        {
-            f.res = r.get<uint8_t>();
-            f.changeAt = GetTime() + double(r.get<uint16_t>());
-            for (int &m : f.mul)
-                m = r.get<uint8_t>();
-        }
-        if (!r.ok)
-            return true;
-        w.donateReadyAt = GetTime() + double(cd);
-        for (int f = 0; f < FACTION_COUNT; f++)
-            w.demand[f] = d[f];
+        onEcon(r);
         return true;
-    }
     default:
         return false;
     }
+}
+
+void PacketHandler::onQueue(Reader &r)
+{
+    int n = r.get<uint8_t>();
+    std::unordered_map<uint32_t, QEntry> q;
+    for (int i = 0; i < n; i++)
+    {
+        uint32_t uid = r.get<uint32_t>();
+        int cnt = r.get<uint8_t>();
+        QEntry e;
+        e.pct = r.get<uint8_t>();
+        for (int j = 0; j < cnt; j++)
+            e.kinds.push_back(r.get<uint8_t>());
+        if (!r.ok)
+            return;
+        q[uid] = e;
+    }
+    app.world.queues = q;
+}
+
+void PacketHandler::onAlert(Reader &r)
+{
+    Toast t{};
+    t.type = r.get<uint8_t>();
+    t.x = r.get<float>();
+    t.y = r.get<float>();
+    t.text = r.str();
+    t.t = GetTime();
+    if (!r.ok)
+        return;
+
+    app.baseMenus.push(t);
+    if (t.type == 2)
+        app.cam.target = {t.x * TILE, t.y * TILE}; // lost our town: look at the clan
+}
+
+void PacketHandler::onBaseInfo(Reader &r)
+{
+    ClientWorld &w = app.world;
+    r.get<uint8_t>(); // total quota (the per-type values follow)
+    int hl = r.get<uint8_t>(), mv = r.get<uint8_t>(), pct = r.get<uint8_t>(), q[QUOTA_TYPES], al[R_Count];
+
+    for (int &v : q)
+        v = r.get<uint8_t>();
+    for (int &v : al)
+        v = r.get<uint8_t>();
+
+    if (!r.ok)
+        return;
+
+    // a recent local edit wins over the server echo
+    if (GetTime() - w.baseEditAt > 1.5)
+    {
+        for (int t = 0; t < QUOTA_TYPES; t++)
+            w.quota[t] = q[t];
+        for (int k = 0; k < R_Count; k++)
+            w.alloc[k] = al[k];
+    }
+
+    w.homeless = hl != 0;
+    w.townMoving = mv != 0;
+    w.movePct = pct;
+
+    if (w.homeless && !w.wasHomeless)
+        app.placement.begin(Placement::HomelessHall, K_TownHall, 0);
+
+    if (!w.homeless && w.wasHomeless && app.placement.placeMode == Placement::HomelessHall)
+        app.placement.buildKind = -1;
+
+    w.wasHomeless = w.homeless;
+}
+
+void PacketHandler::onJobs(Reader &r)
+{
+    int n = r.get<uint16_t>();
+    std::unordered_map<uint32_t, BJob> v;
+    for (int i = 0; i < n; i++)
+    {
+        uint32_t uid = r.get<uint32_t>();
+        BJob j;
+        j.kind = r.get<uint8_t>();
+        j.phase = r.get<uint8_t>();
+        j.pct = r.get<uint8_t>();
+        if (!r.ok)
+            return;
+        v[uid] = j;
+    }
+    app.world.jobs = std::move(v);
+}
+
+void PacketHandler::onEcon(Reader &r)
+{
+    ClientWorld &w = app.world;
+    float cd = r.get<float>();
+    FacDemand d[FACTION_COUNT];
+    for (auto &f : d)
+    {
+        f.res = r.get<uint8_t>();
+        f.changeAt = GetTime() + double(r.get<uint16_t>());
+        for (int &m : f.mul)
+            m = r.get<uint8_t>();
+    }
+    if (!r.ok)
+        return;
+
+    w.donateReadyAt = GetTime() + double(cd);
+    for (int f = 0; f < FACTION_COUNT; f++)
+        w.demand[f] = d[f];
 }

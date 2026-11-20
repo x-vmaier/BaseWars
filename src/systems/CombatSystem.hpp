@@ -22,6 +22,11 @@ class CombatSystem
     // Whoever damages a storage building (Town Hall, Outpost, Storage House) takes resources in proportion to the
     // damage dealt.
     void lootStorage(entt::entity e, float amt, int attacker);
+    void raidCargo(const float *cargo, int owner, int killer);
+    void killRewards(entt::entity e, Kind k, int owner, int killer, Pos p);
+    void townHallFell(int owner, int killer, uint16_t town);
+    entt::entity pickTarget(entt::entity e, int ow, bool &explicitOrder);
+    void strike(entt::entity e, Unit &u, Kind k, int ow, Pos p, entt::entity tg, Pos tp, float dt);
     World &world;
     entt::registry &reg;
     Systems &s;

@@ -5,6 +5,8 @@
 #pragma once
 #include <raylib.h>
 
+#include <vector>
+
 class App;
 
 class PostFx
@@ -22,6 +24,8 @@ class PostFx
   private:
     void runBloom();
     void uniforms(float t);
+    std::vector<float> collectLights(bool &nearFire) const;
+    void stepAtmosphere(bool snow, bool nearFire);
     App &app;
     RenderTexture2D rt{}, bloomA{}, bloomB{};
     Shader shPost{}, shBright{}, shBlur{};

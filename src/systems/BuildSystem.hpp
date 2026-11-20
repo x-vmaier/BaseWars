@@ -19,6 +19,10 @@ class BuildSystem
     void tick(const std::vector<entt::entity> &blds, float dt);
 
   private:
+    void produce(entt::entity e, Building &b, const Info &in, int ow, Pos c, float eff, float dt,
+                 std::unordered_map<uint32_t, int> &workerCount);
+    void defensiveFire(entt::entity e, Building &b, const Info &in, int ow, Pos c, float eff, float dt);
+
     World &world;
     entt::registry &reg;
     Systems &s;

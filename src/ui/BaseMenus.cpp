@@ -62,45 +62,58 @@ void BaseMenus::draw()
     double now = GetTime();
     std::erase_if(toasts, [&](const Toast &t) { return now - t.t > 14.0; });
     Vector2 m = ui::mouse();
+
     for (size_t i = 0; i < toasts.size(); i++)
-    {
-        const Toast &t = toasts[i];
-        Rectangle r = toastRect(int(i));
-        float a = std::clamp(float(14.0 - (now - t.t)) / 2.f, 0.f, 1.f),
-              pulse = t.type == 0 ? float(std::sin(now * 8) * .5 + .5) : 0.f;
-        bool hov = CheckCollisionPointRec(m, r);
-        Color base = t.type == 0 ? rgb(150, 36, 30, int(235 * a)) : rgb(60, 80, 140, int(235 * a));
-        DrawRectangleRounded(r, .2f, 6, hov ? rgb(base.r + 30, base.g + 20, base.b + 20, base.a) : base);
-        DrawRectangleRoundedLinesEx(r, .2f, 6, 2 + pulse * 2, rgb(255, 210, 120, int(255 * a)));
-        std::string s = t.text;
-        while (MeasureText(s.c_str(), 15) > int(r.width) - 20 && s.size() > 4)
-            s.pop_back();
-        DrawText(s.c_str(), int(r.x) + 10, int(r.y) + 7, 15, rgb(255, 255, 255, int(255 * a)));
-        std::string loc = TextFormat("(%d, %d)  click to jump", int(t.x), int(t.y));
-        DrawText(loc.c_str(), int(r.x) + 10, int(r.y) + 27, 12, rgb(255, 230, 170, int(255 * a)));
-    }
+        drawToast(int(i), m, now);
     if (W.homeless)
-    {
-        Rectangle b = homelessBanner();
-        bool hov = CheckCollisionPointRec(m, b);
-        DrawRectangleRounded(b, .2f, 6, hov ? rgb(190, 100, 40, 240) : rgb(160, 80, 30, 235));
-        DrawRectangleRoundedLinesEx(b, .2f, 6, 2, rgb(255, 220, 140));
-        DrawText("You are homeless", int(b.x) + 14, int(b.y) + 8, 18, WHITE);
-        DrawText("Click here, then place a new Town Hall near your clan (free).", int(b.x) + 14, int(b.y) + 32, 13,
-                 rgb(255, 235, 200));
-    }
+        drawHomeless(m);
     if (W.townMoving)
     {
         Rectangle nr = app.hud.nameRect();
         textShadow(TextFormat("Moving town: %d%%", W.movePct), int(nr.x) + 8, int(nr.y + nr.height) + 6, 15,
                    rgb(255, 220, 120));
     }
+    drawPlacementBanner();
+}
+
+void BaseMenus::drawToast(int i, Vector2 m, double now)
+{
+    const Toast &t = toasts[size_t(i)];
+    Rectangle r = toastRect(i);
+    float a = std::clamp(float(14.0 - (now - t.t)) / 2.f, 0.f, 1.f),
+          pulse = t.type == 0 ? float(std::sin(now * 8) * .5 + .5) : 0.f;
+    bool hov = CheckCollisionPointRec(m, r);
+    Color base = t.type == 0 ? rgb(150, 36, 30, int(235 * a)) : rgb(60, 80, 140, int(235 * a));
+    DrawRectangleRounded(r, .2f, 6, hov ? rgb(base.r + 30, base.g + 20, base.b + 20, base.a) : base);
+    DrawRectangleRoundedLinesEx(r, .2f, 6, 2 + pulse * 2, rgb(255, 210, 120, int(255 * a)));
+
+    std::string s = t.text;
+    while (MeasureText(s.c_str(), 15) > int(r.width) - 20 && s.size() > 4)
+        s.pop_back();
+    DrawText(s.c_str(), int(r.x) + 10, int(r.y) + 7, 15, rgb(255, 255, 255, int(255 * a)));
+    std::string loc = TextFormat("(%d, %d)  click to jump", int(t.x), int(t.y));
+    DrawText(loc.c_str(), int(r.x) + 10, int(r.y) + 27, 12, rgb(255, 230, 170, int(255 * a)));
+}
+
+void BaseMenus::drawHomeless(Vector2 m)
+{
+    Rectangle b = homelessBanner();
+    bool hov = CheckCollisionPointRec(m, b);
+    DrawRectangleRounded(b, .2f, 6, hov ? rgb(190, 100, 40, 240) : rgb(160, 80, 30, 235));
+    DrawRectangleRoundedLinesEx(b, .2f, 6, 2, rgb(255, 220, 140));
+    DrawText("You are homeless", int(b.x) + 14, int(b.y) + 8, 18, WHITE);
+    DrawText("Click here, then place a new Town Hall near your clan (free).", int(b.x) + 14, int(b.y) + 32, 13,
+             rgb(255, 235, 200));
+}
+
+void BaseMenus::drawPlacementBanner()
+{
     int em = app.placement.effMode();
-    if (em == Placement::HomelessHall || em == Placement::MoveTown || em == Placement::Relocate)
-    {
-        std::string h = em == Placement::HomelessHall ? "Place your new Town Hall"
-                                                      : (em == Placement::MoveTown ? "Place the moved Town Hall"
-                                                                                   : "Place the relocated building");
-        textShadow(h, ui::screenW() / 2 - MeasureText(h.c_str(), 20) / 2, 16, 20, rgb(255, 230, 120));
-    }
+    if (em != Placement::HomelessHall && em != Placement::MoveTown && em != Placement::Relocate)
+        return;
+
+    std::string h = em == Placement::HomelessHall
+                        ? "Place your new Town Hall"
+                        : (em == Placement::MoveTown ? "Place the moved Town Hall" : "Place the relocated building");
+    textShadow(h, ui::screenW() / 2 - MeasureText(h.c_str(), 20) / 2, 16, 20, rgb(255, 230, 120));
 }

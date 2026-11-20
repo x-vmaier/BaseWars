@@ -23,6 +23,8 @@ class Minimap
     Rectangle rect() const;
 
   private:
+    void paintTerrain(int cx, int cy);
+    void paintEntities(int cx, int cy);
     App &app;
     TMap mMini;
     double lastMM = 0;

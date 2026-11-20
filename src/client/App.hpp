@@ -96,4 +96,7 @@ class App
   private:
     void loadGfx();
     void drawUI(float dt);
+    void drawScene(float t);
+    void drawPlayingFrame(float t, float dt);
+    void drawMenuFrame(float t);
 };

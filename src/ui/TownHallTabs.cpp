@@ -34,7 +34,6 @@ std::string shortNum(float v)
 }
 } // namespace
 
-// layout
 Rectangle TownHallWindow::slot(int r) const
 {
     Rectangle c = content();
@@ -69,7 +68,6 @@ Rectangle TownHallWindow::quotaArrow(int t, int dir) const
                    : Rectangle{k.x + k.width - 34, k.y + k.height + 10, 34, 34};
 }
 
-// storage tab
 void TownHallWindow::inputStorage(Vector2 m)
 {
     ClientWorld &W = app.world;
@@ -120,16 +118,29 @@ void TownHallWindow::inputStorage(Vector2 m)
 
 void TownHallWindow::drawStorage(Vector2 m, const Info &in)
 {
+    Rectangle c = content();
+    float hpf = in.hp / std::max(1.f, in.maxhp), cap = storageCap(K_TownHall, in.aux) * hpEfficiency(hpf);
+
+    drawStorageSummary({c.x, c.y, c.width, 150}, in, cap, hpf);
+    for (int r = 0; r < R_Count; r++)
+        drawStorageSlot(r, m, cap);
+    DrawText("Income above a resource's share is discarded. Shares can add up to more than 100%: the total capacity "
+             "still applies.",
+             int(c.x) + 4, int(c.y + c.height) - 22, 12, SOFT);
+}
+
+void TownHallWindow::drawStorageSummary(Rectangle top, const Info &in, float cap, float hpf)
+{
     const ClientWorld &W = app.world;
-    Rectangle c = content(), top{c.x, c.y, c.width, 150};
     box(top);
     DrawText("Storage", int(top.x) + 10, int(top.y) + 8, 18, INK);
-    float hpf = in.hp / std::max(1.f, in.maxhp), cap = storageCap(K_TownHall, in.aux) * hpEfficiency(hpf),
-          used = W.res[0] + W.res[1] + W.res[2] + W.res[3];
+
+    float used = W.res[0] + W.res[1] + W.res[2] + W.res[3];
     float lw = top.width - 360;
     DrawText(TextFormat("Total %d / %d", int(used), int(cap)), int(top.x) + 12, int(top.y) + 38, 16, INK);
     barRect({top.x + 12, top.y + 60, lw - 12, 12}, used / std::max(1.f, cap),
             used >= cap * .98f ? BAR_UPGRADE : BAR_BUILD);
+
     float ty = top.y + 82;
     std::string lv =
         in.aux < MAX_LEVEL
@@ -144,38 +155,38 @@ void TownHallWindow::drawStorage(Vector2 m, const Info &in)
         ty += 15;
     }
     drawCapacityChart({top.x + top.width - 340, top.y + 10, 328, 130}, in.aux);
-    for (int r = 0; r < R_Count; r++)
-    {
-        Rectangle s = slot(r);
-        box(s);
-        float cx = s.x + s.width / 2;
-        ui::resourceIcon(r, {cx - 24, s.y + 10, 48, 48});
-        centred(r == R_Meat ? "Food (Meat)" : RES_NAME[r], cx, s.y + 64, 16, INK);
-        float rc = allocCap(cap, W.alloc[r]), have = W.res[r], frac = have / std::max(1.f, rc);
-        centred(TextFormat("%d / %d", int(have), int(rc)), cx, s.y + 88, 15, frac >= .98f ? WARN : INK);
-        barRect({s.x + 18, s.y + 110, s.width - 36, 10}, rc > 0 ? frac : 0.f, frac >= .98f ? BAR_UPGRADE : BAR_BUILD);
-        centred(TextFormat("Share %d%%", W.alloc[r]), cx, s.y + 136, 15, INK);
-        Rectangle sl = allocSlider(r);
-        ui::sliderTrack(sl, float(W.alloc[r]) / 100.f,
-                        dragRes == r ||
-                            CheckCollisionPointRec(m, {sl.x - 12, sl.y - 12, sl.width + 24, sl.height + 24}));
-        centred(W.alloc[r] == 0 ? "None is kept"
-                                : (frac >= .98f ? "Full: income is discarded" : "of the hall's capacity"),
-                cx, s.y + 190, 12, frac >= .98f || W.alloc[r] == 0 ? WARN : SOFT);
-        Rectangle db = disposeBtn(r);
-        bool armed = disposeArm == r && GetTime() - disposeAt < CONFIRM_SECONDS;
-        if (disposeArm == r && !armed)
-            disposeArm = -1;
-        centred(armed ? TextFormat("Discard all %d?", int(have)) : "Discard this resource", cx, db.y - 18, 12,
-                armed ? WARN : SOFT);
-        ui::drawButton(db, armed ? "Confirm" : "Dispose", have >= 1.f, true, CheckCollisionPointRec(m, db), armed, 14);
-    }
-    DrawText("Income above a resource's share is discarded. Shares can add up to more than 100%: the total capacity "
-             "still applies.",
-             int(c.x) + 4, int(c.y + c.height) - 22, 12, SOFT);
 }
 
-// capacity per Town Hall level as small columns (current level highlighted)
+void TownHallWindow::drawStorageSlot(int r, Vector2 m, float cap)
+{
+    const ClientWorld &W = app.world;
+    Rectangle s = slot(r);
+    box(s);
+    float cx = s.x + s.width / 2;
+    ui::resourceIcon(r, {cx - 24, s.y + 10, 48, 48});
+    centred(r == R_Meat ? "Food (Meat)" : RES_NAME[r], cx, s.y + 64, 16, INK);
+
+    float rc = allocCap(cap, W.alloc[r]), have = W.res[r], frac = have / std::max(1.f, rc);
+    centred(TextFormat("%d / %d", int(have), int(rc)), cx, s.y + 88, 15, frac >= .98f ? WARN : INK);
+    barRect({s.x + 18, s.y + 110, s.width - 36, 10}, rc > 0 ? frac : 0.f, frac >= .98f ? BAR_UPGRADE : BAR_BUILD);
+    centred(TextFormat("Share %d%%", W.alloc[r]), cx, s.y + 136, 15, INK);
+
+    Rectangle sl = allocSlider(r);
+    ui::sliderTrack(sl, float(W.alloc[r]) / 100.f,
+                    dragRes == r || CheckCollisionPointRec(m, {sl.x - 12, sl.y - 12, sl.width + 24, sl.height + 24}));
+    centred(W.alloc[r] == 0 ? "None is kept" : (frac >= .98f ? "Full: income is discarded" : "of the hall's capacity"),
+            cx, s.y + 190, 12, frac >= .98f || W.alloc[r] == 0 ? WARN : SOFT);
+
+    Rectangle db = disposeBtn(r);
+    bool armed = disposeArm == r && GetTime() - disposeAt < CONFIRM_SECONDS;
+    if (disposeArm == r && !armed)
+        disposeArm = -1;
+    centred(armed ? TextFormat("Discard all %d?", int(have)) : "Discard this resource", cx, db.y - 18, 12,
+            armed ? WARN : SOFT);
+    ui::drawButton(db, armed ? "Confirm" : "Dispose", have >= 1.f, true, CheckCollisionPointRec(m, db), armed, 14);
+}
+
+// Capacity per Town Hall level as small columns (current level highlighted).
 void TownHallWindow::drawCapacityChart(Rectangle r, int level)
 {
     DrawText("Capacity by Town Hall level", int(r.x), int(r.y), 13, INK);
@@ -194,7 +205,6 @@ void TownHallWindow::drawCapacityChart(Rectangle r, int level)
     }
 }
 
-// clan tab
 void TownHallWindow::sendQuotas()
 {
     app.cmd.quotas(app.world.quota);
@@ -251,67 +261,82 @@ void TownHallWindow::drawClan(Vector2 m)
 {
     const ClientWorld &W = app.world;
     Rectangle c = content(), top{c.x, c.y, c.width, 112};
+    drawClanMembership(m, top);
+
+    Rectangle q{c.x, c.y + 124, c.width, c.height - 124};
+    box(q);
+    DrawText("Defense quotas", int(q.x) + 10, int(q.y) + 8, 18, INK);
+    DrawText("Idle troops of each type sent to every clan mate under attack.", int(q.x) + 12, int(q.y) + 34, 13, SOFT);
+
+    int total = 0;
+    for (int t = 0; t < QUOTA_TYPES; t++)
+    {
+        drawQuotaCard(t, m);
+        total += W.quota[t];
+    }
+    std::string sum = TextFormat("Up to %d troops per attacked clan mate.", total);
+    if (!W.myClan())
+        sum += " Quotas apply once you are in a clan.";
+    DrawText(sum.c_str(), int(q.x) + 12, int(q.y + q.height) - 26, 14, W.myClan() ? INK : WARN);
+}
+
+void TownHallWindow::drawClanMembership(Vector2 m, Rectangle top)
+{
+    const ClientWorld &W = app.world;
     box(top);
     DrawText("Clan", int(top.x) + 10, int(top.y) + 8, 18, INK);
+
     int mc = W.myClan();
     Rectangle cb = clanBtn();
-    if (mc)
-    {
-        int members = 0, leader = 0;
-        for (auto &cl : W.clansList)
-            if (cl.id == mc)
-            {
-                members = cl.members;
-                leader = cl.leader;
-            }
-        textShadow(W.clanName(mc), int(top.x) + 12, int(top.y) + 38, 20, clanColor(mc));
-        std::string sub = TextFormat("%d member%s, leader %s", members, members == 1 ? "" : "s",
-                                     leader ? W.nameOf(leader).c_str() : "?");
-        DrawText(sub.c_str(), int(top.x) + 12, int(top.y) + 64, 13, SOFT);
-        DrawText("Clan mates share vision; their troops help defend you.", int(top.x) + 12, int(top.y) + 82, 13, SOFT);
-        bool armed = leaveArm && GetTime() - leaveAt < CONFIRM_SECONDS;
-        if (leaveArm && !armed)
-            leaveArm = false;
-        ui::drawButton(cb, armed ? "Confirm leave" : "Leave clan", true, true, CheckCollisionPointRec(m, cb), armed,
-                       14);
-        Rectangle mb{cb.x - 168, cb.y, 158, 30};
-        ui::drawButton(mb, "Members", true, false, CheckCollisionPointRec(m, mb), false, 14);
-    }
-    else
+    if (!mc)
     {
         DrawText("You are not in a clan.", int(top.x) + 12, int(top.y) + 40, 16, INK);
         DrawText("Join or create one in the social menu (P) to defend each other.", int(top.x) + 12, int(top.y) + 62,
                  13, SOFT);
         ui::drawButton(cb, "Find a clan", true, false, CheckCollisionPointRec(m, cb), false, 14);
+        return;
     }
-    Rectangle q{c.x, c.y + 124, c.width, c.height - 124};
-    box(q);
-    DrawText("Defense quotas", int(q.x) + 10, int(q.y) + 8, 18, INK);
-    DrawText("Idle troops of each type sent to every clan mate under attack.", int(q.x) + 12, int(q.y) + 34, 13, SOFT);
-    int total = 0;
-    for (int t = 0; t < QUOTA_TYPES; t++)
-    {
-        Kind k = QUOTA_KINDS[t];
-        Rectangle tc = troopCard(t);
-        bool locked = W.thLevel() < unitThLevel(k);
-        card(tc, k, W.quota[t] > 0, CheckCollisionPointRec(m, tc), locked, float(t) * .7f);
-        int owned = 0;
-        W.reg.view<Info>().each([&](const Info &i)
+
+    int members = 0, leader = 0;
+    for (auto &cl : W.clansList)
+        if (cl.id == mc)
         {
-            if (i.owner == W.me && i.kind == k)
-                owned++;
-        });
-        Rectangle la = quotaArrow(t, -1), ra = quotaArrow(t, 1);
-        ui::arrowButton(la, -1, W.quota[t] > 0, CheckCollisionPointRec(m, la));
-        ui::arrowButton(ra, 1, W.quota[t] < MAX_QUOTA_UI, CheckCollisionPointRec(m, ra));
-        centred(std::to_string(W.quota[t]), tc.x + tc.width / 2, la.y + 6, 22, W.quota[t] > 0 ? INK : SOFT);
-        centred(TextFormat("You have %d", owned), tc.x + tc.width / 2, la.y + la.height + 8, 12, SOFT);
-        if (locked)
-            centred(TextFormat("Town Hall Lv%d", unitThLevel(k)), tc.x + tc.width / 2, la.y + la.height + 24, 12, WARN);
-        total += W.quota[t];
-    }
-    std::string sum = TextFormat("Up to %d troops per attacked clan mate.", total);
-    if (!mc)
-        sum += " Quotas apply once you are in a clan.";
-    DrawText(sum.c_str(), int(q.x) + 12, int(q.y + q.height) - 26, 14, mc ? INK : WARN);
+            members = cl.members;
+            leader = cl.leader;
+        }
+    textShadow(W.clanName(mc), int(top.x) + 12, int(top.y) + 38, 20, clanColor(mc));
+    std::string sub =
+        TextFormat("%d member%s, leader %s", members, members == 1 ? "" : "s", leader ? W.nameOf(leader).c_str() : "?");
+    DrawText(sub.c_str(), int(top.x) + 12, int(top.y) + 64, 13, SOFT);
+    DrawText("Clan mates share vision; their troops help defend you.", int(top.x) + 12, int(top.y) + 82, 13, SOFT);
+
+    bool armed = leaveArm && GetTime() - leaveAt < CONFIRM_SECONDS;
+    if (leaveArm && !armed)
+        leaveArm = false;
+    ui::drawButton(cb, armed ? "Confirm leave" : "Leave clan", true, true, CheckCollisionPointRec(m, cb), armed, 14);
+    Rectangle mb{cb.x - 168, cb.y, 158, 30};
+    ui::drawButton(mb, "Members", true, false, CheckCollisionPointRec(m, mb), false, 14);
+}
+
+void TownHallWindow::drawQuotaCard(int t, Vector2 m)
+{
+    const ClientWorld &W = app.world;
+    Kind k = QUOTA_KINDS[t];
+    Rectangle tc = troopCard(t);
+    bool locked = W.thLevel() < unitThLevel(k);
+    card(tc, k, W.quota[t] > 0, CheckCollisionPointRec(m, tc), locked, float(t) * .7f);
+
+    int owned = 0;
+    W.reg.view<Info>().each([&](const Info &i)
+    {
+        if (i.owner == W.me && i.kind == k)
+            owned++;
+    });
+    Rectangle la = quotaArrow(t, -1), ra = quotaArrow(t, 1);
+    ui::arrowButton(la, -1, W.quota[t] > 0, CheckCollisionPointRec(m, la));
+    ui::arrowButton(ra, 1, W.quota[t] < MAX_QUOTA_UI, CheckCollisionPointRec(m, ra));
+    centred(std::to_string(W.quota[t]), tc.x + tc.width / 2, la.y + 6, 22, W.quota[t] > 0 ? INK : SOFT);
+    centred(TextFormat("You have %d", owned), tc.x + tc.width / 2, la.y + la.height + 8, 12, SOFT);
+    if (locked)
+        centred(TextFormat("Town Hall Lv%d", unitThLevel(k)), tc.x + tc.width / 2, la.y + la.height + 24, 12, WARN);
 }

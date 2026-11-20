@@ -15,7 +15,6 @@
 
 namespace fs = std::filesystem;
 
-// assets
 namespace
 {
 std::string assetRoot;
@@ -77,7 +76,7 @@ Rectangle frameRect(const Anim &a, int f)
 
 namespace
 {
-// tiny JSON (for Tiled .tmj)
+// Tiny JSON reader, enough for Tiled .tmj files.
 struct J
 {
     enum T
@@ -134,6 +133,60 @@ struct JParser
         return r;
     }
 
+    void parseObject(J &v)
+    {
+        v.t = J::Obj;
+        i++;
+        ws();
+        while (i < s.size() && s[i] != '}')
+        {
+            ws();
+            std::string k = str();
+            ws();
+            if (s[i] == ':')
+                i++;
+            v.o.push_back({k, parse()});
+            ws();
+            if (s[i] == ',')
+                i++;
+            ws();
+        }
+        i++;
+    }
+
+    void parseArray(J &v)
+    {
+        v.t = J::Arr;
+        i++;
+        ws();
+        while (i < s.size() && s[i] != ']')
+        {
+            v.a.push_back(parse());
+            ws();
+            if (s[i] == ',')
+                i++;
+            ws();
+        }
+        i++;
+    }
+
+    void parseNumber(J &v)
+    {
+        size_t e = i;
+        while (e < s.size() &&
+               (std::isdigit(uint8_t(s[e])) || s[e] == '-' || s[e] == '+' || s[e] == '.' || s[e] == 'e' || s[e] == 'E'))
+            e++;
+        if (e == i)
+        {
+            ok = false;
+            i++;
+            return;
+        }
+        v.t = J::Num;
+        v.n = std::atof(s.substr(i, e - i).c_str());
+        i = e;
+    }
+
     J parse()
     {
         J v;
@@ -143,42 +196,12 @@ struct JParser
             ok = false;
             return v;
         }
+
         char c = s[i];
         if (c == '{')
-        {
-            v.t = J::Obj;
-            i++;
-            ws();
-            while (i < s.size() && s[i] != '}')
-            {
-                ws();
-                std::string k = str();
-                ws();
-                if (s[i] == ':')
-                    i++;
-                v.o.push_back({k, parse()});
-                ws();
-                if (s[i] == ',')
-                    i++;
-                ws();
-            }
-            i++;
-        }
+            parseObject(v);
         else if (c == '[')
-        {
-            v.t = J::Arr;
-            i++;
-            ws();
-            while (i < s.size() && s[i] != ']')
-            {
-                v.a.push_back(parse());
-                ws();
-                if (s[i] == ',')
-                    i++;
-                ws();
-            }
-            i++;
-        }
+            parseArray(v);
         else if (c == '"')
         {
             v.t = J::Str;
@@ -197,32 +220,95 @@ struct JParser
             i += 5;
         }
         else if (s.compare(i, 4, "null") == 0)
-        {
             i += 4;
-        }
         else
-        {
-            size_t e = i;
-            while (e < s.size() && (std::isdigit(uint8_t(s[e])) || s[e] == '-' || s[e] == '+' || s[e] == '.' ||
-                                    s[e] == 'e' || s[e] == 'E'))
-                e++;
-            if (e == i)
-            {
-                ok = false;
-                i++;
-                return v;
-            }
-            v.t = J::Num;
-            v.n = std::atof(s.substr(i, e - i).c_str());
-            i = e;
-        }
+            parseNumber(v);
         return v;
     }
 };
 
+double numOr(const J &j, const char *k, double d)
+{
+    auto v = j.get(k);
+    return v ? v->n : d;
+}
+
+void readMapProperties(const J &root, TMap &m)
+{
+    auto props = root.get("properties");
+    if (!props)
+        return;
+
+    for (auto &pr : props->a)
+    {
+        auto nm = pr.get("name");
+        auto v = pr.get("value");
+        if (!nm || !v)
+            continue;
+        if (nm->s == "scale")
+            m.scale = float(v->n);
+        if (nm->s == "padding")
+            m.padding = int(v->n);
+    }
+}
+
+void loadTilesets(const J &root, TMap &m, const std::string &name)
+{
+    auto ts = root.get("tilesets");
+    if (!ts)
+        return;
+
+    for (auto &t : ts->a)
+    {
+        auto img = t.get("image");
+        if (!img)
+        {
+            TraceLog(LOG_WARNING, "%s: external tilesets are not supported; use 'Embed tileset' in Tiled",
+                     name.c_str());
+            continue;
+        }
+
+        std::string full = (fs::path(asset("ui")) / img->s).lexically_normal().string();
+        Texture2D tx = LoadTexture(full.c_str());
+        if (tx.id == 0)
+        {
+            TraceLog(LOG_WARNING, "missing tileset image %s", full.c_str());
+            continue;
+        }
+
+        SetTextureFilter(tx, TEXTURE_FILTER_POINT);
+        m.sets.push_back({int(numOr(t, "firstgid", 1)), int(numOr(t, "columns", 1)), int(numOr(t, "tilewidth", 64)),
+                          int(numOr(t, "tileheight", 64)), tx});
+    }
+}
+
+// Later layers overwrite earlier ones; the top three gid bits are Tiled's flip flags.
+void readLayers(const J &root, TMap &m)
+{
+    auto ls = root.get("layers");
+    if (!ls)
+        return;
+
+    for (auto &l : ls->a)
+    {
+        auto ty = l.get("type"), d = l.get("data");
+        if (!ty || ty->s != "tilelayer" || !d)
+            continue;
+
+        if (m.data.empty())
+            m.data.assign(size_t(m.w) * size_t(m.h), 0);
+
+        for (size_t i = 0; i < d->a.size() && i < m.data.size(); i++)
+        {
+            uint32_t g = uint32_t(d->a[i].n) & 0x1FFFFFFFu;
+            if (g)
+                m.data[i] = g;
+        }
+    }
+}
+
 } // namespace
 
-// Tiled maps used as UI backgrounds
 TMap loadTMap(const std::string &name)
 {
     TMap m;
@@ -245,78 +331,22 @@ TMap loadTMap(const std::string &name)
         return m;
     }
 
-    auto num = [&](const J &j, const char *k, double d)
-    {
-        auto v = j.get(k);
-        return v ? v->n : d;
-    };
+    m.w = int(numOr(root, "width", 0));
+    m.h = int(numOr(root, "height", 0));
+    m.tw = int(numOr(root, "tilewidth", 64));
+    m.th = int(numOr(root, "tileheight", 64));
+    readMapProperties(root, m);
+    loadTilesets(root, m, name);
+    readLayers(root, m);
 
-    m.w = int(num(root, "width", 0));
-    m.h = int(num(root, "height", 0));
-    m.tw = int(num(root, "tilewidth", 64));
-    m.th = int(num(root, "tileheight", 64));
-
-    if (auto props = root.get("properties"))
-        for (auto &pr : props->a)
-        {
-            auto nm = pr.get("name");
-            auto v = pr.get("value");
-            if (!nm || !v)
-                continue;
-            if (nm->s == "scale")
-                m.scale = float(v->n);
-            if (nm->s == "padding")
-                m.padding = int(v->n);
-        }
-
-    if (auto ts = root.get("tilesets"))
-        for (auto &t : ts->a)
-        {
-            auto img = t.get("image");
-            if (!img)
-            {
-                TraceLog(LOG_WARNING, "%s: external tilesets are not supported; use 'Embed tileset' in Tiled",
-                         name.c_str());
-                continue;
-            }
-
-            std::string full = (fs::path(asset("ui")) / img->s).lexically_normal().string();
-            Texture2D tx = LoadTexture(full.c_str());
-            if (tx.id == 0)
-            {
-                TraceLog(LOG_WARNING, "missing tileset image %s", full.c_str());
-                continue;
-            }
-
-            SetTextureFilter(tx, TEXTURE_FILTER_POINT);
-            m.sets.push_back({int(num(t, "firstgid", 1)), int(num(t, "columns", 1)), int(num(t, "tilewidth", 64)),
-                              int(num(t, "tileheight", 64)), tx});
-        }
-
-    if (auto ls = root.get("layers"))
-        for (auto &l : ls->a)
-        {
-            auto ty = l.get("type"), d = l.get("data");
-            if (!ty || ty->s != "tilelayer" || !d)
-                continue;
-
-            if (m.data.empty())
-                m.data.assign(size_t(m.w) * size_t(m.h), 0);
-
-            for (size_t i = 0; i < d->a.size() && i < m.data.size(); i++)
-            {
-                uint32_t g = uint32_t(d->a[i].n) & 0x1FFFFFFFu;
-                if (g)
-                    m.data[i] = g;
-            }
-        }
-
+    // Highest firstgid first, so drawTMap picks the owning tileset with the first match.
     std::sort(m.sets.begin(), m.sets.end(), [](const TMap::TS &a, const TMap::TS &b) { return a.first > b.first; });
 
     m.ok = m.w > 0 && m.h > 0 && !m.sets.empty() && !m.data.empty();
     TraceLog(LOG_INFO, "UI map %s: %dx%d tiles, scale %.2f, ok=%d", name.c_str(), m.w, m.h, m.scale, int(m.ok));
     return m;
 }
+
 // Draws the whole map stretched into `dst` (natural size when dst matches size()).
 void drawTMap(const TMap &m, Rectangle dst, Color tint)
 {

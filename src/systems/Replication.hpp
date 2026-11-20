@@ -7,6 +7,14 @@
 
 struct Systems;
 
+struct PathCand
+{
+    uint32_t uid;
+    float d; // distance to the viewer camera
+    std::vector<IV> pts;
+    uint64_t h;
+};
+
 class Replication
 {
   public:
@@ -25,5 +33,17 @@ class Replication
     World &world;
     entt::registry &reg;
     Systems &s;
+
+    bool writeStateEntity(Writer &w, int id, const SrcGrid &grid, entt::entity e, const Uid &uid, const Owner &o,
+                          const Info &in, const Health &h);
+    void unitFields(entt::entity e, const Unit &u, uint8_t &state, uint8_t &aux, uint8_t &aim);
+    void buildingFields(entt::entity e, const Info &in, uint8_t &state, uint8_t &aux, uint8_t &aim, uint8_t &prog,
+                        uint16_t &stock);
+    std::unordered_map<int64_t, Bits> sharedExplored(int id);
+    void writeRosterPlayers(Writer &w, int id, const Pos *thPos, const bool *hasTh);
+    void writeRosterClans(Writer &w);
+    std::vector<PathCand> collectPaths(int id);
+    uint16_t writePathDeltas(Writer &w, std::unordered_map<uint32_t, uint64_t> &sent, const std::vector<PathCand> &cs);
+
     std::unordered_map<uint32_t, uint64_t> pathSent[MAX_PLAYERS + 1]; // per player: uid -> hash of the path last sent
 };

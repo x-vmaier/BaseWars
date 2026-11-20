@@ -25,7 +25,7 @@ Rectangle Chat::bar() const
 bool Chat::channelOk(int c) const
 {
     return c != 1 || app.world.myClan() != 0;
-} // clan chat needs a clan
+}
 Rectangle Chat::tab(int i) const
 {
     Rectangle b = bar();
@@ -46,8 +46,9 @@ void Chat::update(Vector2 m)
             text.push_back(char(c));
     if ((IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) && !text.empty())
         text.pop_back();
+    // Left the clan: fall back to Global.
     if (!channelOk(ch))
-        ch = 0; // left the clan: back to Global
+        ch = 0;
     if (IsKeyPressed(KEY_TAB))
         do
             ch = (ch + 1) % 3;
@@ -75,34 +76,50 @@ void Chat::draw()
 {
     double now = GetTime();
     Rectangle b = bar();
-    std::vector<const ChatLine *> vis;
-    for (auto it = lines.rbegin(); it != lines.rend() && vis.size() < 8; ++it)
-        if (isOpen || now - it->t < 14)
-            vis.push_back(&*it);
-    float y = b.y - 28 - 17.f * float(vis.size());
-    if (!vis.empty())
-        DrawRectangleRounded({b.x, y - 4, b.width, 17.f * float(vis.size()) + 8}, .1f, 4,
-                             rgb(20, 14, 10, isOpen ? 190 : 120));
-    for (auto it = vis.rbegin(); it != vis.rend(); ++it)
-    {
-        const ChatLine &c = **it;
-        std::string t = std::string("[") + channelName(c.ch)[0] + "] " + c.name + ": " + c.text;
-        while (MeasureText(t.c_str(), 13) > int(b.width) - 12 && t.size() > 4)
-            t.pop_back();
-        float a = isOpen ? 1.f : std::clamp(float(14 - (now - c.t)) / 3.f, 0.f, 1.f);
-        DrawText(t.c_str(), int(b.x) + 6, int(y), 13,
-                 Color{channelColor(c.ch).r, channelColor(c.ch).g, channelColor(c.ch).b, (unsigned char)(255 * a)});
-        y += 17;
-    }
+    drawLines(b, now);
+
     if (!isOpen)
     {
         DrawText("Enter: chat", int(b.x + b.width) - MeasureText("Enter: chat", 11) - 4, int(b.y) + 8, 11,
                  rgb(210, 214, 225, 170));
         return;
     }
-    Vector2 m = ui::mouse();
+    drawTabs(ui::mouse());
+    drawInputBar(b, now);
+}
+
+// Closed: only recent lines, fading out. Open: the last 8 at full alpha.
+void Chat::drawLines(const Rectangle &b, double now)
+{
+    std::vector<const ChatLine *> vis;
+    for (auto it = lines.rbegin(); it != lines.rend() && vis.size() < 8; ++it)
+        if (isOpen || now - it->t < 14)
+            vis.push_back(&*it);
+
+    float y = b.y - 28 - 17.f * float(vis.size());
+    if (!vis.empty())
+        DrawRectangleRounded({b.x, y - 4, b.width, 17.f * float(vis.size()) + 8}, .1f, 4,
+                             rgb(20, 14, 10, isOpen ? 190 : 120));
+
+    for (auto it = vis.rbegin(); it != vis.rend(); ++it)
+    {
+        const ChatLine &c = **it;
+        std::string t = std::string("[") + channelName(c.ch)[0] + "] " + c.name + ": " + c.text;
+        while (MeasureText(t.c_str(), 13) > int(b.width) - 12 && t.size() > 4)
+            t.pop_back();
+
+        float a = isOpen ? 1.f : std::clamp(float(14 - (now - c.t)) / 3.f, 0.f, 1.f);
+        DrawText(t.c_str(), int(b.x) + 6, int(y), 13,
+                 Color{channelColor(c.ch).r, channelColor(c.ch).g, channelColor(c.ch).b, (unsigned char)(255 * a)});
+        y += 17;
+    }
+}
+
+void Chat::drawTabs(Vector2 m)
+{
     if (!channelOk(ch))
         ch = 0;
+
     std::string tip;
     for (int i = 0; i < 3; i++)
     {
@@ -111,15 +128,21 @@ void Chat::draw()
         if (hov && !ok)
             tip = "Join a clan first";
     }
-    if (!tip.empty())
-    {
-        int w = MeasureText(tip.c_str(), 12);
-        Rectangle t1 = tab(1);
-        DrawRectangleRounded({t1.x, t1.y - 24, float(w) + 12, 20}, .3f, 4, rgb(30, 22, 16, 235));
-        DrawText(tip.c_str(), int(t1.x) + 6, int(t1.y) - 20, 12, rgb(255, 200, 160));
-    }
+    if (tip.empty())
+        return;
+
+    int w = MeasureText(tip.c_str(), 12);
+    Rectangle t1 = tab(1);
+    DrawRectangleRounded({t1.x, t1.y - 24, float(w) + 12, 20}, .3f, 4, rgb(30, 22, 16, 235));
+    DrawText(tip.c_str(), int(t1.x) + 6, int(t1.y) - 20, 12, rgb(255, 200, 160));
+}
+
+void Chat::drawInputBar(const Rectangle &b, double now)
+{
     DrawRectangleRounded(b, .3f, 6, rgb(255, 250, 235, 235));
     DrawRectangleRoundedLinesEx(b, .3f, 6, 2, channelColor(ch).r > 200 ? rgb(60, 120, 200) : rgb(60, 140, 100));
+
+    // Show the tail of the text so the cursor stays visible.
     std::string shown = text + (int(now * 2) % 2 == 0 ? "|" : "");
     while (MeasureText(shown.c_str(), 14) > int(b.width) - 14 && shown.size() > 2)
         shown.erase(shown.begin());
