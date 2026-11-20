@@ -1,100 +1,99 @@
 # Base Wars - agent handoff
 
-C++23 RTS (EnTT + Raylib + Steamworks). One authoritative `server`, one `client`. **Read `TODO.md` first** (status, the ordered Roadmap and the task details),
-then `ARCHITECTURE.md` (layout, conventions, extension recipes, planned architecture, test hooks). Branch: `feature/prompt-implementation`. Work is committed through T13b.
+C++23 RTS (EnTT + Raylib + Steamworks). One authoritative `server`, one `client`. Branch: `feature/prompt-implementation`.
+Read order: this file, then `TODO.md` (status, roadmap, current task specs), then `ARCHITECTURE.md` (layout, conventions, recipes, tests, hooks).
+Specs of tasks that are not yet current live in `BACKLOG.md`; open it only when a task becomes current.
 
-## Session protocol (read this first)
+The owner does not approve plans and does not playtest every task. You work autonomously and prove correctness with automated checks.
 
-1. Do **only the first unfinished task in the Roadmap table of `TODO.md`** (currently **T18**; task ids are stable names, the Roadmap order is what counts, e.g. T18 and T19 come
-   before T14). Never start the next task in the same session.
-2. Start in plan mode: read the relevant code, then show a short plan (design + file list + order) and wait for approval before editing.
-3. Work in small steps. After each step: build warning-free, run the game, and verify the result (see "Definition of done").
-4. Stop after the task. Update `TODO.md` (move it to Done, list what was only read-verified), update `ARCHITECTURE.md` if structure or extension points changed, commit, report.
+## Session protocol (one task per session)
+
+1. Take the first Roadmap row in `TODO.md` with status `todo` (currently **T24a**). Skip `blocked` rows.
+2. Read the task text (in `TODO.md`, or in `BACKLOG.md` if it is not listed there; move its spec into `TODO.md` first) and the code it names.
+   Write a plan of at most 15 lines (design, files, order, the selftest you will add) and continue immediately.
+3. Decide small things yourself and log them as one line in the Decisions log (`Txx: decision - reason`).
+   **Ask the owner only before irreversible choices** (protocol format, save format, deleting player data) when the task text does not already decide it.
+4. Work in small steps. After each step build warning-free, run `tools/check.sh`, fix, commit.
+5. Finish with the close-out below, then stop and report.
+
+### Task size
+
+A task should fit one session and one coherent concept. Rough guide: about 12 files and 600 net lines, but **coherence beats the count**:
+never split a change into half-working pieces just to hit a number. If the work clearly outgrows the session, stop at a green, committed, shippable state,
+split the remainder into new Roadmap rows (same id + suffix) and say so in the report.
+
+### Close-out (short)
+
+* `tools/check.sh` is green.
+* `TODO.md`: task moved to Done (one row), next row is current, "only verified by reading" and new Known gaps listed, Decisions added.
+* `ARCHITECTURE.md` updated **only if** layout, protocol, save format, config keys, registries, selftests or env hooks changed.
+* `CLAUDE.md`: add a rule under "Rules that bit us" only for a genuinely new trap; update the "currently Txx" pointer.
+* Commit `Txx: <summary>`. No push, no history rewrite, no force operations.
+
+### If you cannot finish
+
+If the gate cannot go green after reasonable effort: revert to the last green commit (or keep the work on a `wip/Txx` branch), record what failed and why in `TODO.md` Known gaps, and stop.
+Also stop for: missing owner-supplied assets or licences (mark the row `blocked: <reason>`, take the next row), or a destructive action outside the repo/build dir (never do it).
+A contradiction between two rules is resolved in favour of the Design goals in `TODO.md`; log it. A flaky tool (Steam, window manager) is not a reason to stop: retry.
+
+## Verification
+
+* `tools/check.sh` is the gate: release + asan builds with zero warnings, every `server --selftest`, clang-format check. Docs-sync and style greps are **advisory warnings**, not failures.
+* Every task adds at least one selftest scenario that asserts behaviour with numbers (headless, fixed seed, no Steam, fast-forwarded ticks). Selftests also run `World::checkInvariants()`.
+* Test unhappy paths where relevant: save/reload mid-action, disconnect/reconnect, destroyed target, empty/full inventory, two players interacting.
+* **Stuck-state rule:** every player-facing state (defeat, resettle offer, pending build, queue, convoy, voyage) has a guaranteed exit (timeout, cancel, auto-resolve) proven by a selftest.
+* Visible changes (UI, rendering) get one scripted client run with `BW_SHOT` that you view yourself and judge. Screenshots are **optional evidence, never part of the gate** (the client run is flaky).
+* Client-heavy tasks (interpolation, prediction, map art, juice) cannot be fully proven headless. Say so in the report and list what the owner should look at in a short manual playtest.
+* Never claim a mechanic works unless it was run. Whatever was only read goes into `TODO.md` "only verified by reading".
 
 ## Build
 
-* Steamworks SDK must exist in `third_party/steamworks` (git-ignored; it is on the dev machine). CMake fails without it.
-* `cmake --preset release && cmake --build build/release` (or any build dir: `cmake -S . -B <dir> -G Ninja && ninja -C <dir>`).
-  Both targets must build with **zero warnings**. After CMake changes re-run configure (sources are globbed with CONFIGURE_DEPENDS).
-* The build dir gets `assets` (symlink), `config.txt`, `server.cfg`, `steam_appid.txt`, libsteam_api.
+* Steamworks SDK must exist in `third_party/steamworks` (git-ignored). CMake fails without it.
+* `cmake --preset release && cmake --build build/release`; sanitizer build `cmake --preset asan` (from T24a). Both targets build with zero warnings.
+  After CMake changes re-run configure (sources are globbed).
 
-## Running the game (verified workflow)
+## Running the game
 
-* **The Steam client must be running** (`steam -silent &`, wait until `~/.steam/steam.pipe` is fresh and it has finished updating) or both exes fail
-  in `SteamAPI_Init` / `SteamGameServer_Init` (the client prints the reason). The dev machine's Steam works once started.
-* From the build dir: `./server 7777 42 mysave.bin Test --local &` (fresh save name each time; `--local` = no Steam backend login, direct IP only), then
-  `BW_SHOT=out.png BW_SHOT_FRAMES=300 timeout 60 ./client --connect 127.0.0.1:7777` and view the PNG with the Read tool.
-* Client hooks (`src/client/TestHooks.cpp`): `BW_UI`, `BW_SITE`, `BW_CAM`, `BW_ZOOM`, `BW_CMD`, `BW_MOUSE`, `BW_SCALE`, `BW_THTAB`... Server hooks and
-  `debug_instant_*` timers are listed in `ARCHITECTURE.md` / `config/server.cfg`. `BW_NETLOG=1` traces Steam connection states.
-* Known flakiness: ~1 in 3 scripted client runs time out without a screenshot (re-run); the client segfaults in `steamclient.so` at exit (ignore).
+* Selftests need no Steam (from T24a): `./server --selftest <name|list|all>`.
+* Real client runs need the Steam client running (`steam -silent &`, wait until `~/.steam/steam.pipe` is fresh), otherwise `SteamAPI_Init` fails.
+* From the build dir: `./server 7777 42 mysave.bin Test --local &` (fresh save name each time), then
+  `BW_SHOT=out.png BW_SHOT_FRAMES=300 timeout 60 ./client --connect 127.0.0.1:7777`, view the PNG. `tools/shot.sh` wraps this with retries.
+* Hooks are listed in `ARCHITECTURE.md`. `BW_NETLOG=1` traces Steam connection states.
+* Known flakiness: about 1 in 3 scripted client runs time out (retry up to 3 times); the client segfaults in `steamclient.so` at exit (ignore).
 
 ## Rules that bit us
 
-* **Identity is the authenticated 64-bit SteamID** (planned fix in T18; until it lands the server still matches by `uuid`, do not extend that). Never key ownership, saves or
-  names on machine ids, local files, IPs or connection slots, and never accept a player name from the client: names come from Steam.
-* **Server authority:** the server owns all simulation state (combat, health, resources, pathfinding, timers, rewards, ruins, shields). The client renders, predicts (after T19) and
-  sends commands. A feature that needs new state also needs: a component + system on the server, replication, a `SaveSystem` entry (bump `SAVE_MAGIC`), `server.cfg` tunables.
-* **New content goes through the registries** (`KindDefs.hpp` entry + `KT_*` tag, `KindFactories.cpp` hooks, drawer / art tables). Never add a `switch` or `if (kind == ...)` chain.
-* **Protocol:** append-only; T19 deliberately breaks it once (command sequence envelope, tick-numbered snapshots, protocol version). After T19 every client command carries a sequence
-  number and every state message a tick; keep new messages inside that scheme.
-* **Assets:** only the Tiny Swords Free Pack that is in `assets/` may be used (units / buildings in 5 colors, terrain, VFX, UI). The Enemy Pack and any audio are **not** in the
-  repo; do not invent sprites or reference missing files. Generated map / UI art (T21) is the only exception, produced by a script in `tools/`.
-* Screenshot runs: the tiling window manager gives the client a random window size per run, so compare before / after images only at the same size (re-run until equal) and expect
-  moving units and foliage to differ between any two runs.
+* **Identity is the authenticated 64-bit SteamID** (fix planned in T18a; until then the server matches by `uuid`, do not extend that). Never key ownership, saves or names on machine ids, local files, IPs or connection slots; never trust a client-sent name.
+* **Server authority:** the server owns all simulation state. A feature with new state needs: component + system, replication, `SaveSystem` entry (bump `SAVE_MAGIC`), `server.cfg` tunables, an invariant if it can dangle.
+* **New content goes through the registries** (`KindDefs.hpp` entry + `KT_*` tag, `KindFactories.cpp`, drawer/art tables). No `switch` or `if (kind == ...)` chains.
+* **Protocol:** append-only; T19a is the one planned break (sequence envelope, tick-numbered snapshots, protocol version). After it, keep new messages inside that scheme.
+* **Real time vs sim time:** anything that must survive restarts or offline time stores a wall-clock expiry, never a tick count.
+* **Fairness:** a threat the player cannot see coming or counter is a bug. Anything that can destroy progress needs a telegraph and a cap. Threats come only from the Pacing Director (after T25a) or explicit player action.
+* **Assets:** only the Tiny Swords Free Pack in `assets/`. The Enemy Pack is not in the repo; never invent sprites or reference missing files. Generated map art (T21a) and sounds (T28a) are the only exceptions.
+* Audio must never crash or block: no audio device = silently disabled.
+* Screenshot runs: the tiling WM gives a random window size per run; compare before/after only at equal size.
+* Do not put `pkill -f './server 7777'` in a shell line that contains that text (it kills its own shell); use `pkill -x server`.
+* Parallel agents: split by disjoint files; only one agent at a time touches shared files (`Shared.hpp`, `World.*`, `PacketHandler.*`, `SaveSystem.*`, `ServerConfig.*`). Sub-agents do not run git write commands.
+* Tunables go in `ServerConfig` + `config/server.cfg`; shared gate/cost/time rules in `src/common/Progression.hpp`.
+* No `.inc` files, no extra executables or bots (selftests live inside `server`, helper scripts in `tools/`).
+* Client UI: every resource cost goes through `ui::drawCosts`; use `ui::` screen/mouse helpers inside UI code.
+* Windows: never name a variable `near` / `far`.
 
-* Protocol is append-only: new `Msg` enumerators go at the END of the `C_*` / `S_*` group. Bump `SAVE_MAGIC` (`SaveSystem.hpp`) when the save layout changes.
-* Tunables -> `ServerConfig` + `config/server.cfg` (documented); gate/cost/time rules -> `src/common/Progression.hpp` (shared by client and server).
-* No `.inc` files, no monoliths (keep files < ~600 lines), header beside source, no extra executables/bots.
-* Client UI: every resource cost goes through `ui::drawCosts` (`src/ui/CostRow`); buttons carry only a label. Use `ui::` screen/mouse helpers inside UI code.
-* Do not run `pkill -f './server 7777'` in the same shell command line that contains that text (it kills its own shell); use `pkill -x server`.
-* Parallel agents: split by disjoint files, and only one agent at a time may touch shared files (`Shared.hpp`, `World.*`, `PacketHandler.*`,
-  `SaveSystem.*`, `ServerConfig.*`). Agents must not run git write commands; the lead builds, verifies and commits per task.
-* Never claim a mechanic works unless it was run; `TODO.md` lists what was only verified by reading.
+## Code style
 
-## Code style (mandatory for all new and touched code)
+Goal: code a new contributor can read in one pass and extend without touching many files. `.clang-format` is the formatter; run it on touched files.
 
-The goal is code a new contributor can read in one pass and extend without touching many files.
+* **File header:** a short Doxygen block (`@file`, `@brief`) as the first thing in the file, before `#pragma once`. Doxygen is used nowhere else.
+* **Comments:** plain `//`, the *why* only (non-obvious rule, invariant, past bug, unit/ownership). Never restate the code.
+* **Lambdas in containers** (draw queue, job list, callbacks) stay tiny and just call a named method.
+* **Prefer** functions under ~50 lines and files under ~600 lines. These are guidance: split when you touch a file and it improves clarity, do not shuffle code only to hit a number.
+* **ECS (EnTT):** components are plain data; behaviour lives in systems iterating views. A type is one table entry plus a factory. Validate stored entities with `registry.valid(e)`.
+  Do not add/remove components of the iterated type while iterating a view. Cleanup of dependents uses `registry.on_destroy<T>()`. Singletons go in `registry.ctx()`.
+* **Robustness:** validate everything from the network (range, ownership, rate, size). A malformed packet never crashes or corrupts the server. No `assert` for input checks.
+* Leave touched files better than you found them.
 
-* **File header:** a Doxygen block as the very first thing in the file, BEFORE `#pragma once` and includes. One brief line, no essays.
-  This is the ONLY place Doxygen is used:
+## Definition of done
 
-  ```cpp
-  /**
-   * @file NavalSystem.hpp
-   * @brief Ship movement, boarding and voyages.
-   */
-  #pragma once
-  ```
-
-* **Comments everywhere else:** plain `//` comments, no Doxygen tags (`@brief`, `@param`, `/** */`) on classes, functions or members.
-  Comment the *why* only: a non-obvious rule, an invariant, a past bug, a unit or ownership that cannot be read from the code.
-  Never restate what the code says. Self-explanatory functions get no comment. No per-line comments.
-* **No large lambdas pushed into containers.** Never `items.push_back({y, [=, this]() { ...50 lines... }})`.
-  A lambda in a draw queue, job list or callback is at most ~3 lines and only calls a named method:
-
-  ```cpp
-  items.push_back({sortY, [=, this] { drawBarracks(b); }});
-  ```
-
-  Real logic lives in named private methods or free functions.
-* **Blank lines group logic.** Separate setup, computation, side effects and the return. Separate unrelated steps. Split any function longer than ~50 lines
-  into named helpers. No walls of code.
-* **ECS style (EnTT):**
-  * Components are plain data. Behavior lives in systems that iterate views (`registry.view<A, B>()`).
-  * A type (building, unit, NPC, ship) is one data-table entry plus a factory that attaches its components.
-    A new mechanic is a new component plus a system, never a `switch` on the type enum in several files.
-  * Validate every stored `entt::entity` with `registry.valid(e)` before use. Never add or remove components of the iterated type while iterating a view; defer it.
-  * Cleanup of dependent state (jobs, ships, caravans) hooks `registry.on_destroy<T>()` instead of being repeated in many systems.
-  * Shared singletons (e.g. wind) go in `registry.ctx()`, not in globals.
-* **Extensibility over switches.** The recipes are in `ARCHITECTURE.md` ("Extending the game"); keep them true.
-* **Formatting:** the tree is formatted with `.clang-format`. Run it on every file you touch.
-* **Leave every file you touch better than you found it:** the same rules apply to code you edit, not only to new code.
-
-## Definition of done (for every task)
-
-* Both targets build with zero warnings.
-* The changed behavior was actually run (scripted server + client run with a screenshot where it is visible); anything only read is listed in `TODO.md`.
-* New files follow the code style above; no function over ~50 lines; no multi-line lambdas in containers.
-* Style check for files you created or touched: each file starts with the Doxygen file block (`grep -L '@file' <files>` prints nothing) and contains
-  no other Doxygen tags (`grep -n '@brief\|@param\|/\*\*' <files>` shows only the header block).
-* New env hooks you used are added to `ARCHITECTURE.md`; `TODO.md` is updated; one commit per logical step.
+* `tools/check.sh` green (zero warnings, all selftests, format).
+* The task's "Done when" is met and covered by a selftest or an inspected screenshot.
+* Close-out above is complete.
