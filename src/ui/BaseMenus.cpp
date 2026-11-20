@@ -136,7 +136,7 @@ void BaseMenus::drawDefeat(Vector2 m)
     const ClientWorld::DefeatView &d = app.world.defeat;
     Rectangle r = defeatPanel();
     drawTMap(mPaper, r);
-    ui::panelTitle(r, "Defeated", 22, .55f, 13);
+    ui::panelTitle(r, "Defeated", 22, .55f);
 
     std::string by = d.conqueror.empty() ? "Your Town Hall has fallen." : "Conquered by " + d.conqueror;
     if (!d.clan.empty())

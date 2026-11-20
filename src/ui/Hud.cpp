@@ -12,6 +12,14 @@
 
 #include <cmath>
 
+namespace
+{
+// The ribbon art (title_ribbon / hud_resources): straight band between the swallow tails, as fractions of the
+// map's size, measured on the composed tilemap.
+constexpr float BAND_L = .13f, BAND_R = .87f, BAND_CY = .516f;
+constexpr float NAME_SCALE = 1.5f; // name banner = title ribbon (scale .5) enlarged to match the resource ribbon
+} // namespace
+
 void Hud::load()
 {
     mHud = loadTMap("hud_resources");
@@ -33,12 +41,13 @@ Rectangle Hud::hudRect() const
 Rectangle Hud::nameRect() const
 {
     Vector2 s = ui::titleMap().size();
-    return {10, 78, s.x, s.y};
+    float k = NAME_SCALE;
+    return {10, 10 + hudRect().height + 6, s.x * k, s.y * k};
 }
 Rectangle Hud::coordRect() const
 {
     Rectangle f = app.minimap.frame();
-    return {f.x + f.width / 2 - 78, f.y + f.height + 2, 156, 24};
+    return {f.x + f.width / 2 - 100, f.y + f.height + 2, 200, 32};
 }
 bool Hud::over(Vector2 m) const
 {
@@ -58,17 +67,26 @@ void Hud::drawResources()
     Rectangle h = hudRect();
     drawTMap(mHud, h);
 
-    float slot = (h.width - 2 * float(mHud.padding) - 60) / 4.f;
+    // Each resource is one group (icon + value over name) centred in its quarter of the ribbon's straight band.
+    const float bandL = h.x + h.width * BAND_L, bandW = h.width * (BAND_R - BAND_L), cy = h.y + h.height * BAND_CY;
+    const float slot = bandW / 4.f, iconPx = 32, gap = 6;
+    const int valueFs = 17, nameFs = 10;
     for (int r = 0; r < R_Count; r++)
     {
-        float x = h.x + float(mHud.padding) + 22 + float(r) * slot;
-        ui::drawResourceIcon(r, x, h.y + h.height * .5f - 14, .45f);
-
         // food (meat) pays for every unit, building, upgrade and repair
         bool food = r == R_Meat, low = food && W.res[r] < 60.f;
         Color c = low ? (std::fmod(GetTime(), 1.0) < .5 ? rgb(255, 110, 90) : rgb(255, 200, 120)) : WHITE;
-        textShadow(std::to_string(int(W.res[r])), int(x) + 30, int(h.y + h.height * .5f) - 13, 18, c);
-        textShadow(food ? "Food" : RES_NAME[r], int(x) + 30, int(h.y + h.height * .5f) + 5, 10,
+        std::string value = std::to_string(int(W.res[r]));
+        const char *name = food ? "Food" : RES_NAME[r];
+
+        int textW = std::max(measureText(value, valueFs), measureText(name, nameFs));
+        int vh = textHeight(valueFs), nh = textHeight(nameFs);
+        float groupW = iconPx + gap + float(textW), x = bandL + slot * (float(r) + .5f) - groupW / 2;
+        ui::drawResourceIcon(r, x, cy - iconPx / 2, iconPx / 64.f);
+
+        float top = cy - float(vh + nh - 4) / 2;
+        textShadow(value, int(x + iconPx + gap), int(top), valueFs, c);
+        textShadow(name, int(x + iconPx + gap), int(top) + vh - 4, nameFs,
                    food ? rgb(255, 200, 150) : rgb(230, 220, 200));
     }
     if (W.res[R_Meat] < 60.f && app.session.welcomed)
@@ -91,10 +109,13 @@ void Hud::drawNameBanner()
     });
     Texture2D av = tex(std::string("UI Elements/UI Elements/Human Avatars/Avatars_") + (W.me % 25 + 1 < 10 ? "0" : "") +
                        std::to_string(W.me % 25 + 1) + ".png");
-    DrawTexturePro(av, {0, 0, 256, 256}, {nr.x + 22, nr.y + 8, 44, 44}, {0, 0}, 0, WHITE);
-    textShadow(W.myName, int(nr.x) + 76, int(nr.y) + 12, 18, teamColor(W.me));
-    textShadow(TextFormat("Units %d/%d  Buildings %d  FPS %d", units, UNIT_CAP, bld, GetFPS()), int(nr.x) + 76,
-               int(nr.y) + 34, 12, rgb(235, 235, 235));
+    float cy = nr.y + nr.height * BAND_CY, avPx = 52, ax = nr.x + nr.width * (BAND_L + .015f);
+    DrawTexturePro(av, {0, 0, 256, 256}, {ax, cy - avPx / 2, avPx, avPx}, {0, 0}, 0, WHITE);
+    int tx = int(ax + avPx + 10), nameFs = 17, statFs = 11, nh = textHeight(nameFs), sh = textHeight(statFs);
+    int top = int(cy) - (nh + sh - 2) / 2;
+    textShadow(W.myName, tx, top, nameFs, teamColor(W.me));
+    textShadow(TextFormat("Units %d/%d  Buildings %d  FPS %d", units, UNIT_CAP, bld, GetFPS()), tx, top + nh - 2,
+               statFs, rgb(235, 235, 235));
 }
 
 // Bottom left: message log above the help line. Both wrap at the chat column (bottom right) so nothing overlaps it.
@@ -107,9 +128,10 @@ void Hud::drawLog()
     auto help = wrapText(
         "LMB select/attack  RMB command/menu  M move  A attack  B build  P players  H home  Arrows/MMB pan  Wheel zoom",
         maxW, 11);
+    int helpLh = textHeight(11) + 1, logLh = textHeight(16) + 2;
     for (size_t i = 0; i < help.size(); i++)
-        textShadow(help[i], 14, sh - 14 - 13 * int(help.size() - 1 - i), 11, rgb(210, 214, 225, 200));
-    int ly = sh - 30 - 13 * int(help.size() - 1);
+        textShadow(help[i], 14, sh - 6 - helpLh * int(help.size() - i), 11, rgb(210, 214, 225, 200));
+    int ly = sh - 8 - helpLh * int(help.size()) - logLh;
     for (int i = int(logs.size()) - 1; i >= 0; i--)
     {
         double age = now - logs[i].t;
@@ -120,7 +142,7 @@ void Hud::drawLog()
         for (size_t k = ls.size(); k-- > 0;)
         {
             textShadow(ls[k], 14, ly, 16, c);
-            ly -= 20;
+            ly -= logLh;
         }
     }
     Input::Mode mode = app.input.mode;
@@ -171,9 +193,9 @@ void Hud::drawCoords()
     DrawRectangleRounded(cr, .3f, 6, rgb(40, 28, 20, 225));
     DrawRectangleRoundedLinesEx(cr, .3f, 6, 2, rgb(20, 12, 8));
     std::string cs =
-        TextFormat("X %d    Y %d", int(std::floor(app.cam.target.x / TILE)), int(std::floor(app.cam.target.y / TILE)));
-    drawText(cs.c_str(), int(cr.x + cr.width / 2) - measureText(cs.c_str(), 16) / 2, int(cr.y) + 4, 16,
-             rgb(255, 240, 200));
+        TextFormat("X %d  Y %d", int(std::floor(app.cam.target.x / TILE)), int(std::floor(app.cam.target.y / TILE)));
+    drawText(cs, int(cr.x + cr.width / 2) - measureText(cs, 22, TextFace::Pixel) / 2,
+             int(cr.y + cr.height / 2) - textHeight(22, TextFace::Pixel) / 2, 22, rgb(255, 240, 200), TextFace::Pixel);
 }
 
 void Hud::drawSocialTab()
@@ -181,8 +203,7 @@ void Hud::drawSocialTab()
     Rectangle t = socialTabBtn();
     DrawRectangleRounded(t, .3f, 6, rgb(70, 50, 34, 235));
     DrawRectangleRoundedLinesEx(t, .3f, 6, 2, rgb(30, 20, 14));
-    DrawTexturePro(tex("UI Elements/UI Elements/Icons/Icon_06.png"), {0, 0, 64, 64}, {t.x + 4, t.y + 8, 40, 40}, {0, 0},
-                   0, WHITE);
+    ui::drawTabIcon(t, 6, "Icon_06.png");
 }
 
 void Hud::drawDragRect()

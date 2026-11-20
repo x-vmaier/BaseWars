@@ -73,7 +73,7 @@ A contradiction between two rules is resolved in favour of the Design goals in `
 * **Protocol:** append-only inside the T19a envelope (`PROTOCOL_VERSION`, command seq, tick-numbered unreliable `S_State` chunks under `SNAPSHOT_MTU`). Frequent state goes into snapshot chunks, never into a big message; one-off events stay reliable.
 * **Real time vs sim time:** anything that must survive restarts or offline time stores a wall-clock expiry, never a tick count.
 * **Fairness:** a threat the player cannot see coming or counter is a bug. Anything that can destroy progress needs a telegraph and a cap. Threats come only from the Pacing Director (after T25a) or explicit player action.
-* **Assets:** only the Tiny Swords Free Pack in `assets/` (plus Noto Sans in `assets/fonts/`, OFL). The Enemy Pack is not in the repo; never invent sprites or reference missing files. Generated map art (T21a) and sounds (T28a) are the only exceptions.
+* **Assets:** only the Tiny Swords Free Pack in `assets/` (plus Noto Sans and Press Start 2P in `assets/fonts/`, OFL). The Enemy Pack is not in the repo; never invent sprites or reference missing files. Generated map art (T21a) and sounds (T28a) are the only exceptions.
 * Audio must never crash or block: no audio device = silently disabled.
 * Screenshot runs: the tiling WM gives a random window size per run; compare before/after only at equal size.
 * Do not put `pkill -f './server 7777'` in a shell line that contains that text (it kills its own shell); use `pkill -x server`.

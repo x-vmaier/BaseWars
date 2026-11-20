@@ -530,7 +530,7 @@ void ContextPanel::draw()
     const Info &in = W.reg.get<Info>(it->second);
     Rectangle cr = rect();
     drawTMap(mCtx, cr);
-    ui::panelTitle(cr, KINFO[in.kind].name, 20, .55f, 12);
+    ui::panelTitle(cr, KINFO[in.kind].name, 20, .55f);
 
     float x = cr.x + float(mCtx.padding) + 8, y = topY();
     for (auto &l : lines)

@@ -11,6 +11,8 @@
 
 class App;
 
+inline constexpr float SIDE_Y = 232; // top of the left side tabs, below the resource ribbon and name banner
+
 class Hud
 {
   public:
@@ -22,7 +24,7 @@ class Hud
     Rectangle hudRect() const;
     Rectangle nameRect() const;
     Rectangle coordRect() const;
-    static Rectangle socialTabBtn() { return {0, 214, 40, 56}; }
+    static Rectangle socialTabBtn() { return {0, SIDE_Y + 64, 40, 56}; }
     bool over(Vector2 m) const; // ribbon / banner / coordinates / social tab
 
     void drawTop(); // resource ribbon + name banner

@@ -40,9 +40,9 @@ void drawButton(Rectangle r, const std::string &label, bool enabled, bool red, b
         fs--;
         tw = measureText(label.c_str(), fs);
     }
-    drawText(label.c_str(), int(r.x + r.width / 2) - tw / 2 + 1, int(r.y + r.height / 2) - textHeight(fs) / 2, fs,
+    drawText(label.c_str(), int(r.x + r.width / 2) - tw / 2 + 1, int(r.y + r.height / 2) - textHeight(fs) / 2 + 1, fs,
              rgb(20, 20, 40, 180));
-    drawText(label.c_str(), int(r.x + r.width / 2) - tw / 2, int(r.y + r.height / 2) - textHeight(fs) / 2 - 1, fs,
+    drawText(label.c_str(), int(r.x + r.width / 2) - tw / 2, int(r.y + r.height / 2) - textHeight(fs) / 2, fs,
              enabled ? WHITE : rgb(200, 200, 200));
 }
 void drawResourceIcon(int r, float x, float y, float s)
@@ -121,13 +121,20 @@ void sliderTrack(Rectangle sl, float k, bool hover)
     DrawCircleV({sl.x + sl.width * k, sl.y + sl.height / 2}, r, hover ? rgb(255, 245, 215) : rgb(250, 235, 200));
     DrawCircleLines(int(sl.x + sl.width * k), int(sl.y + sl.height / 2), r, rgb(60, 40, 28));
 }
-void panelTitle(Rectangle panel, const std::string &title, int fs, float rise, int textDy)
+void drawTabIcon(Rectangle tab, float visibleLeft, const char *icon)
+{
+    const float sz = 30;
+    float cx = tab.x + visibleLeft + (tab.width - visibleLeft) / 2, cy = tab.y + tab.height / 2;
+    DrawTexturePro(tex(std::string("UI Elements/UI Elements/Icons/") + icon), {0, 0, 64, 64},
+                   {cx - sz / 2, cy - sz / 2, sz, sz}, {0, 0}, 0, WHITE);
+}
+void panelTitle(Rectangle panel, const std::string &title, int fs, float rise)
 {
     Vector2 ts = mTitle.size();
     Rectangle tr{panel.x + panel.width / 2 - ts.x / 2, panel.y - ts.y * rise, ts.x, ts.y};
     drawTMap(mTitle, tr);
-    textShadow(title, int(tr.x + tr.width / 2) - measureText(title.c_str(), fs) / 2, int(tr.y + tr.height / 2) - textDy,
-               fs, WHITE);
+    textShadow(title, int(tr.x + tr.width / 2) - measureText(title, fs, TextFace::Pixel) / 2,
+               int(tr.y + tr.height * .516f) - textHeight(fs, TextFace::Pixel) / 2, fs, WHITE, TextFace::Pixel);
 }
 
 } // namespace ui

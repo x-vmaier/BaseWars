@@ -262,8 +262,8 @@ void TownHallWindow::drawFrame(Vector2 m, const Info &in)
     Rectangle tr{sz.x / 2 - mTitle.size().x / 2, -30, mTitle.size().x, mTitle.size().y};
     drawTMap(mTitle, tr);
     std::string title = TextFormat("Town Hall - Level %d", in.aux);
-    textShadow(title, int(tr.x + tr.width / 2) - measureText(title.c_str(), 20) / 2, int(tr.y + tr.height / 2) - 12, 20,
-               WHITE);
+    textShadow(title, int(tr.x + tr.width / 2) - measureText(title, 20, TextFace::Pixel) / 2,
+               int(tr.y + tr.height * .516f) - textHeight(20, TextFace::Pixel) / 2, 20, WHITE, TextFace::Pixel);
     Rectangle closeR{sz.x - 52, 20, 26, 20};
     ui::drawButton(closeR, "X", true, true, CheckCollisionPointRec(m, closeR), false, 12);
 

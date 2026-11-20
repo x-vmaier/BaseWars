@@ -15,6 +15,8 @@ const TMap &titleMap(); // "title_ribbon": panel titles and the HUD name banner
 
 void drawButton(Rectangle r, const std::string &label, bool enabled, bool red, bool hover, bool pressed, int fs = 14);
 void drawResourceIcon(int r, float x, float y, float s);
+// Icon centred in the visible part of a side tab (the first `visibleLeft` px hide behind the menu).
+void drawTabIcon(Rectangle tab, float visibleLeft, const char *icon);
 void statBar(float x, float y, float w, float frac, Color c, const std::string &label, const std::string &value,
              const std::string &bonus);
 // Single-line text field: appends typed printable characters / handles backspace; true when the text changed.
@@ -28,6 +30,6 @@ void tabStrip(const Rectangle *tabs, const char *const *labels, int n, int activ
 // Horizontal slider track with a knob at frac (0..1), in the pause-menu colours.
 void sliderTrack(Rectangle r, float frac, bool hover);
 // Draws a title ribbon centred above a panel with `title` in it (height factor `rise` of the ribbon above r.y).
-void panelTitle(Rectangle panel, const std::string &title, int fs, float rise, int textDy);
+void panelTitle(Rectangle panel, const std::string &title, int fs, float rise);
 
 } // namespace ui

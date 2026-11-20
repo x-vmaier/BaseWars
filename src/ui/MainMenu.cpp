@@ -242,10 +242,10 @@ void MainMenu::drawTitle(const Rectangle &r)
     drawTMap(ui::titleMap(), {tr.x, tr.y, tr.width, tr.height});
 
     // Drop shadow first, then the lit text one pixel up-left.
-    drawText("BASE WARS", int(tr.x + tr.width / 2) - measureText("BASE WARS", 34, TextWeight::Bold) / 2 + 2,
-             int(tr.y) + 22, 34, rgb(20, 40, 60), TextWeight::Bold);
-    drawText("BASE WARS", int(tr.x + tr.width / 2) - measureText("BASE WARS", 34, TextWeight::Bold) / 2, int(tr.y) + 20,
-             34, rgb(255, 245, 210), TextWeight::Bold);
+    int tw = measureText("BASE WARS", 44, TextFace::Pixel), th = textHeight(44, TextFace::Pixel);
+    int tx = int(tr.x + tr.width / 2) - tw / 2, ty = int(tr.y + tr.height * .516f) - th / 2;
+    drawText("BASE WARS", tx + 2, ty + 2, 44, rgb(20, 40, 60), TextFace::Pixel);
+    drawText("BASE WARS", tx, ty, 44, rgb(255, 245, 210), TextFace::Pixel);
 }
 
 void MainMenu::drawTopBar(Vector2 m)

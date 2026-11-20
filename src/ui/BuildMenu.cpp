@@ -11,7 +11,9 @@
 #include "rendering/UnitAnims.hpp"
 #include "ui/CostRow.hpp"
 #include "ui/GameText.hpp"
+#include "ui/Hud.hpp"
 #include "ui/UiScale.hpp"
+#include "ui/Widgets.hpp"
 
 void BuildMenu::load()
 {
@@ -23,11 +25,11 @@ Rectangle BuildMenu::rect() const
 {
     Vector2 s = mBuild.size();
     float needed = 2.f * float(mBuild.padding) + 34.f + float(COUNT) * 47.f + 26.f;
-    return {LEFT - (1 - slide) * (s.x + LEFT + 12), 150, s.x, std::max(s.y, needed)};
+    return {LEFT - (1 - slide) * (s.x + LEFT + 12), SIDE_Y, s.x, std::max(s.y, needed)};
 }
 Rectangle BuildMenu::tab() const
 {
-    return {std::max(0.f, rect().x + rect().width - 6), 150, 40, 56};
+    return {std::max(0.f, rect().x + rect().width - 6), SIDE_Y, 40, 56};
 }
 Rectangle BuildMenu::item(int i) const
 {
@@ -78,7 +80,8 @@ void BuildMenu::draw(float dt)
 
     Rectangle br = rect();
     drawTMap(mBuild, br);
-    textShadow("BUILD", int(br.x + br.width / 2) - 28, int(br.y) + mBuild.padding + 8, 20, rgb(255, 240, 200));
+    textShadow("BUILD", int(br.x + br.width / 2) - measureText("BUILD", 20, TextFace::Pixel) / 2,
+               int(br.y) + mBuild.padding + 8, 20, rgb(255, 240, 200), TextFace::Pixel);
 
     int hoverItem = -1, hoverGate = 0;
     for (int i = 0; i < COUNT; i++)
@@ -92,7 +95,7 @@ void BuildMenu::draw(float dt)
             hoverGate = gate;
         }
     }
-    drawText("Shift: keep placing", int(br.x) + mBuild.padding + 4, int(br.y + br.height) - mBuild.padding - 20, 12,
+    drawText("Shift: keep placing", int(br.x) + mBuild.padding + 4, int(br.y + br.height) - mBuild.padding - 26, 12,
              rgb(255, 235, 200));
     if (hoverItem >= 0)
         tooltip(LIST[hoverItem], item(hoverItem), hoverGate);
@@ -103,8 +106,7 @@ void BuildMenu::drawTab()
     Rectangle tb = tab();
     DrawRectangleRounded(tb, .3f, 6, rgb(70, 50, 34, 235));
     DrawRectangleRoundedLinesEx(tb, .3f, 6, 2, rgb(30, 20, 14));
-    Texture2D hm = tex("UI Elements/UI Elements/Icons/Icon_01.png");
-    DrawTexturePro(hm, {0, 0, 64, 64}, {tb.x + 4, tb.y + 8, 40, 40}, {0, 0}, 0, WHITE);
+    ui::drawTabIcon(tb, 6, "Icon_01.png");
 }
 
 void BuildMenu::drawItem(int i, bool hov, int gate)

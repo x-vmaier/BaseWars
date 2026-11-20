@@ -152,7 +152,7 @@ void PauseMenu::draw()
     DrawRectangle(0, 0, ui::screenW(), ui::screenH(), rgb(0, 0, 0, 150));
     Rectangle r = rect();
     drawTMap(mPause, r);
-    ui::panelTitle(r, "Paused", 22, .55f, 13);
+    ui::panelTitle(r, "Paused", 22, .55f);
 
     drawScaleRow();
     drawWindowRow(m);
