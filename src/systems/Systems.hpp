@@ -9,6 +9,7 @@
 #include "systems/CombatSystem.hpp"
 #include "systems/ConstructionSystem.hpp"
 #include "systems/ConvoyHaulSystem.hpp"
+#include "systems/DefeatSystem.hpp"
 #include "systems/DefenseSystem.hpp"
 #include "systems/EnvironmentSystem.hpp"
 #include "systems/FactionSystem.hpp"
@@ -34,7 +35,8 @@ struct Systems
         : spawn(w, *this), session(w, *this), packets(w, *this), repl(w, *this), build(w, *this), units(w, *this),
           env(w, *this), training(w, *this), fire(w, *this), territory(w, *this), clearing(w, *this), convoy(w, *this),
           hunt(w, *this), faction(w, *this), town(w, *this), patrol(w, *this), raid(w, *this), clan(w, *this),
-          defense(w, *this), naval(w, *this), ferry(w, *this), combat(w, *this), save(w, *this), construction(w, *this)
+          defense(w, *this), naval(w, *this), ferry(w, *this), combat(w, *this), save(w, *this), construction(w, *this),
+          defeat(w, *this)
     {
     }
     Systems(const Systems &) = delete;
@@ -64,4 +66,5 @@ struct Systems
     CombatSystem combat;
     SaveSystem save;
     ConstructionSystem construction;
+    DefeatSystem defeat;
 };

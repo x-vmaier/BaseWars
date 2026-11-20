@@ -117,7 +117,7 @@ void CombatSystem::killRewards(entt::entity e, Kind k, int owner, int killer, Po
 }
 
 // A fallen faction Town Hall ends the town; a player's last Town Hall is a defeat.
-void CombatSystem::townHallFell(int owner, int killer, uint16_t town)
+void CombatSystem::townHallFell(int owner, int killer, uint16_t town, IV tile)
 {
     if (isFactionOwner(owner))
     {
@@ -134,7 +134,7 @@ void CombatSystem::townHallFell(int owner, int killer, uint16_t town)
             other = true;
     });
     if (!other)
-        defeat(owner, killer);
+        defeat(owner, killer, tile);
 }
 
 void CombatSystem::processKills()
@@ -155,14 +155,15 @@ void CombatSystem::processKills()
         killRewards(e, k, owner, killer, p);
 
         uint16_t town = reg.all_of<TownTag>(e) ? reg.get<TownTag>(e).town : uint16_t(0);
+        IV tile = isBuilding(k) ? IV{reg.get<Building>(e).tx, reg.get<Building>(e).ty} : IV{0, 0};
         world.destroyNow(e);
         if (k == K_TownHall)
-            townHallFell(owner, killer, town);
+            townHallFell(owner, killer, town, tile);
     }
     world.toKill.clear();
 }
 
-void CombatSystem::defeat(int victim, int killer)
+void CombatSystem::defeat(int victim, int killer, IV hall)
 {
     if (isPlayer(killer) && killer != victim && world.pl[killer].used && !world.sameClan(killer, victim))
     {
@@ -178,13 +179,7 @@ void CombatSystem::defeat(int victim, int killer)
     }
     if (s.clan.baseDefeat(victim))
         return; // clan members become homeless instead of respawning
-    world.removeOwner(victim);
-    world.resetProfile(victim);
-    s.spawn.spawnBase(victim, world.bp[victim].friends);
-    world.pl[victim].sentFog.clear();
-    world.pl[victim].sentTerr.clear();
-    world.say(victim, "Your Town Hall fell! You rebuild at a fresh clearing elsewhere in the world.");
-    std::printf("%s was defeated\n", world.pl[victim].name.c_str());
+    s.defeat.defeat(victim, killer, hall);
 }
 
 // Explicit Attack orders are dropped when the target is gone, allied or aboard a ship.

@@ -67,6 +67,7 @@ void App::loadGfx()
     minimap.load();
     context.load();
     social.load();
+    baseMenus.load();
     bigMap.load();
     training.load();
     townHall.load();

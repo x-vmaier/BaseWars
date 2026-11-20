@@ -92,6 +92,38 @@ void SpawnSystem::spawnBase(int id, const std::vector<uint64_t> &friends)
     Pos anchor;
     IV c = spawnAnchor(id, friends, anchor) ? findClearing(&anchor) : findClearing();
     testSpawn(c); // BW_SPAWN test hook
+    foundBase(id, c);
+}
+
+IV SpawnSystem::offerSite(int id, const std::vector<uint64_t> &friends, int attempt)
+{
+    // Priority classes keep their order; within a class halls are sorted by uid so the rotation is deterministic.
+    struct Cand
+    {
+        int cls;
+        uint32_t uid;
+        Pos at;
+    };
+    std::vector<Cand> cands;
+    reg.view<Uid, Info, Building, Owner>().each([&](const Uid &u, const Info &i, const Building &b, const Owner &o)
+    {
+        if (i.kind != K_TownHall || !isPlayer(o.id) || o.id == id)
+            return;
+        bool isFriend = world.pl[o.id].steamId != 0 &&
+                        std::find(friends.begin(), friends.end(), world.pl[o.id].steamId) != friends.end();
+        int cls = isFriend ? 0 : (world.sameClan(id, o.id) || world.allied(id, o.id) ? 1 : 2);
+        cands.push_back({cls, u.id, footCenter(i.kind, b.tx, b.ty)});
+    });
+    if (cands.empty())
+        return findClearing();
+    std::sort(cands.begin(), cands.end(),
+              [](const Cand &a, const Cand &b) { return a.cls != b.cls ? a.cls < b.cls : a.uid < b.uid; });
+    const Pos &anchor = cands[size_t(attempt) % cands.size()].at;
+    return findClearing(&anchor);
+}
+
+void SpawnSystem::foundBase(int id, IV c)
+{
     auto th = world.makeBuilding(K_TownHall, uint8_t(id), c.x - 2, c.y - 1, true);
     Pos p = world.posOf(th);
     world.pl[id].cam = p;

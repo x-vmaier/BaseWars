@@ -18,6 +18,7 @@ void Sim::baseSecond()
     sys.defense.supportSecond();
     sys.session.authSecond();
     sys.clan.homelessSecond();
+    sys.defeat.second();
     sys.faction.demandSecond();
     for (int id = 1; id <= MAX_PLAYERS; id++)
         if (world.pl[id].online)

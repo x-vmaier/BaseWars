@@ -7,8 +7,7 @@
 
 struct Systems;
 
-inline constexpr uint32_t SAVE_MAGIC =
-    0x39535742u; // "BWS9" (BWS8 + profiles keyed by SteamID only: no uuid, no stored name)
+inline constexpr uint32_t SAVE_MAGIC = 0x30315742u; // "BW10" (BWS9 + defeat / resettle state, burning ruins)
 
 class SaveSystem
 {

@@ -174,7 +174,7 @@ bool PacketHandler::readEntity(Reader &r)
 
     auto e = it->second;
     auto &old = reg.get<Info>(e);
-    if (ow == w.me && hp < old.hp - .5f)
+    if (ow == w.me && hp < old.hp - .5f && w.defeat.phase == DF_None)
     {
         app.post.damage = std::min(.7f, app.post.damage + .12f);
         app.post.shake = std::max(app.post.shake, 3.f);
@@ -478,6 +478,9 @@ bool PacketHandler::basePacket(uint8_t type, Reader &r)
     case S_Econ:
         onEcon(r);
         return true;
+    case S_Defeat:
+        onDefeat(r);
+        return true;
     default:
         return false;
     }
@@ -552,6 +555,40 @@ void PacketHandler::onBaseInfo(Reader &r)
         app.placement.buildKind = -1;
 
     w.wasHomeless = w.homeless;
+}
+
+void PacketHandler::onDefeat(Reader &r)
+{
+    ClientWorld::DefeatView v;
+    v.phase = r.get<uint8_t>();
+    if (v.phase > DF_Offered)
+        return;
+    if (v.phase != DF_None)
+    {
+        v.conqueror = app.session.resolveNames(r.str());
+        v.clan = r.str();
+        v.ruin = {r.get<float>(), r.get<float>()};
+        v.site = {r.get<float>(), r.get<float>()};
+        v.offerEndsAt = GetTime() + double(r.get<uint16_t>());
+    }
+    if (!r.ok)
+        return;
+
+    ClientWorld::DefeatView &old = app.world.defeat;
+    bool moved = v.phase != old.phase || (v.phase == DF_Offered && (v.site.x != old.site.x || v.site.y != old.site.y));
+    old = v;
+    if (v.phase == DF_None)
+        return;
+
+    // No own entities exist any more: stop the damage vignette for good and look at the ruin / offered site.
+    app.post.damage = 0;
+    app.post.shake = 0;
+    app.placement.cancel();
+    if (moved)
+    {
+        Pos at = v.phase == DF_Offered ? v.site : v.ruin;
+        app.cam.target = {at.x * TILE, at.y * TILE};
+    }
 }
 
 void PacketHandler::onJobs(Reader &r)

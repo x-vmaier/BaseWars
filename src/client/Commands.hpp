@@ -44,6 +44,8 @@ class Commands
     void relocate(uint32_t building, IV t);
     void dequeue(uint32_t building, int idx);
     void repair(uint32_t building, int mode); // 0 start a repair, 1 cancel the running upgrade / repair
+    void resettle();                          // defeated: first offer, or the next candidate site
+    void resettleAccept();                    // found the Town Hall at the offered site
     void camera(Vector2 camTarget);           // where we look (server streams nearby chunks)
 
   private:

@@ -22,6 +22,7 @@ const Scenario SCENARIOS[] = {
     {"raid", "forced raid: raiders arrive, hall survives or raid expires", raidTest},
     {"net-garbage", "malformed / oversized / out-of-range packets", netGarbageTest},
     {"identity", "SteamID-only ownership: separate towns, reconnects, forged / unanswered logins", identityTest},
+    {"defeat", "defeat: burning ruin, resettle offers, blocked commands, timeouts", defeatTest},
     {"invariants", "invariant checker catches an orphaned job", invariantsTest},
 };
 

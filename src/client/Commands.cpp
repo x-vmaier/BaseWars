@@ -91,6 +91,18 @@ void Commands::clanJoin(int c)
     w.put<uint8_t>(C_ClanJoin).put<uint8_t>(uint8_t(c));
     app.session.send(w);
 }
+void Commands::resettle()
+{
+    Writer w;
+    w.put<uint8_t>(C_Resettle);
+    app.session.send(w);
+}
+void Commands::resettleAccept()
+{
+    Writer w;
+    w.put<uint8_t>(C_ResettleAccept);
+    app.session.send(w);
+}
 void Commands::clanLeave()
 {
     Writer w;

@@ -72,8 +72,19 @@ struct Demand
     float filled = 0;
 }; // what a faction's towns want right now
 
+// Defeat / resettlement state of one player (saved).
+struct DefeatState
+{
+    uint8_t phase = DF_None;
+    uint8_t conqueror = 0; // owner id of the last attacker (0 = unknown)
+    uint8_t tries = 0;     // offers shown so far (picks the next candidate)
+    Pos ruin{0, 0}, site{0, 0};
+    double offerAt = 0; // world.clock when the offer was made; only counts while online (reset on login)
+};
+
 struct BaseProf
 { // per-player base mechanics state (saved in the "base" section)
+    DefeatState defeat;
     uint8_t quota[QUOTA_TYPES]{3, 2, 0,
                                0}; // defense quota per QUOTA_KINDS type: troops sent to every attacked clan mate
     uint8_t alloc[R_Count]{100, 100, 100, 100}; // Town Hall storage share per resource (% of the hall's capacity)

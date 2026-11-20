@@ -34,10 +34,18 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
         return;
 
     Profile &p = world.pl[id];
+    if (s.defeat.blocked(id) && type != C_Cam && type != C_Chat && type != C_Resettle && type != C_ResettleAccept)
+        return; // a defeated player may only look around, chat and resettle
     switch (type)
     {
     case C_Cam:
         onCam(p, r);
+        break;
+    case C_Resettle:
+        s.defeat.onResettle(id);
+        break;
+    case C_ResettleAccept:
+        s.defeat.onAccept(id);
         break;
     case C_Build:
         onBuild(id, p, r);

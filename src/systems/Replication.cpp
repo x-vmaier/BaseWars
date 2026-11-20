@@ -61,7 +61,9 @@ bool Replication::writeStateEntity(Writer &w, int id, const SrcGrid &grid, entt:
     Pos ps = world.posOf(e);
     // Test hook: show every entity.
     static const bool seeAll = std::getenv("BW_SEEALL") != nullptr;
-    if (!seeAll && !world.allied(id, o.id) && !grid.seen(ps.x, ps.y, isBuilding(in.kind) ? 2.f : 0.f) &&
+    const Ruin *ruin = reg.try_get<Ruin>(e);
+    if (!seeAll && !(ruin && ruin->victim == id) && !world.allied(id, o.id) &&
+        !grid.seen(ps.x, ps.y, isBuilding(in.kind) ? 2.f : 0.f) &&
         !((reg.all_of<Convoy>(e) || reg.all_of<Haul>(e)) && s.convoy.spottedForClan(id, uid.id)))
         return false;
 

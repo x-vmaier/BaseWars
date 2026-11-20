@@ -32,6 +32,14 @@ inline constexpr int TEAM_COLORS = 5;
 inline constexpr int SPAWN_MIN_DIST = 72;
 inline constexpr int SPAWN_RADIUS = 140;
 
+// A player whose last Town Hall fell: banner until they ask to resettle, then one offered site at a time.
+enum DefeatPhase : uint8_t
+{
+    DF_None,
+    DF_Defeated, // burning ruin, banner with the Resettle button
+    DF_Offered   // a site is offered: only Accept / Resettle (next site) are allowed
+};
+
 // NPC factions own villages/towns. Their owner ids live above the player id range.
 inline constexpr int FACTION_BASE = 100;
 inline constexpr int FACTION_COUNT = 5;
@@ -119,10 +127,14 @@ enum Msg : uint8_t
     S_ShipInfo, // [ships] path lines, ship passenger/cargo breakdown
     S_Queue,
     S_Alert,
-    S_BaseInfo, // [base] training queues, clan alerts, own base info
-    S_Jobs,     // [sites] construction / upgrade / repair jobs of own and allied buildings
-    S_Econ
-}; // [economy] donation cooldown, faction demands and gift multipliers
+    S_BaseInfo,       // [base] training queues, clan alerts, own base info
+    S_Jobs,           // [sites] construction / upgrade / repair jobs of own and allied buildings
+    S_Econ,           // [economy] donation cooldown, faction demands and gift multipliers
+    C_Resettle,       // [defeat] no payload: request the first resettlement offer / the next candidate site
+    C_ResettleAccept, // [defeat] no payload: found the Town Hall at the offered site
+    S_Defeat          // [defeat] u8 phase (DefeatPhase), then if phase != 0: str conqueror, str clan, f32 ruin x,y,
+                      // f32 site x,y, u16 seconds left of the offer
+};
 // S_BaseInfo: u8 quota (total), u8 homeless, u8 moving, u8 move %, then u8 x4 quota per QUOTA_KINDS type and u8 x
 // R_Count storage shares %.
 

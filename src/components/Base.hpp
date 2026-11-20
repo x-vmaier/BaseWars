@@ -49,6 +49,15 @@ struct Support
     int fails = 0;
 };
 
+// Remains of a defeated town (kind K_Ruin, neutral owner). `expiresAt` is wall-clock seconds so it survives restarts;
+// T20d reuses this for destroyed buildings.
+struct Ruin
+{
+    double expiresAt = 0;
+    uint8_t victim = 0; // player who lost the town (the only one who sees it without vision)
+    bool burning = true;
+};
+
 struct Extinguish
 {
     uint32_t target;

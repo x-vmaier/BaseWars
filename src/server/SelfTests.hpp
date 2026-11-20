@@ -66,6 +66,7 @@ void raidTest(Ctx &);
 void netGarbageTest(Ctx &);
 void invariantsTest(Ctx &);
 void identityTest(Ctx &);
+void defeatTest(Ctx &);
 
 int runCli(const std::string &what);
 

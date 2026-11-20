@@ -13,7 +13,7 @@ src/common/   KindDefs.hpp (kind registry: KINDS table, KT_* tags), Shared.hpp (
 src/components/  data-only EnTT components (server side)
 src/networking/  SteamServerNet / SteamClientNet (Steam Networking Sockets), SteamClient (login/friends), ServerBrowser
 src/server/   World (shared server state + entity helpers), Sim (system order per tick), Invariants (checkInvariants), ServerMain (main + net loop), SelfTests (+ selftests/*.cpp)
-src/systems/  one class per server system, all taking World& and Systems& (see Systems.hpp)
+src/systems/  one class per server system (DefeatSystem = ruin + resettlement), all taking World& and Systems& (see Systems.hpp)
 src/client/   App (frame loop), Session, PacketHandler, Commands, Input, Placement, ClientWorld, TestHooks, Settings
 src/rendering/  renderers (terrain, water, buildings, units, ships, effects, post-fx, minimap), Assets, Bars, Sprites
 src/ui/       widgets (CostRow, tabs, sliders, arrows) and panels (Hud, BuildMenu, ContextPanel, TrainingPanel = Archery,
@@ -33,7 +33,7 @@ Headers sit beside their `.cpp`. No `.inc` files. Files should stay readable (gu
 
 * `tools/check.sh` is the gate: release + asan builds, all selftests, clang-format check. Docs-sync (every `BW_*` env hook and selftest name appears in this file) and header checks are advisory warnings.
 * **Selftests:** `server --selftest <name|list|all>`. Headless: no Steam, fixed seed, fast-forwarded ticks, deterministic, exit 0/1. Registered by name in `src/server/SelfTests.cpp`, one file per feature under `src/server/selftests/`.
-  Every feature task adds a scenario with numeric assertions. Baseline: `boot`, `saveload` (save -> load -> save byte-identical, so saves must be written in a deterministic order), `economy`, `raid`, `net-garbage`, `invariants` (the checker catches an orphaned job), `identity` (SteamID-only ownership, forged / pending / timed-out logins).
+  Every feature task adds a scenario with numeric assertions. Baseline: `boot`, `saveload` (save -> load -> save byte-identical, so saves must be written in a deterministic order), `economy`, `raid`, `net-garbage`, `invariants` (the checker catches an orphaned job), `identity` (SteamID-only ownership, forged / pending / timed-out logins), `defeat` (burning ruin, resettle offers, blocked commands, timeouts).
   Scenarios use `selftest::Fixture` (a `Sim` = World + Systems, offline transport, fake connections via `join`, `run(seconds)`); `Sim` (`src/server/Sim.cpp`) holds the tick order shared with the real server loop.
 * **Invariants:** `World::checkInvariants()` (always on in selftests, `BW_INVARIANTS=1` in real runs): stored entities valid, no job / ship / caravan / garrison referencing a dead entity, resources >= 0, footprints do not overlap, at most one Town Hall per owner, timed states have expiries.
   A new component that can dangle adds its check here.
@@ -56,7 +56,7 @@ Headers sit beside their `.cpp`. No `.inc` files. Files should stay readable (gu
 
 * The server is authoritative; the client sends `C_*` commands and renders `S_*` messages. Network input is validated (range, owner, rate, size).
 * Protocol: append new enumerators to the END of the `C_*` / `S_*` group of `Msg` in `Shared.hpp`. (T19a is the one planned break.)
-* Savegame (BWS9): bump `SAVE_MAGIC` (`SaveSystem.hpp`) when the layout changes; an older format is moved aside (`.bad`) and a fresh world starts.
+* Savegame (BW10): bump `SAVE_MAGIC` (`SaveSystem.hpp`) when the layout changes; an older format is moved aside (`.bad`) and a fresh world starts.
   A damaged optional section is skipped; an unreadable mandatory part stops the server instead of overwriting.
 * Tuning belongs in `ServerConfig` + `config/server.cfg`; shared gate/cost rules in `Progression.hpp`.
 * Anything that must survive restarts or offline time uses wall-clock expiries, not ticks.
@@ -87,9 +87,9 @@ One registry per family; ids (`enum Kind`) are persisted and sent, so append onl
 
 Client: `BW_SHOT`, `BW_SHOT_FRAMES`, `BW_CAM`, `BW_ZOOM`, `BW_CMD`, `BW_MOUSE`, `BW_UI`, `BW_SCALE`, `BW_MENU`, `BW_SITE`, `BW_THTAB`, `BW_THHOVER`, `BW_THCLICK`, `BW_WIN`.
 `BW_SITE` verbs: `build`, `upgrade`, `train:<building kind>:<unit kind>@<frame>`, `repair`, `cancel`, `ctx`, `donate`, `alloc`, `dispose`, `quota`.
-Server: `BW_RICH`, `BW_AGGRO`, `BW_REVEAL`, `BW_RAIDNOW`, `BW_SEEALL`, `BW_BASETEST`, `BW_BASESPEED`, `BW_BASEDEBUG`, `BW_HURT`, `BW_SPAWN`, `BW_ARMY`, `BW_PATROLNOW`, `BW_WORLDLOG`, `BW_INVARIANTS` (log invariant violations once per second). Flag: `server --selftest <name|list|all>`.
+Server: `BW_RICH`, `BW_AGGRO`, `BW_REVEAL`, `BW_RAIDNOW`, `BW_SEEALL`, `BW_BASETEST`, `BW_BASESPEED`, `BW_BASEDEBUG`, `BW_HURT`, `BW_SPAWN`, `BW_ARMY`, `BW_PATROLNOW`, `BW_WORLDLOG`, `BW_DEFEAT=<seconds>[,offer]` (defeat every online player once the world clock passes it; `,offer` also asks for the first resettlement site), `BW_INVARIANTS` (log invariant violations once per second). Flag: `server --selftest <name|list|all>`.
 Instant timers for fast testing are `debug_instant_*` in `config/server.cfg`.
-Client `BW_DEV_ID=<n>` (n < 2^32): identity for `--local` servers without Steam login. Hooks arrive with their tasks and are added here then: force-defeat hooks (T18b), fake latency/loss (T19a), `BW_PACING` (T25a).
+Client `BW_DEV_ID=<n>` (n < 2^32): identity for `--local` servers without Steam login. Hooks arrive with their tasks and are added here then: fake latency/loss (T19a), `BW_PACING` (T25a).
 
 ## Planned architecture
 
@@ -98,6 +98,6 @@ The design of each upcoming system is in its task spec (`TODO.md` / `BACKLOG.md`
 * Server owns state; the client renders, predicts (T19c) and sends commands.
 * Threats come from one place, the Pacing Director (`Pacing` singleton in `registry.ctx()`, real-time persisted timers, offline pause); patrol, faction and raid code ask it instead of rolling their own timers.
 * Persistent identity is the authenticated SteamID (T18a); names are resolved client-side from Steam.
-* Shared `Ruin` component (T18b) is reused for destroyed buildings (T20d).
+* Shared `Ruin` component + `K_Ruin` kind (T18b, `DefeatSystem`: ruin, S_Defeat, C_Resettle / C_ResettleAccept) is reused for destroyed buildings (T20d).
 * Audio and feedback are client-only presentation driven by server fx events; no audio device = disabled.
 * Tactical slow-motion (T23a) is client presentation only.

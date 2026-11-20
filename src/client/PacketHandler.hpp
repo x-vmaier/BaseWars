@@ -35,6 +35,7 @@ class PacketHandler
     void onQueue(Reader &r);
     void onAlert(Reader &r);
     void onBaseInfo(Reader &r);
+    void onDefeat(Reader &r);
     void onJobs(Reader &r);
     void onEcon(Reader &r);
     App &app;

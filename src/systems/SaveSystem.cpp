@@ -539,7 +539,7 @@ void SaveSystem::saveBase(Writer &w)
     writeBasePlayers(w);
 
     std::vector<entt::entity> es =
-        byUid([&](entt::entity e) { return reg.any_of<BFlags, Moving, RelocNew, TrainQ, Support, SiteJob>(e); });
+        byUid([&](entt::entity e) { return reg.any_of<BFlags, Moving, RelocNew, TrainQ, Support, SiteJob, Ruin>(e); });
     w.put<uint32_t>(uint32_t(es.size()));
     for (auto e : es)
         writeBaseEntity(w, e);
@@ -558,6 +558,10 @@ void SaveSystem::writeBasePlayers(Writer &w)
         if (!world.pl[i].used)
             continue;
         w.put<uint8_t>(uint8_t(i)).put<uint8_t>(world.bp[i].homeless ? 1 : 0);
+        const DefeatState &df = world.bp[i].defeat;
+        w.put<uint8_t>(df.phase).put<uint8_t>(df.conqueror).put<uint8_t>(df.tries);
+        w.put<float>(df.ruin.x).put<float>(df.ruin.y).put<float>(df.site.x).put<float>(df.site.y);
+        w.put<double>(df.offerAt);
         for (uint8_t q : world.bp[i].quota)
             w.put<uint8_t>(q);
         for (uint8_t a : world.bp[i].alloc)
@@ -610,6 +614,11 @@ void SaveSystem::writeBaseEntity(Writer &w, entt::entity e)
         for (float v : sj->paid)
             w.put<float>(v);
     }
+
+    const Ruin *ru = reg.try_get<Ruin>(e);
+    w.put<uint8_t>(ru ? 1 : 0);
+    if (ru)
+        w.put<double>(ru->expiresAt).put<uint8_t>(ru->victim).put<uint8_t>(ru->burning ? 1 : 0);
 }
 
 void SaveSystem::loadBase(Reader &r)
@@ -634,6 +643,15 @@ void SaveSystem::readBasePlayers(Reader &r)
     {
         int id = r.get<uint8_t>();
         uint8_t hl = r.get<uint8_t>(), q[QUOTA_TYPES], al[R_Count];
+        DefeatState df;
+        df.phase = r.get<uint8_t>();
+        df.conqueror = r.get<uint8_t>();
+        df.tries = r.get<uint8_t>();
+        df.ruin.x = r.get<float>();
+        df.ruin.y = r.get<float>();
+        df.site.x = r.get<float>();
+        df.site.y = r.get<float>();
+        df.offerAt = r.get<double>();
         for (auto &v : q)
             v = r.get<uint8_t>();
         for (auto &v : al)
@@ -651,6 +669,8 @@ void SaveSystem::readBasePlayers(Reader &r)
             world.bp[id].alloc[k] = std::min<uint8_t>(al[k], 100);
         world.bp[id].homeless = hl != 0;
         world.bp[id].friends = fr;
+        if (df.phase <= DF_Offered && std::isfinite(df.ruin.x + df.ruin.y + df.site.x + df.site.y))
+            world.bp[id].defeat = df;
     }
 }
 
@@ -706,8 +726,19 @@ void SaveSystem::readBaseEntity(Reader &r)
             v = r.get<float>();
         sj.since = world.clock;
     }
+    bool hasRuin = r.get<uint8_t>() != 0;
+    Ruin ruin;
+    if (hasRuin)
+    {
+        ruin.expiresAt = r.get<double>();
+        ruin.victim = r.get<uint8_t>();
+        ruin.burning = r.get<uint8_t>() != 0;
+    }
     if (!r.ok || e == entt::null)
         return;
+
+    if (hasRuin && reg.all_of<Building>(e) && reg.get<Info>(e).kind == K_Ruin)
+        reg.emplace_or_replace<Ruin>(e, ruin);
 
     if (hasSj && sj.kind <= SJ_Repair && reg.all_of<Building>(e))
         reg.emplace_or_replace<SiteJob>(e, sj);

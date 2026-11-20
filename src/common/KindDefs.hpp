@@ -36,6 +36,7 @@ enum Kind : uint8_t
     K_Monk,
     K_Ship,
     K_Sheep,
+    K_Ruin,
     K_Count
 };
 
@@ -61,6 +62,7 @@ enum KindTag : uint32_t
     KT_Firefighter = 1u << 16,  // idle units of this kind put out fires
     KT_Worker = 1u << 17,       // builds, clears obstacles, hauls, hunts (pawn)
     KT_Healer = 1u << 18,       // heals allies instead of fighting (dps is healing per second)
+    KT_Ruin = 1u << 19,         // burning remains of a defeated town (neutral, indestructible, expires)
 };
 
 struct KindInfo
@@ -191,6 +193,8 @@ inline constexpr KindDef KINDS[K_Count] = {
      .thLevel = 4,
      .trainSeconds = 18.f},
     {.stats = {"Sheep", false, 1, 1, {0, 0, 0, 0}, 12, 0.9f, 0, 0, 0, 0}, .tags = KT_Animal},
+    {.stats = {"Burning Ruin", true, 4, 3, {0, 0, 0, 0}, 1, 0, 0, 0, 0, 0},
+     .tags = KT_Ruin | KT_Fireproof | KT_Freestanding | KT_SingleLevel | KT_NonCombat},
 };
 
 // Build menu order (hotkeys 1..): the kinds with a menuSlot, by slot.

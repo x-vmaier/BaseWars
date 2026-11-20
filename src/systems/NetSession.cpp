@@ -143,12 +143,14 @@ void NetSession::finishHello(uint64_t conn, uint64_t steamId, const std::vector<
     }
 
     sendWelcome(conn, id);
+    s.defeat.onLogin(id);
     s.repl.sendFog(id);
     s.clearing.sendClearedFull(id);
     s.spawn.worldTestSpawn(id, fresh);
     s.repl.sendRoster();
-    world.say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu."
-                        : "Welcome back, " + p.name + "! Your base is just as you left it.");
+    if (fresh || world.bp[id].defeat.phase == DF_None)
+        world.say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu."
+                            : "Welcome back, " + p.name + "! Your base is just as you left it.");
     std::printf("%llu (slot %d) %s\n", static_cast<unsigned long long>(steamId), id, fresh ? "joined" : "rejoined");
 }
 
@@ -203,7 +205,7 @@ void NetSession::initNewProfile(int id, uint64_t steamId)
     }
 }
 
-void NetSession::respawnIfDestroyed(int id, const std::vector<uint64_t> &friends)
+void NetSession::respawnIfDestroyed(int id, const std::vector<uint64_t> &)
 {
     bool hasTH = false;
     reg.view<Info, Owner>().each([&](const Info &i, const Owner &o)
@@ -211,12 +213,10 @@ void NetSession::respawnIfDestroyed(int id, const std::vector<uint64_t> &friends
         if (i.kind == K_TownHall && o.id == id)
             hasTH = true;
     });
-    if (hasTH || world.bp[id].homeless)
+    if (hasTH || world.bp[id].homeless || world.bp[id].defeat.phase != DF_None)
         return;
 
-    world.resetProfile(id);
-    s.spawn.spawnBase(id, friends);
-    world.say(id, "Your base was destroyed while you were away. You start over.");
+    s.defeat.beginWithoutRuin(id); // no town and no defeat state: old data, same resettle flow
 }
 
 void NetSession::sendWelcome(uint64_t conn, int id)

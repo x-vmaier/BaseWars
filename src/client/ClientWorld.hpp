@@ -58,6 +58,13 @@ struct ClientWorld
     int alloc[R_Count]{100, 100, 100, 100};                  // S_BaseInfo: Town Hall storage share per resource (%)
     double baseEditAt = -10; // local edit time: ignore S_BaseInfo quota / shares briefly (no flicker)
     bool homeless = false, wasHomeless = false, townMoving = false;
+    struct DefeatView
+    { // S_Defeat: banner (DF_Defeated) or resettlement offer (DF_Offered)
+        int phase = DF_None;
+        std::string conqueror, clan;
+        Pos ruin{0, 0}, site{0, 0};
+        double offerEndsAt = 0; // local GetTime() when the server accepts the offer by itself
+    } defeat;
 
     // ---- terrain
     int biomeAt(int x, int y) const;

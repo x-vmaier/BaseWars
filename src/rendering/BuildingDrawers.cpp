@@ -75,6 +75,28 @@ void BuildingRenderer::drawMine(const BuildingView &v) const
     drawSprite(g1, {0, 0, 128, 128}, {cx - 4, bottom - 84, 96, 96}, v.tint, md, v.oc);
 }
 
+// The fallen Town Hall still stands, grayed out and on fire (no ruin art in the pack).
+void BuildingRenderer::drawRuin(const BuildingView &v) const
+{
+    float cx = v.cx, bottom = v.bottom;
+    BSpr s = buildingSprite(K_TownHall, 0);
+    Texture2D bt = tex(std::string("Buildings/Black Buildings/") + s.file + ".png");
+    float dw = s.artW * s.scale, dh = s.artH * s.scale;
+    Rectangle dst{cx - dw / 2, bottom - 6 - s.artBottom * s.scale, dw, dh};
+    drawSprite(bt, {0, 0, s.artW, s.artH}, dst, rgb(120, 118, 124), v.hover ? 1 : 0, WHITE);
+
+    Anim fire = mkAnim("Particle FX/Fire_02.png", 64, 64, 12, 32, 62);
+    static const float fx[] = {-84, -30, 20, 70, -10}, fy[] = {-50, -118, -70, -96, -150};
+    for (int k = 0; k < 5; k++)
+        drawAnim(fire, frameFor(fire, v.t, float(k) * 1.9f), cx + fx[k], bottom + fy[k], false,
+                 1.5f + .15f * float(k % 3));
+
+    Anim smoke = mkAnim("Particle FX/Dust_02.png", 64, 64, 9, 32, 60);
+    for (int k = 0; k < 3; k++)
+        drawAnim(smoke, frameFor(smoke, v.t, float(k) * 2.7f), cx - 60 + float(k) * 60,
+                 bottom - 170 - float(k % 2) * 24, false, 2.4f, rgb(70, 70, 76, 190));
+}
+
 void BuildingRenderer::queueCampfireSmoke(const BuildingView &v, DrawList &items) const
 {
     if (v.prog >= 1.f)
@@ -117,6 +139,11 @@ const BuildingDrawer &BuildingRenderer::drawerOf(Kind k)
         t[K_Harbour].underlay = &BuildingRenderer::drawPier;
         t[K_Mine].body = &BuildingRenderer::drawMine;
         t[K_TownHall].extras = &BuildingRenderer::queueTownHallName;
+
+        BuildingDrawer &ruin = t[K_Ruin];
+        ruin.body = &BuildingRenderer::drawRuin;
+        ruin.siteFx = false;
+        ruin.damageFx = false;
 
         BuildingDrawer &fire = t[K_Campfire];
         fire.body = &BuildingRenderer::drawCampfire;

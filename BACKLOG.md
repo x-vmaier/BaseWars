@@ -64,13 +64,6 @@ Currently there is no audio and little feedback; this is the cheapest large gain
 
 ## Correctness (small)
 
-### T18c Tree canopy occlusion transparency (size S)
-
-* A tree (pine / oak) fades to semi-transparent while any of the local player's own units (`owner == me`) stands behind its canopy / sprite bounds, with smooth fade in and out (per-tree alpha state keyed by tile, decays when nothing is occluded).
-* Wild animals, enemy and NPC units never trigger it. Must not change click picking or draw order.
-* Done when: before / after screenshots of a pawn behind a tree (same window size) show the fade and the opaque tree when the pawn is elsewhere.
-* Code: `FeatureRenderer` (`src/rendering/`), `ClientWorld::reg`.
-
 ## Naval (T14)
 
 ### T14a Ships as registry kinds, harbour production, crews (size M)

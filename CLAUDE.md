@@ -8,7 +8,7 @@ The owner does not approve plans and does not playtest every task. You work auto
 
 ## Session protocol (one task per session)
 
-1. Take the first Roadmap row in `TODO.md` with status `todo` (currently **T18b**). Skip `blocked` rows.
+1. Take the first Roadmap row in `TODO.md` with status `todo` (currently **T18c**). Skip `blocked` rows.
 2. Read the task text (in `TODO.md`, or in `BACKLOG.md` if it is not listed there; move its spec into `TODO.md` first) and the code it names.
    Write a plan of at most 15 lines (design, files, order, the selftest you will add) and continue immediately.
 3. Decide small things yourself and log them as one line in the Decisions log (`Txx: decision - reason`).
@@ -83,6 +83,7 @@ A contradiction between two rules is resolved in favour of the Design goals in `
 * Client UI: every resource cost goes through `ui::drawCosts`; use `ui::` screen/mouse helpers inside UI code.
 * Windows: never name a variable `near` / `far`. Builds need the MSVC environment (vcvars64); see `ARCHITECTURE.md` Build.
 * Saves must be written in a deterministic order (sort hash sets, order entities by uid): selftest `saveload` compares bytes.
+* A player can have no Town Hall (defeated, `DefeatSystem`, or homeless): code that picks a player's hall must handle `townHallOf(id) == entt::null`. While `bp[id].defeat.phase != DF_None` the server drops every command except camera, chat and resettle.
 * Never index `KINDS`/`KINFO` with a kind read from the network before checking `k < K_Count`.
 
 ## Code style

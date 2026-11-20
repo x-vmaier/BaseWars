@@ -54,6 +54,7 @@ class BuildingRenderer
     void drawPier(const BuildingView &v) const;
     void drawCampfire(const BuildingView &v) const;
     void drawMine(const BuildingView &v) const;
+    void drawRuin(const BuildingView &v) const; // burning remains of a defeated town
     void queueCampfireSmoke(const BuildingView &v, DrawList &items) const;
     void queueTownHallName(const BuildingView &v, DrawList &items) const;
     void drawTownHallName(const BuildingView &v) const;

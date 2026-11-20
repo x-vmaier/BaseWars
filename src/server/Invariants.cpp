@@ -102,5 +102,20 @@ std::vector<std::string> World::checkInvariants()
         if (!(r.until > 0) || !std::isfinite(r.until))
             c.fail("Raider without expiry", u.id);
     });
+
+    // Ruins are neutral K_Ruin buildings with an expiry; a defeated player has no Town Hall and a sane state.
+    reg.view<Uid, Info, Ruin>().each([&](const Uid &u, const Info &i, const Ruin &ru)
+    {
+        if (i.kind != K_Ruin || !(ru.expiresAt > 0) || !std::isfinite(ru.expiresAt))
+            c.fail("Ruin without expiry or on a wrong kind", u.id);
+    });
+    reg.view<Uid, Info>().each([&](const Uid &u, const Info &i)
+    {
+        if (i.kind == K_Ruin && !reg.all_of<Ruin>(byUid[u.id]))
+            c.fail("K_Ruin without Ruin component", u.id);
+    });
+    for (int id = 1; id <= MAX_PLAYERS; id++)
+        if (bp[id].defeat.phase > DF_Offered || (bp[id].defeat.phase != DF_None && halls[id] > 0))
+            c.fail("player " + std::to_string(id) + " has a defeat state but a Town Hall or an invalid phase", 0);
     return std::move(c.out);
 }

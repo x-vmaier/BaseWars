@@ -22,6 +22,9 @@ struct ServerConfig
     float clearTimeScale = 1.f;  // multiplier on how long clearing an obstacle takes
     // ---- connection
     double authTimeoutS = 15.0; // a hello whose Steam ticket verdict has not arrived by then is dropped
+    // ---- defeat and resettlement
+    double defeatRuinHours = 24.0;       // real hours a defeated town stays as a burning ruin (wall clock, persisted)
+    double resettleOfferTimeoutS = 60.0; // an offered site unanswered for this long is accepted automatically
     // ---- NPC towns and factions
     int townRegionChance = 85;      // % of 8x8-chunk regions that contain an NPC town
     int townMinDistance = 45;       // minimum tiles between an NPC town and any player Town Hall

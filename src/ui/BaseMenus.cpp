@@ -8,8 +8,14 @@
 #include "client/App.hpp"
 #include "rendering/Text.hpp"
 #include "ui/UiScale.hpp"
+#include "ui/Widgets.hpp"
 
 #include <cmath>
+
+void BaseMenus::load()
+{
+    mPaper = loadTMap("pause_menu");
+}
 
 void BaseMenus::push(const Toast &t)
 {
@@ -27,8 +33,26 @@ Rectangle BaseMenus::homelessBanner() const
     return {float(ui::screenW()) / 2 - 230, float(ui::screenH()) - 128, 460, 56};
 }
 
+Rectangle BaseMenus::defeatPanel() const
+{
+    bool offer = app.world.defeat.phase == DF_Offered;
+    float w = 440, h = offer ? 120.f : 190.f;
+    return {float(ui::screenW()) / 2 - w / 2, offer ? float(ui::screenH()) - h - 24 : 72.f, w,
+            h}; // top: the burning ruin stays visible below
+}
+Rectangle BaseMenus::defeatButton(int i) const
+{
+    Rectangle p = defeatPanel();
+    bool offer = app.world.defeat.phase == DF_Offered;
+    if (!offer)
+        return {p.x + p.width / 2 - 90, p.y + p.height - 62, 180, 40};
+    return {p.x + 30 + float(i == 0 ? 0 : 1) * 200, p.y + p.height - 56, 180, 40};
+}
+
 bool BaseMenus::over(Vector2 m) const
 {
+    if (app.world.defeat.phase != DF_None && CheckCollisionPointRec(m, defeatPanel()))
+        return true;
     for (size_t i = 0; i < toasts.size(); i++)
         if (CheckCollisionPointRec(m, toastRect(int(i))))
             return true;
@@ -41,6 +65,14 @@ bool BaseMenus::input(Vector2 m)
 {
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         return false;
+    if (int ph = app.world.defeat.phase; ph != DF_None)
+    {
+        if (CheckCollisionPointRec(m, defeatButton(0)))
+            app.cmd.resettle();
+        else if (ph == DF_Offered && CheckCollisionPointRec(m, defeatButton(1)))
+            app.cmd.resettleAccept();
+        return CheckCollisionPointRec(m, defeatPanel());
+    }
     for (size_t i = 0; i < toasts.size(); i++)
         if (CheckCollisionPointRec(m, toastRect(int(i))))
         {
@@ -65,6 +97,10 @@ void BaseMenus::draw()
 
     for (size_t i = 0; i < toasts.size(); i++)
         drawToast(int(i), m, now);
+    if (W.defeat.phase == DF_Defeated)
+        drawDefeat(m);
+    else if (W.defeat.phase == DF_Offered)
+        drawOffer(m);
     if (W.homeless)
         drawHomeless(m);
     if (W.townMoving)
@@ -93,6 +129,56 @@ void BaseMenus::drawToast(int i, Vector2 m, double now)
     DrawText(s.c_str(), int(r.x) + 10, int(r.y) + 7, 15, rgb(255, 255, 255, int(255 * a)));
     std::string loc = TextFormat("(%d, %d)  click to jump", int(t.x), int(t.y));
     DrawText(loc.c_str(), int(r.x) + 10, int(r.y) + 27, 12, rgb(255, 230, 170, int(255 * a)));
+}
+
+void BaseMenus::drawDefeat(Vector2 m)
+{
+    const ClientWorld::DefeatView &d = app.world.defeat;
+    Rectangle r = defeatPanel();
+    drawTMap(mPaper, r);
+    ui::panelTitle(r, "Defeated", 22, .55f, 13);
+
+    std::string by = d.conqueror.empty() ? "Your Town Hall has fallen." : "Conquered by " + d.conqueror;
+    if (!d.clan.empty())
+        by += "  [" + d.clan + "]";
+    int fs = 17;
+    while (MeasureText(by.c_str(), fs) > int(r.width) - 50 && fs > 11)
+        fs--;
+    DrawText(by.c_str(), int(r.x + r.width / 2) - MeasureText(by.c_str(), fs) / 2, int(r.y) + 62, fs, rgb(70, 45, 30));
+    const char *hint = "Your town is burning. Found a new one elsewhere.";
+    DrawText(hint, int(r.x + r.width / 2) - MeasureText(hint, 14) / 2, int(r.y) + 92, 14, rgb(90, 62, 44));
+    Rectangle b = defeatButton(0);
+    ui::drawButton(b, "Resettle", true, false, CheckCollisionPointRec(m, b), false, 17);
+}
+
+void BaseMenus::drawOffer(Vector2 m)
+{
+    const ClientWorld::DefeatView &d = app.world.defeat;
+    Rectangle r = defeatPanel();
+    drawTMap(mPaper, r);
+    int left = std::max(0, int(std::ceil(d.offerEndsAt - GetTime())));
+    std::string t = "New town site offered - auto-accepted in " + std::to_string(left) + " s";
+    DrawText(t.c_str(), int(r.x + r.width / 2) - MeasureText(t.c_str(), 15) / 2, int(r.y) + 26, 15, rgb(70, 45, 30));
+    Rectangle a = defeatButton(1), n = defeatButton(0);
+    ui::drawButton(n, "Resettle (next site)", true, true, CheckCollisionPointRec(m, n), false, 15);
+    ui::drawButton(a, "Accept", true, false, CheckCollisionPointRec(m, a), false, 17);
+    drawOfferSite();
+}
+
+// Footprint outline of the offered Town Hall (4x3 tiles around the site centre).
+void BaseMenus::drawOfferSite() const
+{
+    const ClientWorld::DefeatView &d = app.world.defeat;
+    const KindInfo &ki = KINFO[K_TownHall];
+    Vector2 a = GetWorldToScreen2D({(d.site.x - 2.f) * TILE, (d.site.y - 1.f) * TILE}, app.cam);
+    float z = app.cam.zoom / ui::scale(), sc = ui::scale(); // the UI layer is drawn under the scale matrix
+    a = {a.x / sc, a.y / sc};
+    float pulse = float(std::sin(GetTime() * 4) * .5 + .5);
+    Rectangle fp{a.x, a.y, float(ki.fw) * TILE * z, float(ki.fh) * TILE * z};
+    DrawRectangleRec(fp, rgb(120, 220, 120, int(50 + 50 * pulse)));
+    DrawRectangleLinesEx(fp, 3, rgb(200, 255, 190));
+    const char *label = "New Town Hall";
+    textShadow(label, int(fp.x + fp.width / 2) - MeasureText(label, 16) / 2, int(fp.y) - 24, 16, rgb(255, 245, 190));
 }
 
 void BaseMenus::drawHomeless(Vector2 m)

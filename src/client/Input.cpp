@@ -171,6 +171,8 @@ bool Input::hudClick(Vector2 m, bool ui)
 void Input::camera(float dt, Vector2 rm, bool ui)
 {
     Camera2D &cam = app.cam;
+    if (app.world.defeat.phase != DF_None)
+        return; // the camera stays on the ruin / offered site (the server picks where to look)
     float sw = float(::GetScreenWidth()), sh = float(::GetScreenHeight());
     float sp = 800.f * dt / cam.zoom;
     if (IsKeyDown(KEY_UP))
