@@ -50,7 +50,7 @@ Headers sit beside their `.cpp`. No `.inc` files. Files should stay readable (gu
 * `BW_NETLOG=1` prints Steam connection state transitions.
 * **Identity (T18a):** `C_Hello` = `u64 steamId, u16 len + auth ticket, friends`. The server asks `SteamServerNet::beginAuth` (Steam `BeginAuthSession`, verdict as `NetEvent::Auth`; pending hellos expire after `auth_timeout_s`).
   Profiles are keyed only by the verified SteamID; a second login of an online id replaces the old session. `--local` servers (and selftests) accept only `DEV_TICKET` for ids < 2^32 (`BW_DEV_ID` on the client). Real servers run in Steam authentication mode.
-  The server never stores or trusts names: it writes `<SteamID>` tokens (`common/NameToken.hpp`) and clients resolve persona names (`SteamClient::nameOf`, refreshed once per second).
+  The server never stores or trusts names: it writes `\x01<SteamID>\x02` tokens (`common/NameToken.hpp`) and clients resolve persona names (`SteamClient::nameOf`, refreshed once per second).
 
 ## Conventions
 
