@@ -16,6 +16,7 @@ void Sim::baseSecond()
     sys.territory.relocSecond();
     sys.fire.burnSecond();
     sys.defense.supportSecond();
+    sys.session.authSecond();
     sys.clan.homelessSecond();
     sys.faction.demandSecond();
     for (int id = 1; id <= MAX_PLAYERS; id++)
@@ -37,6 +38,9 @@ void Sim::pollNet()
             break;
         case NetEvent::Disconnect:
             sys.session.onDisconnect(ev.conn);
+            break;
+        case NetEvent::Auth:
+            sys.session.onAuthResult(ev.conn, !ev.data.empty() && ev.data[0]);
             break;
         }
     }

@@ -8,7 +8,7 @@
 struct Systems;
 
 inline constexpr uint32_t SAVE_MAGIC =
-    0x38535742u; // "BWS8" (world + ships + base sections; base: per-type quotas, storage shares)
+    0x39535742u; // "BWS9" (BWS8 + profiles keyed by SteamID only: no uuid, no stored name)
 
 class SaveSystem
 {

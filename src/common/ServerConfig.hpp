@@ -20,6 +20,8 @@ struct ServerConfig
     float featureDensity[8] = {
         0, 1, 1, 1, 1, 1, 1, 0}; // indexed by Biome enum (Ocean, Plains, Forest, Highlands, Desert, Flowers, Snow, ...)
     float clearTimeScale = 1.f;  // multiplier on how long clearing an obstacle takes
+    // ---- connection
+    double authTimeoutS = 15.0; // a hello whose Steam ticket verdict has not arrived by then is dropped
     // ---- NPC towns and factions
     int townRegionChance = 85;      // % of 8x8-chunk regions that contain an NPC town
     int townMinDistance = 45;       // minimum tiles between an NPC town and any player Town Hall

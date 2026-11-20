@@ -19,7 +19,7 @@ struct ClientWorld
     // identity
     int me = 0; // our player id (0 until S_Welcome)
     uint32_t seed = 0;
-    std::string myName; // display name (config / menu / profile / S_Welcome)
+    std::string myName, myRaw; // Steam persona name resolved from the server's name token (myRaw)
 
     // economy and diplomacy (S_State / S_Roster / S_Map)
     float res[R_Count]{};

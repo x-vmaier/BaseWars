@@ -26,7 +26,9 @@ class Fixture
     Systems &sys = sim.sys;
     std::string savePath;
 
-    int join(const std::string &uuid, const std::string &name, uint64_t steamId = 0, uint64_t conn = 0);
+    // Joins with the dev ticket (fixtures run the transport in dev-auth mode); returns the player slot or 0.
+    int join(uint64_t steamId, uint64_t conn = 0);
+    int joinWithTicket(uint64_t steamId, const std::vector<uint8_t> &ticket, uint64_t conn = 0);
     void leave(uint64_t conn);
     void send(uint64_t conn, const Writer &w);
     void run(double seconds) { sim.run(int(seconds * TICK_HZ)); }
@@ -63,6 +65,7 @@ void economyTest(Ctx &);
 void raidTest(Ctx &);
 void netGarbageTest(Ctx &);
 void invariantsTest(Ctx &);
+void identityTest(Ctx &);
 
 int runCli(const std::string &what);
 

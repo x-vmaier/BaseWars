@@ -10,7 +10,7 @@ namespace selftest
 void bootTest(Ctx &t)
 {
     Fixture f;
-    int id = f.join("selftest-uuid-0001", "Alice");
+    int id = f.join(1);
     t.check(id == 1, "first player gets slot 1");
     t.check(f.hallOf(id) != entt::null, "new player owns a Town Hall");
     t.check(f.world.unitCount(id) == 3, "new player starts with 2 pawns and a warrior");
@@ -27,7 +27,7 @@ void bootTest(Ctx &t)
 void invariantsTest(Ctx &t)
 {
     Fixture f;
-    f.join("selftest-uuid-0001", "Alice");
+    f.join(1);
     t.invariants(f, "clean world");
 
     auto pawn = f.world.reg.view<Info>().front();

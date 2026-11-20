@@ -22,7 +22,7 @@ void raidTest(Ctx &t)
     Fixture f;
     cfg().raidInterval = 1e7; // exactly one raid per faction
     cfg().raidIntervalRandom = 1;
-    int id = f.join("selftest-uuid-0001", "Alice");
+    int id = f.join(1);
     World &w = f.world;
     for (int fac = 0; fac < FACTION_COUNT; fac++)
     {

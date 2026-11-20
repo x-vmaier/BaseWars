@@ -29,8 +29,8 @@ void saveloadTest(Ctx &t)
     {
         Fixture a;
         cfg().instantBuild = true;
-        int p1 = a.join("selftest-uuid-0001", "Alice");
-        int p2 = a.join("selftest-uuid-0002", "Bob");
+        int p1 = a.join(1);
+        int p2 = a.join(2);
         int tx = 0, ty = 0;
         if (a.findSite(p1, K_Lumber, tx, ty))
         {
@@ -70,7 +70,7 @@ void saveloadTest(Ctx &t)
     }
 
     // Reconnect to the loaded world and keep playing.
-    t.check(b.join("selftest-uuid-0001", "Alice") == 1, "same profile rejoins its slot");
+    t.check(b.join(1) == 1, "same profile rejoins its slot");
     b.run(30);
     t.invariants(b, "after rejoin");
 }

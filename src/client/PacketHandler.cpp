@@ -27,8 +27,13 @@ void PacketHandler::handle(const uint8_t *d, size_t n)
         onFog(r);
         break;
     case S_Text:
-        app.msg(r.str());
+    {
+        std::string text = app.session.resolveNames(r.str());
+        if (!app.session.welcomed)
+            app.session.serverNote = text; // e.g. why the login was refused
+        app.msg(text);
         break;
+    }
     case S_Roster:
         onRoster(r);
         break;
@@ -79,7 +84,8 @@ void PacketHandler::onWelcome(Reader &r)
         return;
 
     getRules(r); // the server's progression / food / donation tunables
-    w.myName = nm;
+    w.myRaw = nm;
+    w.myName = app.session.resolveNames(nm);
     cam.target = {cx * TILE, cy * TILE};
     cam.zoom = 1.f;
     if (const char *c = std::getenv("BW_CAM"))
@@ -270,7 +276,8 @@ void PacketHandler::onRoster(Reader &r)
         p.id = r.get<uint8_t>();
         p.flags = r.get<uint8_t>();
         p.clan = r.get<uint8_t>();
-        p.name = r.str();
+        p.raw = r.str();
+        p.name = app.session.resolveNames(p.raw);
         p.hasLoc = r.get<uint8_t>() != 0;
         p.lx = r.get<float>();
         p.ly = r.get<float>();
@@ -300,7 +307,7 @@ void PacketHandler::onChat(Reader &r)
     ChatLine c{};
     c.ch = r.get<uint8_t>();
     r.get<uint8_t>();
-    c.name = r.str();
+    c.name = app.session.resolveNames(r.str());
     c.text = r.str();
     c.t = GetTime();
     if (!r.ok)

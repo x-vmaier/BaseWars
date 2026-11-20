@@ -1,6 +1,6 @@
 /**
  * @file MainMenu.hpp
- * @brief Main menu and server browser: Internet / Friends / Direct tabs, name box, server list, connecting overlay.
+ * @brief Main menu and server browser: Internet / Friends / Direct tabs, server list, connecting overlay.
  */
 #pragma once
 #include "networking/NetTypes.hpp"
@@ -47,7 +47,7 @@ class MainMenu
 
     App &app;
     TMap mMenu;
-    int tab = 0, sel = -1, focus = 0; // tab, selected row, focused text field (0 none, 1 name, 2 address)
+    int tab = 0, sel = -1, focus = 0; // tab, selected row, focused text field (0 none, 2 address)
     double lastClick = 0;
     std::vector<ServerEntry> list;
 };

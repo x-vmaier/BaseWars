@@ -7,6 +7,7 @@
 #include "systems/KindFactories.hpp"
 #include "systems/Systems.hpp"
 
+#include "common/NameToken.hpp"
 #include <algorithm>
 #include <climits>
 #include <cmath>
@@ -15,6 +16,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+
 #include <string>
 
 namespace
@@ -22,8 +24,6 @@ namespace
 void writePlayer(Writer &w, int i, const Profile &p)
 {
     w.put<uint8_t>(uint8_t(i));
-    w.str(p.uuid);
-    w.str(p.name);
     w.put<uint64_t>(p.lastSeen);
     for (float r : p.res)
         w.put<float>(r);
@@ -61,8 +61,6 @@ void putSorted(Writer &w, const std::unordered_set<int64_t> &set)
 void readPlayer(Reader &r, Profile &p)
 {
     p.used = true;
-    p.uuid = r.str();
-    p.name = r.str();
     p.lastSeen = r.get<uint64_t>();
     for (float &v : p.res)
         v = r.get<float>();
@@ -75,6 +73,7 @@ void readPlayer(Reader &r, Profile &p)
     p.cam.x = r.get<float>();
     p.cam.y = r.get<float>();
     p.steamId = r.get<uint64_t>();
+    p.name = nameToken(p.steamId);
     p.clan = r.get<uint8_t>();
     for (float &rp : p.rep)
         rp = r.get<float>();

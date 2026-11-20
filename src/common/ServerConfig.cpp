@@ -74,6 +74,7 @@ void applyWorldGen(ServerConfig &c, const Entry &e)
 
 void applyNpcs(ServerConfig &c, const Entry &e)
 {
+    e.D("auth_timeout_s", c.authTimeoutS);
     e.I("town_region_chance", c.townRegionChance);
     e.I("town_min_distance", c.townMinDistance);
     e.I("hostile_faction_percent", c.hostileFactionPercent);

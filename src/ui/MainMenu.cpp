@@ -1,6 +1,6 @@
 /**
  * @file MainMenu.cpp
- * @brief Main menu and server browser: Internet / Friends / Direct tabs, name box, server list, connecting overlay.
+ * @brief Main menu and server browser: Internet / Friends / Direct tabs, server list, connecting overlay.
  */
 #include "ui/MainMenu.hpp"
 
@@ -154,16 +154,7 @@ void MainMenu::updateConnecting(Vector2 m, bool click)
 
 void MainMenu::updateTextFields()
 {
-    if (focus == 1)
-    {
-        std::string n = app.world.myName;
-        if (ui::textInput(n, 20))
-        {
-            app.world.myName = n;
-            app.settings.name = n;
-        }
-    }
-    else if (focus == 2)
+    if (focus == 2)
         ui::textInput(directAddr, 40);
 }
 
@@ -182,11 +173,6 @@ void MainMenu::onClick(Vector2 m)
             refresh();
             return;
         }
-    if (CheckCollisionPointRec(m, nameBox()))
-    {
-        focus = 1;
-        return;
-    }
     if (tab == 2 && CheckCollisionPointRec(m, addrBox()))
     {
         focus = 2;
@@ -267,8 +253,10 @@ void MainMenu::drawTopBar(Vector2 m)
     for (int i = 0; i < 3; i++)
         ui::drawButton(tabBtn(i), tabs[i], true, false, CheckCollisionPointRec(m, tabBtn(i)), tab == i, 13);
 
-    ui::textBox(nameBox(), app.world.myName, "Your name", focus == 1);
-    DrawText("Name:", int(nameBox().x) - 46, int(nameBox().y) + 6, 13, rgb(70, 45, 30));
+    // The name is the Steam persona of the account that will own the town; it cannot be edited here.
+    const Session &s = app.session;
+    std::string who = s.devId ? "Dev " + std::to_string(s.devId) : (s.steam.ok ? s.steam.name : "Steam is not running");
+    DrawText(("Playing as: " + who).c_str(), int(nameBox().x) + 4, int(nameBox().y) + 6, 15, rgb(70, 45, 30));
 }
 
 void MainMenu::drawServerList(Vector2 m)

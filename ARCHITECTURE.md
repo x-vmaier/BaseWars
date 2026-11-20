@@ -33,7 +33,7 @@ Headers sit beside their `.cpp`. No `.inc` files. Files should stay readable (gu
 
 * `tools/check.sh` is the gate: release + asan builds, all selftests, clang-format check. Docs-sync (every `BW_*` env hook and selftest name appears in this file) and header checks are advisory warnings.
 * **Selftests:** `server --selftest <name|list|all>`. Headless: no Steam, fixed seed, fast-forwarded ticks, deterministic, exit 0/1. Registered by name in `src/server/SelfTests.cpp`, one file per feature under `src/server/selftests/`.
-  Every feature task adds a scenario with numeric assertions. Baseline: `boot`, `saveload` (save -> load -> save byte-identical, so saves must be written in a deterministic order), `economy`, `raid`, `net-garbage`, `invariants` (the checker catches an orphaned job).
+  Every feature task adds a scenario with numeric assertions. Baseline: `boot`, `saveload` (save -> load -> save byte-identical, so saves must be written in a deterministic order), `economy`, `raid`, `net-garbage`, `invariants` (the checker catches an orphaned job), `identity` (SteamID-only ownership, forged / pending / timed-out logins).
   Scenarios use `selftest::Fixture` (a `Sim` = World + Systems, offline transport, fake connections via `join`, `run(seconds)`); `Sim` (`src/server/Sim.cpp`) holds the tick order shared with the real server loop.
 * **Invariants:** `World::checkInvariants()` (always on in selftests, `BW_INVARIANTS=1` in real runs): stored entities valid, no job / ship / caravan / garrison referencing a dead entity, resources >= 0, footprints do not overlap, at most one Town Hall per owner, timed states have expiries.
   A new component that can dangle adds its check here.
@@ -48,12 +48,15 @@ Headers sit beside their `.cpp`. No `.inc` files. Files should stay readable (gu
 * Client: `client --connect host:port` joins directly; the menu has Internet / Friends / Direct tabs.
 * Current state (changes in T19a-c): fixed 20 Hz tick, `S_State` every 2nd tick, everything reliable, client smooths `RPos` towards `Goal` (`ClientWorld::interpolate`).
 * `BW_NETLOG=1` prints Steam connection state transitions.
+* **Identity (T18a):** `C_Hello` = `u64 steamId, u16 len + auth ticket, friends`. The server asks `SteamServerNet::beginAuth` (Steam `BeginAuthSession`, verdict as `NetEvent::Auth`; pending hellos expire after `auth_timeout_s`).
+  Profiles are keyed only by the verified SteamID; a second login of an online id replaces the old session. `--local` servers (and selftests) accept only `DEV_TICKET` for ids < 2^32 (`BW_DEV_ID` on the client). Real servers run in Steam authentication mode.
+  The server never stores or trusts names: it writes `<SteamID>` tokens (`common/NameToken.hpp`) and clients resolve persona names (`SteamClient::nameOf`, refreshed once per second).
 
 ## Conventions
 
 * The server is authoritative; the client sends `C_*` commands and renders `S_*` messages. Network input is validated (range, owner, rate, size).
 * Protocol: append new enumerators to the END of the `C_*` / `S_*` group of `Msg` in `Shared.hpp`. (T19a is the one planned break.)
-* Savegame: bump `SAVE_MAGIC` (`SaveSystem.hpp`) when the layout changes; an older format is moved aside (`.bad`) and a fresh world starts.
+* Savegame (BWS9): bump `SAVE_MAGIC` (`SaveSystem.hpp`) when the layout changes; an older format is moved aside (`.bad`) and a fresh world starts.
   A damaged optional section is skipped; an unreadable mandatory part stops the server instead of overwriting.
 * Tuning belongs in `ServerConfig` + `config/server.cfg`; shared gate/cost rules in `Progression.hpp`.
 * Anything that must survive restarts or offline time uses wall-clock expiries, not ticks.
@@ -86,7 +89,7 @@ Client: `BW_SHOT`, `BW_SHOT_FRAMES`, `BW_CAM`, `BW_ZOOM`, `BW_CMD`, `BW_MOUSE`, 
 `BW_SITE` verbs: `build`, `upgrade`, `train:<building kind>:<unit kind>@<frame>`, `repair`, `cancel`, `ctx`, `donate`, `alloc`, `dispose`, `quota`.
 Server: `BW_RICH`, `BW_AGGRO`, `BW_REVEAL`, `BW_RAIDNOW`, `BW_SEEALL`, `BW_BASETEST`, `BW_BASESPEED`, `BW_BASEDEBUG`, `BW_HURT`, `BW_SPAWN`, `BW_ARMY`, `BW_PATROLNOW`, `BW_WORLDLOG`, `BW_INVARIANTS` (log invariant violations once per second). Flag: `server --selftest <name|list|all>`.
 Instant timers for fast testing are `debug_instant_*` in `config/server.cfg`.
-Hooks arrive with their tasks and are added here then: `BW_DEV_ID` and force-defeat hooks (T18b), fake latency/loss (T19a), `BW_PACING` (T25a).
+Client `BW_DEV_ID=<n>` (n < 2^32): identity for `--local` servers without Steam login. Hooks arrive with their tasks and are added here then: force-defeat hooks (T18b), fake latency/loss (T19a), `BW_PACING` (T25a).
 
 ## Planned architecture
 

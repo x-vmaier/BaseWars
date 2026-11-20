@@ -15,7 +15,7 @@
 namespace
 {
 
-void loadConfig(std::string &ip, int &port, std::string &name)
+void loadConfig(std::string &ip, int &port)
 {
     ip = "127.0.0.1";
     port = DEFAULT_PORT;
@@ -49,8 +49,6 @@ void loadConfig(std::string &ip, int &port, std::string &name)
             ip = v;
         else if (k == "server_port" || k == "port")
             port = std::atoi(v.c_str());
-        else if (k == "name" || k == "player_name")
-            name = v;
     }
 }
 
@@ -63,18 +61,11 @@ int main(int argc, char **argv)
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
 
     std::string dir = std::string(GetApplicationDirectory());
-    loadConfig(app.session.ip, app.session.port, app.world.myName);
+    loadConfig(app.session.ip, app.session.port);
     app.settings.load(dir);
 
-    if (app.world.myName.empty())
-        app.world.myName = app.settings.name;
-
     app.session.steam.init();
-
-    if (app.world.myName.empty() && app.session.steam.ok)
-        app.world.myName = app.session.steam.name;
-
-    app.session.loadProfile();
+    app.session.initIdentity();
     app.mainMenu.directAddr = app.settings.lastServer;
     if (const char *sc = std::getenv("BW_SCALE"))
         app.settings.uiScale = std::clamp(float(std::atof(sc)), 0.6f, 2.0f);

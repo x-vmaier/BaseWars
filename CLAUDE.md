@@ -8,7 +8,7 @@ The owner does not approve plans and does not playtest every task. You work auto
 
 ## Session protocol (one task per session)
 
-1. Take the first Roadmap row in `TODO.md` with status `todo` (currently **T18a**). Skip `blocked` rows.
+1. Take the first Roadmap row in `TODO.md` with status `todo` (currently **T18b**). Skip `blocked` rows.
 2. Read the task text (in `TODO.md`, or in `BACKLOG.md` if it is not listed there; move its spec into `TODO.md` first) and the code it names.
    Write a plan of at most 15 lines (design, files, order, the selftest you will add) and continue immediately.
 3. Decide small things yourself and log them as one line in the Decisions log (`Txx: decision - reason`).
@@ -67,7 +67,7 @@ A contradiction between two rules is resolved in favour of the Design goals in `
 
 ## Rules that bit us
 
-* **Identity is the authenticated 64-bit SteamID** (fix planned in T18a; until then the server matches by `uuid`, do not extend that). Never key ownership, saves or names on machine ids, local files, IPs or connection slots; never trust a client-sent name.
+* **Identity is the authenticated 64-bit SteamID** (T18a: verified via Steam auth tickets; `--local` accepts dev ids only). Never key ownership, saves or names on machine ids, local files, IPs or connection slots; never trust a client-sent name.
 * **Server authority:** the server owns all simulation state. A feature with new state needs: component + system, replication, `SaveSystem` entry (bump `SAVE_MAGIC`), `server.cfg` tunables, an invariant if it can dangle.
 * **New content goes through the registries** (`KindDefs.hpp` entry + `KT_*` tag, `KindFactories.cpp`, drawer/art tables). No `switch` or `if (kind == ...)` chains.
 * **Protocol:** append-only; T19a is the one planned break (sequence envelope, tick-numbered snapshots, protocol version). After it, keep new messages inside that scheme.

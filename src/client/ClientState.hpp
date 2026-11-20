@@ -20,7 +20,7 @@ struct Peer
 {
     int id;
     uint8_t flags, clan;
-    std::string name;
+    std::string name, raw; // raw = server name token, re-resolved to the persona name as Steam learns it
     bool hasLoc;
     float lx, ly;
 }; // flags: 1 online, 2 friend/ally, 4 invite received, 8 invite sent

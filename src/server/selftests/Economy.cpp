@@ -16,7 +16,7 @@ void economyTest(Ctx &t)
     Fixture f;
     cfg().instantBuild = true;
     cfg().instantTrain = true;
-    int id = f.join("selftest-uuid-0001", "Alice", 0, 1000);
+    int id = f.join(1, 1000);
     World &w = f.world;
 
     int tx = 0, ty = 0;

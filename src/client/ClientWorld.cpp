@@ -278,6 +278,7 @@ void ClientWorld::clear()
     chunks.clear();
     occ.clear();
     roster.clear();
+    myRaw.clear();
     clansList.clear();
     facTowns.clear();
     fxs.clear();

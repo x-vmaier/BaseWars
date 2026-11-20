@@ -6,47 +6,33 @@
 
 #include "client/App.hpp"
 
+#include "common/NameToken.hpp"
+
 #include <cstdio>
-#include <fstream>
-#include <random>
+#include <cstdlib>
 
-void Session::loadProfile()
+void Session::initIdentity()
 {
-    std::string &myName = app.world.myName;
-    std::string path = std::string(GetApplicationDirectory()) + "profile.txt";
-    std::ifstream f(path);
-    std::string ln;
+    if (const char *d = std::getenv("BW_DEV_ID"))
+        devId = std::strtoull(d, nullptr, 10);
+    if (devId >= net::DEV_ID_LIMIT)
+        devId = 0; // dev ids must never look like a real SteamID
+}
 
-    while (f && std::getline(f, ln))
-    {
-        auto p = ln.find('=');
-        if (p == std::string::npos)
-            continue;
-        std::string k = ln.substr(0, p), v = ln.substr(p + 1);
-        while (!v.empty() && (v.back() == '\r' || v.back() == ' '))
-            v.pop_back();
-        if (k == "uuid")
-            uuid = v;
-        else if (k == "name" && myName.empty())
-            myName = v;
-    }
+std::string Session::resolveNames(const std::string &text) const
+{
+    return expandNameTokens(text, [&](uint64_t id) { return steam.nameOf(id); });
+}
 
-    std::random_device rd;
-    if (uuid.size() < 16)
-    {
-        char buf[40];
-        uint32_t a = rd(), b = rd(), c = rd(), d = rd();
-        std::snprintf(buf, sizeof buf, "%08x-%04x-4%03x-%04x-%04x%08x", a, b >> 16, b & 0xfff, 0x8000 | (c & 0x3fff),
-                      c >> 16, d);
-        uuid = buf;
-    }
-
-    if (myName.empty())
-        myName = "Player" + std::to_string(rd() % 9000 + 1000);
-
-    std::ofstream o(path);
-    if (o)
-        o << "uuid=" << uuid << "\nname=" << myName << "\n";
+void Session::refreshNames()
+{
+    if (GetTime() - lastNameRefresh < 1.0)
+        return;
+    lastNameRefresh = GetTime();
+    for (Peer &p : app.world.roster)
+        p.name = resolveNames(p.raw);
+    if (!app.world.myRaw.empty())
+        app.world.myName = resolveNames(app.world.myRaw);
 }
 
 bool Session::parseAddr(const std::string &s, std::string &host, uint16_t &port)
@@ -62,6 +48,13 @@ void Session::joinServer(const ServerEntry &e)
 {
     app.resetWorld();
     connectingTo = e;
+    serverNote.clear();
+    if (!myId())
+    {
+        app.mainMenu.status =
+            "Steam is not running: it is needed to prove who you are. Start Steam and restart the game.";
+        return;
+    }
     bool ok;
     if (e.steamId && steam.ok)
         ok = cnet.connectSteam(e.steamId);
@@ -89,6 +82,7 @@ void Session::joinServer(const ServerEntry &e)
 void Session::backToMenu(const std::string &why)
 {
     cnet.close();
+    steam.cancelTicket();
     app.resetWorld();
     screen = Screen::Menu;
     app.mainMenu.status = why;
@@ -100,9 +94,19 @@ void Session::sendHello()
 {
     Writer w;
     w.put<uint8_t>(C_Hello);
-    w.str(uuid);
-    w.str(app.world.myName);
-    w.put<uint64_t>(steam.ok ? steam.id : 0);
+    // Dev ids use the dev ticket (accepted by `--local` servers only); otherwise Steam signs our real SteamID.
+    bool dev = devId != 0 || !steam.requestTicket();
+    w.put<uint64_t>(myId());
+    if (dev)
+    {
+        w.put<uint16_t>(uint16_t(sizeof net::DEV_TICKET - 1));
+        w.bytes(net::DEV_TICKET, sizeof net::DEV_TICKET - 1);
+    }
+    else
+    {
+        w.put<uint16_t>(uint16_t(steam.ticket.size()));
+        w.bytes(steam.ticket.data(), steam.ticket.size());
+    }
     w.put<uint16_t>(uint16_t(steam.friends.size()));
     for (uint64_t f : steam.friends)
         w.put<uint64_t>(f);
@@ -130,7 +134,8 @@ void Session::pump()
         case NetEvent::Disconnect:
             connected = false;
             if (screen != Screen::Menu)
-                backToMenu(welcomed ? "Disconnected from the server." : "The server closed the connection.");
+                backToMenu(welcomed ? "Disconnected from the server."
+                                    : (serverNote.empty() ? "The server closed the connection." : serverNote));
             break;
         }
     }

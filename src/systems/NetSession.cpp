@@ -4,6 +4,7 @@
  */
 #include "systems/NetSession.hpp"
 
+#include "common/NameToken.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -14,26 +15,10 @@
 #include <cstring>
 #include <string>
 
-namespace
-{
-std::string sanitizeName(std::string name)
-{
-    for (char &c : name)
-        if (c < 32 || c == 127)
-            c = '?';
-    if (name.empty())
-        name = "Player";
-    if (name.size() > 20)
-        name.resize(20);
-    return name;
-}
-} // namespace
-
-void NetSession::bindConnection(uint64_t conn, int id, const std::string &name, uint64_t steamId,
-                                const std::vector<uint64_t> &friends)
+void NetSession::bindConnection(uint64_t conn, int id, uint64_t steamId, const std::vector<uint64_t> &friends)
 {
     Profile &p = world.pl[id];
-    p.name = name;
+    p.name = nameToken(steamId); // runtime only: clients resolve the persona name themselves
     p.online = true;
     p.conn = conn;
     p.steamId = steamId;
@@ -45,33 +30,89 @@ void NetSession::bindConnection(uint64_t conn, int id, const std::string &name, 
     world.connPlayer[conn] = id;
 }
 
+void NetSession::reject(uint64_t conn, const char *why)
+{
+    Writer w;
+    w.put<uint8_t>(S_Text);
+    w.str(why);
+    world.net.send(conn, w);
+    world.net.endAuth(conn);
+    world.net.kick(conn, true);
+}
+
 void NetSession::onHello(uint64_t conn, Reader &r)
 {
-    std::string uuid = r.str(), name = r.str();
     uint64_t steamId = r.get<uint64_t>();
+    size_t ticketLen = r.get<uint16_t>();
+    const uint8_t *t = r.bytes(ticketLen);
+    std::vector<uint8_t> ticket;
+    if (t && ticketLen <= 2048)
+        ticket.assign(t, t + ticketLen);
     std::vector<uint64_t> friends;
     int nf = r.get<uint16_t>();
     for (int i = 0; i < nf && i < 200; i++)
         friends.push_back(r.get<uint64_t>());
-    if (!r.ok || uuid.size() < 8 || uuid.size() > 64)
+    if (!r.ok || ticketLen > 2048)
     {
         world.net.kick(conn, false);
         return;
     }
-    name = sanitizeName(name);
+    if (pending.count(conn))
+        return; // one hello per connection
 
+    switch (world.net.beginAuth(conn, steamId, ticket))
+    {
+    case AuthResult::Rejected:
+        reject(conn, "Steam could not verify your login. Start Steam and try again.");
+        break;
+    case AuthResult::Pending:
+        pending[conn] = {steamId, friends, world.clock};
+        break;
+    case AuthResult::Accepted:
+        finishHello(conn, steamId, friends);
+        break;
+    }
+}
+
+void NetSession::onAuthResult(uint64_t conn, bool ok)
+{
+    auto it = pending.find(conn);
+    if (it == pending.end())
+        return; // late verdict for a connection that is already gone
+    PendingHello h = std::move(it->second);
+    pending.erase(it);
+    if (ok)
+        finishHello(conn, h.steamId, h.friends);
+    else
+        reject(conn, "Steam rejected your login ticket.");
+}
+
+void NetSession::authSecond()
+{
+    std::vector<uint64_t> stale;
+    for (auto &[conn, h] : pending)
+        if (world.clock - h.since > cfg().authTimeoutS)
+            stale.push_back(conn);
+    for (uint64_t conn : stale)
+    {
+        pending.erase(conn);
+        reject(conn, "Steam did not answer in time. Try again.");
+    }
+}
+
+// Ownership is keyed only by the verified SteamID: any machine that proves the id gets exactly that town.
+void NetSession::finishHello(uint64_t conn, uint64_t steamId, const std::vector<uint64_t> &friends)
+{
     int id = 0;
     for (int i = 1; i <= MAX_PLAYERS; i++)
-        if (world.pl[i].used && world.pl[i].uuid == uuid)
+        if (world.pl[i].used && world.pl[i].steamId == steamId)
             id = i;
     if (id && world.pl[id].online)
     {
-        Writer w;
-        w.put<uint8_t>(S_Text);
-        w.str("This profile is already connected.");
-        world.net.send(conn, w);
-        world.net.kick(conn, true);
-        return;
+        // The id is authenticated, so a new login replaces a stale or duplicate session of the same account.
+        uint64_t old = world.pl[id].conn;
+        world.net.kick(old, false);
+        onDisconnect(old);
     }
 
     bool fresh = false;
@@ -80,14 +121,14 @@ void NetSession::onHello(uint64_t conn, Reader &r)
         id = claimSlot();
         if (!id)
         {
-            world.net.kick(conn, false);
+            reject(conn, "The server is full.");
             return;
         }
         fresh = true;
-        initNewProfile(id, uuid);
+        initNewProfile(id, steamId);
     }
 
-    bindConnection(conn, id, name, steamId, friends);
+    bindConnection(conn, id, steamId, friends);
     Profile &p = world.pl[id];
 
     if (fresh)
@@ -108,7 +149,7 @@ void NetSession::onHello(uint64_t conn, Reader &r)
     s.repl.sendRoster();
     world.say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu."
                         : "Welcome back, " + p.name + "! Your base is just as you left it.");
-    std::printf("%s (%d) %s\n", p.name.c_str(), id, fresh ? "joined" : "rejoined");
+    std::printf("%llu (slot %d) %s\n", static_cast<unsigned long long>(steamId), id, fresh ? "joined" : "rejoined");
 }
 
 int NetSession::claimSlot()
@@ -140,15 +181,15 @@ int NetSession::claimSlot()
     return id;
 }
 
-void NetSession::initNewProfile(int id, const std::string &uuid)
+void NetSession::initNewProfile(int id, uint64_t steamId)
 {
     world.pl[id].used = true;
-    world.pl[id].uuid = uuid;
+    world.pl[id].steamId = steamId;
     world.resetProfile(id);
 
     // A configurable share of the factions is aggressive towards each newcomer.
     for (int f = 0; f < FACTION_COUNT; f++)
-        if (hash2(int(std::hash<std::string>{}(uuid) & 0x7fffffff), f, world.seed + 71) % 100 <
+        if (hash2(int((steamId ^ (steamId >> 32)) & 0x7fffffff), f, world.seed + 71) % 100 <
             uint32_t(cfg().hostileFactionPercent))
             world.pl[id].rep[f] = -50.f;
 
@@ -187,13 +228,15 @@ void NetSession::sendWelcome(uint64_t conn, int id)
         .put<uint32_t>(world.seed)
         .put<float>(p.cam.x)
         .put<float>(p.cam.y);
-    w.str(p.name);
+    w.str(p.name); // token, see NameToken.hpp
     putRules(w);
     world.net.send(conn, w);
 }
 
 void NetSession::onDisconnect(uint64_t conn)
 {
+    pending.erase(conn);
+    world.net.endAuth(conn);
     auto it = world.connPlayer.find(conn);
     int id = it == world.connPlayer.end() ? 0 : it->second;
     world.connPlayer.erase(conn);
@@ -202,6 +245,6 @@ void NetSession::onDisconnect(uint64_t conn)
     world.pl[id].online = false;
     world.pl[id].conn = 0;
     world.pl[id].lastSeen = nowSec();
-    std::printf("%s left\n", world.pl[id].name.c_str());
+    std::printf("%llu (slot %d) left\n", static_cast<unsigned long long>(world.pl[id].steamId), id);
     s.repl.sendRoster();
 }

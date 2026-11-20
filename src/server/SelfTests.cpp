@@ -21,6 +21,7 @@ const Scenario SCENARIOS[] = {
     {"economy", "build, produce, train with expected resource changes", economyTest},
     {"raid", "forced raid: raiders arrive, hall survives or raid expires", raidTest},
     {"net-garbage", "malformed / oversized / out-of-range packets", netGarbageTest},
+    {"identity", "SteamID-only ownership: separate towns, reconnects, forged / unanswered logins", identityTest},
     {"invariants", "invariant checker catches an orphaned job", invariantsTest},
 };
 
@@ -52,15 +53,20 @@ void Fixture::send(uint64_t conn, const Writer &w)
     sys.packets.onPacket(conn, w.b);
 }
 
-int Fixture::join(const std::string &uuid, const std::string &name, uint64_t steamId, uint64_t conn)
+int Fixture::join(uint64_t steamId, uint64_t conn)
+{
+    return joinWithTicket(steamId, std::vector<uint8_t>(DEV_TICKET, DEV_TICKET + sizeof DEV_TICKET - 1), conn);
+}
+
+int Fixture::joinWithTicket(uint64_t steamId, const std::vector<uint8_t> &ticket, uint64_t conn)
 {
     if (!conn)
         conn = nextConn++;
     Writer w;
     w.put<uint8_t>(C_Hello);
-    w.str(uuid);
-    w.str(name);
     w.put<uint64_t>(steamId);
+    w.put<uint16_t>(uint16_t(ticket.size()));
+    w.bytes(ticket.data(), ticket.size());
     w.put<uint16_t>(0);
     send(conn, w);
     auto it = world.connPlayer.find(conn);

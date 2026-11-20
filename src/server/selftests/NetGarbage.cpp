@@ -46,7 +46,7 @@ void netGarbageTest(Ctx &t)
 {
     Fixture f;
     std::mt19937 rng(7);
-    int id = f.join("selftest-uuid-0001", "Alice", 0, 500);
+    int id = f.join(1, 500);
     f.run(5);
     auto pay = payloads(rng);
 

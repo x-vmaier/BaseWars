@@ -129,6 +129,7 @@ void App::run(const std::string &autoJoin)
         float dt = GetFrameTime();
         session.steam.run();
         session.pump();
+        session.refreshNames();
         disp.update();
         post.ensureTargets();
 

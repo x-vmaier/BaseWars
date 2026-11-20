@@ -7,11 +7,10 @@
 #include <steam/isteamnetworkingutils.h>
 #include <steam/steam_api.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <steam/steam_gameserver.h>
-
-#include <cstdio>
 
 namespace net
 {
@@ -19,6 +18,7 @@ namespace net
 namespace
 {
 std::deque<NetEvent> *g_queue = nullptr;
+SteamServerNet *g_net = nullptr;
 HSteamNetPollGroup g_group = k_HSteamNetPollGroup_Invalid;
 
 ISteamNetworkingSockets *sockets()
@@ -63,12 +63,32 @@ void onStatus(SteamNetConnectionStatusChangedCallback_t *info)
 }
 } // namespace
 
+// Steam reports the ticket verdict (and later revocations) here.
+struct AuthCallbacks
+{
+    STEAM_GAMESERVER_CALLBACK(AuthCallbacks, onResponse, ValidateAuthTicketResponse_t);
+};
+
+void AuthCallbacks::onResponse(ValidateAuthTicketResponse_t *r)
+{
+    if (!g_net)
+        return;
+    auto it = g_net->authBySteamId.find(r->m_SteamID.ConvertToUint64());
+    if (it == g_net->authBySteamId.end())
+        return;
+    bool ok = r->m_eAuthSessionResponse == k_EAuthSessionResponseOK;
+    g_net->queue.push_back({NetEvent::Auth, it->second, {uint8_t(ok ? 1 : 0)}});
+}
+
+SteamServerNet::SteamServerNet() = default;
+
 bool SteamServerNet::start(uint16_t port, const std::string &serverName, bool localOnly)
 {
     // Game port = direct listen port, query port = port + 1 (server browser).
     SteamErrMsg err{};
-    if (SteamGameServer_InitEx(0, port, uint16_t(port + 1), eServerModeNoAuthentication, "0.2.0", &err) !=
-        k_ESteamAPIInitResult_OK)
+    if (SteamGameServer_InitEx(0, port, uint16_t(port + 1),
+                               localOnly ? eServerModeNoAuthentication : eServerModeAuthentication, "0.2.0",
+                               &err) != k_ESteamAPIInitResult_OK)
     {
         std::printf("SteamGameServer_Init failed: %s\n", err);
         return false;
@@ -92,6 +112,9 @@ bool SteamServerNet::start(uint16_t port, const std::string &serverName, bool lo
     }
 
     g_queue = &queue;
+    g_net = this;
+    devAuth = localOnly;
+    authCb = std::make_unique<AuthCallbacks>();
     SteamNetworkingConfigValue_t opt[2];
     opt[0].SetPtr(k_ESteamNetworkingConfig_Callback_ConnectionStatusChanged, reinterpret_cast<void *>(&onStatus));
     opt[1].SetInt32(k_ESteamNetworkingConfig_IP_AllowWithoutAuth,
@@ -124,9 +147,11 @@ SteamServerNet::~SteamServerNet()
     if (group)
         sockets()->DestroyPollGroup(group);
 
+    authCb.reset();
     SteamGameServer()->LogOff();
     SteamGameServer_Shutdown();
     g_queue = nullptr;
+    g_net = nullptr;
 }
 
 void SteamServerNet::publish(int players, int maxPlayers, const std::string &map)
@@ -184,6 +209,40 @@ void SteamServerNet::send(uint64_t conn, const Writer &w)
 void SteamServerNet::flush()
 {
     // Messages are sent with NoNagle, so they leave immediately; kept as the per-tick hook of the old transport API.
+}
+
+AuthResult SteamServerNet::beginAuth(uint64_t conn, uint64_t claimedId, const std::vector<uint8_t> &ticket)
+{
+    if (claimedId == 0)
+        return AuthResult::Rejected;
+    if (verifier)
+        return verifier(claimedId, ticket);
+    if (devAuth)
+    {
+        bool match = ticket.size() == sizeof DEV_TICKET - 1 && std::equal(ticket.begin(), ticket.end(), DEV_TICKET);
+        return match && claimedId < DEV_ID_LIMIT ? AuthResult::Accepted : AuthResult::Rejected;
+    }
+    if (!running || ticket.empty() || ticket.size() > 2048 || !CSteamID(claimedId).BIndividualAccount() ||
+        authBySteamId.count(claimedId))
+        return AuthResult::Rejected;
+
+    EBeginAuthSessionResult r =
+        SteamGameServer()->BeginAuthSession(ticket.data(), int(ticket.size()), CSteamID(claimedId));
+    if (r != k_EBeginAuthSessionResultOK)
+        return AuthResult::Rejected;
+    authBySteamId[claimedId] = conn;
+    return AuthResult::Pending;
+}
+
+void SteamServerNet::endAuth(uint64_t conn)
+{
+    for (auto it = authBySteamId.begin(); it != authBySteamId.end(); ++it)
+        if (it->second == conn)
+        {
+            SteamGameServer()->EndAuthSession(CSteamID(it->first));
+            authBySteamId.erase(it);
+            return;
+        }
 }
 
 void SteamServerNet::kick(uint64_t conn, bool linger)

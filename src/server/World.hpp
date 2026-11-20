@@ -48,7 +48,7 @@ struct Profile
     bool used = false, online = false;
     uint64_t conn = 0; // transport connection id (Steam connection)
     uint64_t steamId = 0;
-    std::string uuid, name;
+    std::string name; // runtime-only name token (NameToken.hpp), never saved or client-chosen
     uint64_t lastSeen = 0;
     float res[R_Count]{};
     bool allied[MAX_PLAYERS + 1]{}, pending[MAX_PLAYERS + 1]{}; // pending[x] = I invited x
