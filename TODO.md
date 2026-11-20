@@ -2,7 +2,7 @@
 
 Branch `feature/prompt-implementation`. T1-T13b are implemented and committed.
 **Do the first Roadmap row with status `todo`** (row order counts). One coherent task per session (see `CLAUDE.md`).
-Only the first three tasks are specified in detail below. Every later task has its full spec in `BACKLOG.md`: when a task becomes current, move its spec here.
+Only the first tasks are specified in detail below. Every later task has its full spec in `BACKLOG.md`: when a task becomes current, move its spec here.
 
 ## Design goals (every task is judged against these)
 
@@ -42,6 +42,7 @@ Only the first three tasks are specified in detail below. Every later task has i
 | T11 | Donation cooldown, shifting faction demand, diminishing gift returns |
 | T12 | `ui::CostRow` everywhere; tabbed Town Hall window with per-type defense quotas |
 | T13b | Maintainability refactor: `.clang-format`, draw queue, kind registry (`KindDefs.hpp`), Doxygen headers. A new building + troop needs 2 files, 0 `switch` edits |
+| T24a | `server --selftest` (boot, saveload, economy, raid, net-garbage, invariants) on a shared `Sim`; `World::checkInvariants()`; asan preset, `/W4` warnings policy, `tools/check.sh`, `tools/shot.sh`; saves now byte-stable; fixed OOB kind in `C_UpgradeUnit` |
 | T13 | Biome label, minimap trees, chat/build menu layout, high-contrast bars |
 
 ## Roadmap (do in this order)
@@ -50,7 +51,6 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 | # | Task | Size | Status | Why here |
 | --- | --- | --- | --- | --- |
-| 1 | **T24a** Verification harness (selftests, invariants, asan, `tools/check.sh`) | M | todo | Agents get no human playtest; every later task needs this |
 | 2 | **T18a** Identity: SteamID ownership, Steam names | M | todo | Real player bug; identity before new per-player state |
 | 3 | **T18b** Defeat flow: burning ruin, banner, resettlement | M | todo | Real player bug; creates the `Ruin` component |
 | 4 | **T18c** Tree canopy occlusion transparency | S | todo | Small visible win |
@@ -103,22 +103,6 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 ## Current task specs
 
-### T24a Verification harness (size M)
-
-Goal: agents can prove their work without a human. Nothing else in the game changes.
-
-* `server --selftest <name|list|all>`: headless, no Steam init, fixed seed, ticks fast-forwarded, deterministic, exit 0/1 with a readable log. Registry in `src/server/SelfTests.cpp`, scenarios in `src/server/selftests/*.cpp`.
-  Baseline scenarios: `boot` (worldgen + 5 simulated minutes), `saveload` (run, save, load, compare a hash over all persisted components), `economy` (build, train, produce, expected resources),
-  `raid` (force a raid, assert survival rules), `net-garbage` (malformed / oversized / out-of-range packets: no crash, no state change).
-* `World::checkInvariants()` (always on in selftests, `BW_INVARIANTS=1` in real runs): entities valid, no job / ship / caravan referencing dead entities, resources >= 0, footprints do not overlap, <= 1 Town Hall per owner, timed states have expiries.
-  Fix violations it finds in existing code, or log them in Known gaps if not fixable here.
-* `cmake --preset asan` (ASan + UBSan), zero warnings in every preset; selftests run under asan.
-* `tools/check.sh`: builds release + asan, runs all selftests, clang-format check. Advisory warnings (do not fail): every `BW_*` env var read in `src/` and every selftest name appears in `ARCHITECTURE.md`; every `src` file has a Doxygen header.
-  `tools/shot.sh`: scripted client screenshot with up to 3 retries, ignores the exit segfault; not part of the gate.
-* Update the Testing section of `ARCHITECTURE.md` to reality and remove its "Introduced by T24a" note.
-* Done when: `tools/check.sh` passes from a clean checkout and demonstrably fails when you temporarily (a) introduce a warning, (b) leave an orphan job.
-* Code: `ServerMain.cpp`, `World.*`, `SaveSystem.*`, `CMakePresets.json`, `cmake/Compiler.cmake`.
-
 ### T18a Identity: SteamID ownership and persona names (size M, critical bug)
 
 Today a profile is matched by a client-generated `uuid` (`Session.cpp`, `NetSession::onHello` compares `pl[i].uuid`); the client also sends its own name and an unauthenticated `steamId` in `C_Hello`.
@@ -147,6 +131,11 @@ Fixes: a defeated player keeps the endless damage post-process (`PostFx` vignett
 * Code: `NetSession::respawnIfDestroyed`, `SpawnSystem`, `PostFx.cpp`, `src/ui/BaseMenus.*`, `SaveSystem`.
 
 ## Known gaps / follow-ups
+
+* **T24a only verified by reading:** `tools/shot.sh` (never run), the non-MSVC branches of `cmake/Compiler.cmake` (UBSan on gcc/clang), the clang-format step of `check.sh` on Linux. asan on MSVC has no UBSan. The asan `raid` scenario (700 simulated seconds) takes 15+ minutes: the owner told us not to wait for it, so the asan runs of `raid` and `invariants` were never completed (asan `boot`, `saveload`, `economy`, `net-garbage` passed). Consider shortening `raid` under asan.
+* **Observed by `raid`:** a forced raid kills and respawns the player repeatedly (7 defeats in 700 s: raiders keep targeting the new hall for 600 s). Stress without relief; T18b / T25a must fix.
+* **Invariants not yet checked:** `Attack.target`, `Support`, `Convoy` endpoints, `Voyage.destUid` (may legitimately dangle until the owning system notices).
+* **Selftest limits:** `economy` only covers a Lumber Camp and one Pawn; no selftest for clans, transfers, ships, relocation.
 
 * **Structure leftovers:** `onPacket` (75 lines), `SaveSystem::readBaseEntity` (69), `NetSession::onHello` (62), `App::run` (57), `Input::update` (51); `World.cpp`, `SaveSystem.cpp`, `ClearingSystem.cpp`, `systems/PacketHandler.cpp` are 650-720 lines.
   A new troop beyond the existing five needs a card in `TrainingPanel` (fixed 5 cards) and unit-level replication (`K_Pawn..K_Monk`); small kind checks remain in `Input.cpp`, archer fire arrows and patrol/raid rosters. Fix opportunistically; T17 finishes.

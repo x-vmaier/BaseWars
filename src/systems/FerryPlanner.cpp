@@ -51,15 +51,15 @@ void FerryPlanner::shoreTiles(Pos around, int maxR, size_t want, std::vector<IV>
     }
 }
 
-IV FerryPlanner::waterNextTo(IV s)
+IV FerryPlanner::waterNextTo(IV from)
 {
-    IV best{s.x, s.y};
+    IV best{from.x, from.y};
     int bs = -1;
 
     static const int d4[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
     for (auto &d : d4)
     {
-        int x = s.x + d[0], y = s.y + d[1];
+        int x = from.x + d[0], y = from.y + d[1];
         if (world.biome(x, y) != B_Ocean)
             continue;
 

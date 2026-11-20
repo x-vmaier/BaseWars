@@ -21,6 +21,8 @@ class SteamServerNet
     ~SteamServerNet();
     // localOnly: skip the Steam backend login/advertising (offline testing); direct IP still works.
     bool start(uint16_t port, const std::string &serverName, bool localOnly);
+    void startOffline() { offline = true; } // selftests: no Steam; sends are counted, kicks become Disconnect events
+    size_t sentCount() const { return sent; }
     bool relayActive() const { return advertised; }
     void publish(int players, int maxPlayers, const std::string &map);
     bool poll(NetEvent &out);
@@ -31,7 +33,8 @@ class SteamServerNet
   private:
     void pump();
     std::deque<NetEvent> queue;
-    bool running = false, advertised = false;
+    bool running = false, advertised = false, offline = false;
+    size_t sent = 0;
     uint32_t listenIp = 0, listenP2P = 0, group = 0;
 };
 

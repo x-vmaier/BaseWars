@@ -30,6 +30,15 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "asan",
+            "displayName": "AddressSanitizer (+ UBSan outside MSVC)",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "BW_SANITIZE": "ON"
+            }
         }
     ],
     "buildPresets": [
@@ -40,6 +49,10 @@
         {
             "name": "release",
             "configurePreset": "release"
+        },
+        {
+            "name": "asan",
+            "configurePreset": "asan"
         }
     ],
     "testPresets": [

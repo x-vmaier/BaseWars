@@ -321,7 +321,7 @@ void PacketHandler::onSetHaul(int id, Reader &r)
 void PacketHandler::onUpgradeUnit(int id, Profile &p, Reader &r)
 {
     auto k = Kind(r.get<uint8_t>());
-    if (!r.ok || !isTroop(k))
+    if (!r.ok || k >= K_Count || !isTroop(k))
         return;
     int cur = std::max<int>(1, p.ulevel[k]), to = cur + 1;
     if (to > MAX_UNIT_LEVEL)

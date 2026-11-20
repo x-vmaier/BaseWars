@@ -45,6 +45,7 @@ class SaveSystem
     void writeBaseEntity(Writer &w, entt::entity e);
     void readBasePlayers(Reader &r);
     void readBaseEntity(Reader &r);
+    template <class F> std::vector<entt::entity> byUid(F keep);
     World &world;
     entt::registry &reg;
     Systems &s;

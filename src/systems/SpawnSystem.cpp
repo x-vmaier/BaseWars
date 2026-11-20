@@ -104,11 +104,11 @@ void SpawnSystem::spawnBase(int id, const std::vector<uint64_t> &friends)
 // Test hook: BW_SPAWN=x,y puts the first new base at the clearing nearest to that point.
 bool SpawnSystem::testSpawn(IV &c)
 {
-    static const char *s = std::getenv("BW_SPAWN");
-    if (!s)
+    static const char *spawnAt = std::getenv("BW_SPAWN");
+    if (!spawnAt)
         return false;
     int x = 0, y = 0;
-    if (std::sscanf(s, "%d,%d", &x, &y) != 2)
+    if (std::sscanf(spawnAt, "%d,%d", &x, &y) != 2)
         return false;
     for (int r = 0; r < 60; r++)
         for (int dy = -r; dy <= r; dy++)

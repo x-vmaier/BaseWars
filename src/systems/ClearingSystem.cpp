@@ -51,15 +51,15 @@ bool ClearingSystem::worldBuildOk(int id, Kind k, int tx, int ty)
         uint8_t f = world.featOf(t.x, t.y);
         (f == F_Rock ? rocks : (f == F_Gold ? gold : trees))++;
     }
-    std::string s = "Cannot build here: clear";
+    std::string msg = "Cannot build here: clear";
     if (trees)
-        s += " " + std::to_string(trees) + " tree" + (trees > 1 ? "s" : "");
+        msg += " " + std::to_string(trees) + " tree" + (trees > 1 ? "s" : "");
     if (rocks)
-        s += (trees ? "," : "") + std::string(" ") + std::to_string(rocks) + " rock" + (rocks > 1 ? "s" : "");
+        msg += (trees ? "," : "") + std::string(" ") + std::to_string(rocks) + " rock" + (rocks > 1 ? "s" : "");
     if (gold)
-        s += ((trees || rocks) ? "," : "") + std::string(" ") + std::to_string(gold) + " gold vein" +
-             (gold > 1 ? "s" : "");
-    world.say(id, s + " first (right-click them to send a pawn).");
+        msg += ((trees || rocks) ? "," : "") + std::string(" ") + std::to_string(gold) + " gold vein" +
+               (gold > 1 ? "s" : "");
+    world.say(id, msg + " first (right-click them to send a pawn).");
     return false;
 }
 

@@ -79,8 +79,8 @@ namespace
 // Sprite drawers per feature type; trees and bushes sway, rocks are static.
 void drawTree(const FeatureView &fv, const char *a, const char *b, float w, float h, float anchorY)
 {
-    Anim a1 =
-        mkAnim(std::string("Terrain/Resources/Wood/Trees/Tree") + (fv.h & 1 ? a : b) + ".png", w, h, 6, w / 2, anchorY);
+    Anim a1 = mkAnim(std::string("Terrain/Resources/Wood/Trees/Tree") + (fv.h & 1 ? a : b) + ".png", int(w), int(h), 6,
+                     w / 2, anchorY);
     drawAnim(a1, frameFor(a1, fv.t, float(fv.h % 8)), fv.cx, fv.by, false, 1.f);
 }
 

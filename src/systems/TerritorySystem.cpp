@@ -220,11 +220,11 @@ void TerritorySystem::migrateTown(int ow, entt::entity nth)
     size_t n = 0;
     for (auto e : us)
     {
-        IV s = spots[(n * 7 + 3) % spots.size()];
+        IV spot = spots[(n * 7 + 3) % spots.size()];
         Pos old = reg.get<Pos>(e);
         if (n < 10)
             world.fx(E_Dust, old.x, old.y);
-        reg.get<Pos>(e) = {float(s.x) + .5f, float(s.y) + .5f};
+        reg.get<Pos>(e) = {float(spot.x) + .5f, float(spot.y) + .5f};
         auto &u = reg.get<Unit>(e);
         u.path.clear();
         u.i = 0;
@@ -234,7 +234,7 @@ void TerritorySystem::migrateTown(int ow, entt::entity nth)
         reg.remove<Support>(e);
         reg.remove<Extinguish>(e);
         if (n < 10)
-            world.fx(E_Dust, float(s.x) + .5f, float(s.y) + .5f);
+            world.fx(E_Dust, float(spot.x) + .5f, float(spot.y) + .5f);
         n++;
     }
     world.say(ow, std::to_string(n) + " troops and pawns moved into your new town.");

@@ -2,8 +2,8 @@
  * @file ServerMain.cpp
  * @brief Authoritative server entry point and tick loop.
  */
-#include "server/World.hpp"
-#include "systems/Systems.hpp"
+#include "server/SelfTests.hpp"
+#include "server/Sim.hpp"
 
 #include <chrono>
 #include <csignal>
@@ -22,10 +22,11 @@ class Server
 {
   public:
     Server(uint16_t port, uint32_t seed, std::string path, const std::string &serverName, bool localOnly)
-        : world(seed, std::move(path)), sys(world)
+        : sim(seed, std::move(path))
     {
+        World &world = sim.world;
         bool existed = std::filesystem::exists(world.savePath);
-        bool loaded = sys.save.loadGame();
+        bool loaded = sim.sys.save.loadGame();
         if (!loaded && existed)
         {
             std::error_code ec;
@@ -47,7 +48,7 @@ class Server
         std::printf("Server listening on port %d (Steam Networking Sockets) (seed %u, %s, steam %s)\n", port,
                     world.seed, loaded ? "savegame loaded" : "fresh world", world.net.relayActive() ? "on" : "off");
     }
-    ~Server() { sys.save.saveGame(); }
+    ~Server() { sim.sys.save.saveGame(); }
     Server(const Server &) = delete;
     Server &operator=(const Server &) = delete;
 
@@ -58,10 +59,10 @@ class Server
         const auto step = std::chrono::milliseconds(1000 / TICK_HZ);
         while (!g_quit)
         {
-            pollNet();
-            publishPresence();
-            update(1.f / TICK_HZ);
-            world.net.flush();
+            sim.pollNet();
+            sim.publishPresence();
+            sim.update(1.f / TICK_HZ);
+            sim.world.net.flush();
             next += step;
             auto now = clk::now();
             if (next < now - std::chrono::seconds(1))
@@ -72,143 +73,16 @@ class Server
     }
 
   private:
-    World world;
-    Systems sys;
-
-    // Base mechanics, once per second.
-    void baseSecond()
-    {
-        for (int id = 1; id <= MAX_PLAYERS; id++)
-            if (world.pl[id].used)
-                sys.spawn.baseTestInit(id);
-        sys.territory.evalFunctional();
-        sys.territory.relocSecond();
-        sys.fire.burnSecond();
-        sys.defense.supportSecond();
-        sys.clan.homelessSecond();
-        sys.faction.demandSecond();
-        for (int id = 1; id <= MAX_PLAYERS; id++)
-            if (world.pl[id].online)
-                sys.repl.sendBaseInfo(id);
-    }
-
-    void pollNet()
-    {
-        NetEvent ev;
-        while (world.net.poll(ev))
-        {
-            switch (ev.type)
-            {
-            case NetEvent::Connect:
-                break;
-            case NetEvent::Receive:
-                sys.packets.onPacket(ev.conn, ev.data);
-                break;
-            case NetEvent::Disconnect:
-                sys.session.onDisconnect(ev.conn);
-                break;
-            }
-        }
-    }
-
-    // Keeps the Steam server-browser entry fresh.
-    void publishPresence()
-    {
-        if (world.clock - world.lastPublish <= 5)
-            return;
-
-        int online = 0;
-        for (int i = 1; i <= MAX_PLAYERS; i++)
-            if (world.pl[i].online)
-                online++;
-        world.net.publish(online, MAX_PLAYERS, "Base Wars");
-        world.lastPublish = world.clock;
-    }
-
-    // Systems that only need to run a few times per second.
-    void slowSystems(const std::vector<entt::entity> &units, const std::vector<entt::entity> &blds)
-    {
-        if (world.tick % 20 == 0)
-        {
-            sys.env.coldAndWake(units, blds);
-            baseSecond();
-            sys.town.townTick();
-            sys.faction.callHelp();
-            sys.convoy.updateSpotting();
-            sys.convoy.spawnHauls();
-            sys.raid.raidTick();
-        }
-        if (world.tick % 4 == 0)
-            sys.env.explore(units, blds);
-    }
-
-    // Staggered ticks spread the per-player packets over the second.
-    void replicate()
-    {
-        for (int id = 1; id <= MAX_PLAYERS; id++)
-        {
-            if (!world.pl[id].online)
-                continue;
-            if (world.tick % 10 == 0)
-                sys.repl.sendQueues(id);
-            if (world.tick % 2 == 0)
-                sys.repl.sendState(id);
-            if (world.tick % 8 == 0)
-                sys.repl.sendPaths(id);
-            if (world.tick % 10 == 3 && world.pl[id].online)
-                sys.repl.sendShipInfo(id);
-            if (world.tick % 10 == 0)
-                sys.repl.sendFog(id);
-        }
-        if (world.tick % 2 == 0)
-            world.effects.clear();
-
-        if (world.tick % 20 == 0)
-        {
-            sys.repl.sendRoster();
-            for (int id = 1; id <= MAX_PLAYERS; id++)
-                if (world.pl[id].online)
-                    sys.repl.sendMap(id);
-        }
-    }
-
-    void update(float dt)
-    {
-        auto &reg = world.reg;
-        world.tick++;
-        world.clock += dt;
-        std::vector<entt::entity> units, blds;
-        reg.view<Info>().each([&](entt::entity e, const Info &i) { (isBuilding(i.kind) ? blds : units).push_back(e); });
-
-        sys.build.tick(blds, dt);
-        sys.units.behave(units, dt);
-        sys.combat.processKills();
-        sys.units.move(units, dt);
-        sys.naval.shipsTick(dt);
-        slowSystems(units, blds);
-
-        sys.clearing.clearTick(dt);
-        sys.construction.tick(dt);
-        if (world.tick % 20 == 7)
-        {
-            sys.hunt.sheepSecond();
-            sys.patrol.patrolSecond();
-        }
-        sys.defense.flushAlerts();
-        replicate();
-
-        if (world.clock - world.lastSave > 30)
-        {
-            sys.save.saveGame();
-            world.lastSave = world.clock;
-        }
-    }
+    Sim sim;
 };
 
 } // namespace
 
 int main(int argc, char **argv)
 {
+    for (int i = 1; i + 1 < argc; i++)
+        if (std::string(argv[i]) == "--selftest")
+            return selftest::runCli(argv[i + 1]);
     int port = argc > 1 ? std::atoi(argv[1]) : DEFAULT_PORT;
     uint32_t seed = argc > 2 ? uint32_t(std::strtoul(argv[2], nullptr, 10)) : std::random_device{}();
     std::string save = argc > 3 ? argv[3] : "savegame.bin";

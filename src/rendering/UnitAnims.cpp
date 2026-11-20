@@ -23,7 +23,7 @@ struct AnimCtx
 
 Anim clip(const AnimCtx &c, const std::string &file, int w, int n, float ax, float ay)
 {
-    return mkAnim(c.base + file, w, w, n, ax, ay);
+    return mkAnim(c.base + file, w, w, float(n), ax, ay);
 }
 
 Anim pawnAnim(const AnimCtx &c)

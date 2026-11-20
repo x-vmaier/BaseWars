@@ -175,6 +175,7 @@ bool SteamServerNet::poll(NetEvent &out)
 
 void SteamServerNet::send(uint64_t conn, const Writer &w)
 {
+    sent++;
     if (running)
         sockets()->SendMessageToConnection(HSteamNetConnection(conn), w.b.data(), uint32_t(w.b.size()),
                                            k_nSteamNetworkingSend_Reliable | k_nSteamNetworkingSend_NoNagle, nullptr);
@@ -187,6 +188,8 @@ void SteamServerNet::flush()
 
 void SteamServerNet::kick(uint64_t conn, bool linger)
 {
+    if (offline)
+        queue.push_back({NetEvent::Disconnect, conn, {}});
     if (!running)
         return;
 

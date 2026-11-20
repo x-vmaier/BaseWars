@@ -12,7 +12,7 @@ src/common/   KindDefs.hpp (kind registry: KINDS table, KT_* tags), Shared.hpp (
               Progression.hpp (Town Hall gates, level/cost/time curves), ServerConfig (config/server.cfg loader)
 src/components/  data-only EnTT components (server side)
 src/networking/  SteamServerNet / SteamClientNet (Steam Networking Sockets), SteamClient (login/friends), ServerBrowser
-src/server/   World (shared server state + entity helpers), ServerMain (main + tick loop), SelfTests (+ selftests/*.cpp)
+src/server/   World (shared server state + entity helpers), Sim (system order per tick), Invariants (checkInvariants), ServerMain (main + net loop), SelfTests (+ selftests/*.cpp)
 src/systems/  one class per server system, all taking World& and Systems& (see Systems.hpp)
 src/client/   App (frame loop), Session, PacketHandler, Commands, Input, Placement, ClientWorld, TestHooks, Settings
 src/rendering/  renderers (terrain, water, buildings, units, ships, effects, post-fx, minimap), Assets, Bars, Sprites
@@ -26,15 +26,15 @@ Headers sit beside their `.cpp`. No `.inc` files. Files should stay readable (gu
 
 * Requires the Steamworks SDK in `third_party/steamworks` (folder containing `public/steam/steam_api.h`; git-ignored) or `-DSTEAMWORKS_SDK_DIR=<path>` / `STEAMWORKS_SDK` env var.
 * `cmake --preset release && cmake --build build/release`. Post-build steps copy `steam_api`, `steam_appid.txt` (480), `config/server.cfg` (server), `config.txt` and a link/copy of `assets/` (client). `compile_commands.json` is exported.
-* `cmake --preset asan` builds with AddressSanitizer + UBSan (from T24a). Zero warnings in every preset.
+* `cmake --preset asan` builds with AddressSanitizer + UBSan (MSVC: ASan only; the runtime DLL comes from the VS environment). Zero warnings in every preset (`cmake/Compiler.cmake`: `/W4` or `-Wall -Wextra`, `-DBW_WERROR=ON` makes them errors; `tools/check.sh` sets it).
+* On Windows run builds and `tools/check.sh` from a shell with the MSVC environment (vcvars64) or set `BW_VCVARS` to the path of `vcvars64.bat`.
 
 ## Testing and verification
 
-*(Introduced by T24a; until it lands only manual client/server runs exist. Delete this note then.)*
-
 * `tools/check.sh` is the gate: release + asan builds, all selftests, clang-format check. Docs-sync (every `BW_*` env hook and selftest name appears in this file) and header checks are advisory warnings.
 * **Selftests:** `server --selftest <name|list|all>`. Headless: no Steam, fixed seed, fast-forwarded ticks, deterministic, exit 0/1. Registered by name in `src/server/SelfTests.cpp`, one file per feature under `src/server/selftests/`.
-  Every feature task adds a scenario with numeric assertions. Baseline: `boot`, `saveload`, `economy`, `raid`, `net-garbage`.
+  Every feature task adds a scenario with numeric assertions. Baseline: `boot`, `saveload` (save -> load -> save byte-identical, so saves must be written in a deterministic order), `economy`, `raid`, `net-garbage`, `invariants` (the checker catches an orphaned job).
+  Scenarios use `selftest::Fixture` (a `Sim` = World + Systems, offline transport, fake connections via `join`, `run(seconds)`); `Sim` (`src/server/Sim.cpp`) holds the tick order shared with the real server loop.
 * **Invariants:** `World::checkInvariants()` (always on in selftests, `BW_INVARIANTS=1` in real runs): stored entities valid, no job / ship / caravan / garrison referencing a dead entity, resources >= 0, footprints do not overlap, at most one Town Hall per owner, timed states have expiries.
   A new component that can dangle adds its check here.
 * **Stuck-state rule:** every player-facing state has a guaranteed exit and a selftest proving it.
@@ -84,9 +84,9 @@ One registry per family; ids (`enum Kind`) are persisted and sent, so append onl
 
 Client: `BW_SHOT`, `BW_SHOT_FRAMES`, `BW_CAM`, `BW_ZOOM`, `BW_CMD`, `BW_MOUSE`, `BW_UI`, `BW_SCALE`, `BW_MENU`, `BW_SITE`, `BW_THTAB`, `BW_THHOVER`, `BW_THCLICK`, `BW_WIN`.
 `BW_SITE` verbs: `build`, `upgrade`, `train:<building kind>:<unit kind>@<frame>`, `repair`, `cancel`, `ctx`, `donate`, `alloc`, `dispose`, `quota`.
-Server: `BW_RICH`, `BW_AGGRO`, `BW_REVEAL`, `BW_RAIDNOW`, `BW_SEEALL`, `BW_BASETEST`, `BW_BASESPEED`, `BW_BASEDEBUG`, `BW_HURT`, `BW_SPAWN`, `BW_ARMY`, `BW_PATROLNOW`, `BW_WORLDLOG`.
+Server: `BW_RICH`, `BW_AGGRO`, `BW_REVEAL`, `BW_RAIDNOW`, `BW_SEEALL`, `BW_BASETEST`, `BW_BASESPEED`, `BW_BASEDEBUG`, `BW_HURT`, `BW_SPAWN`, `BW_ARMY`, `BW_PATROLNOW`, `BW_WORLDLOG`, `BW_INVARIANTS` (log invariant violations once per second). Flag: `server --selftest <name|list|all>`.
 Instant timers for fast testing are `debug_instant_*` in `config/server.cfg`.
-Hooks arrive with their tasks and are added here then: `--selftest` and `BW_INVARIANTS` (T24a), `BW_DEV_ID` and force-defeat hooks (T18b), fake latency/loss (T19a), `BW_PACING` (T25a).
+Hooks arrive with their tasks and are added here then: `BW_DEV_ID` and force-defeat hooks (T18b), fake latency/loss (T19a), `BW_PACING` (T25a).
 
 ## Planned architecture
 

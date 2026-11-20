@@ -248,6 +248,9 @@ class World
     void shipDestroyed(entt::entity ship); // passengers go down with the ship
     void removeOwner(int id);
 
+    // ---- verification (Invariants.cpp): human-readable violations, empty when consistent
+    std::vector<std::string> checkInvariants();
+
     // ---- pathfinding (A*, 8-dir, bounded, partial paths allowed)
     bool findPath(IV s, IV g, bool water, uint32_t ignore, std::vector<Pos> &out, int maxNodes = 7000);
     bool order(entt::entity e, Pos goal, uint32_t ignore = 0, int maxNodes = 7000);

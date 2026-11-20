@@ -99,13 +99,13 @@ void DefenseSystem::sendPatrol(entt::entity e, Pos dest, int victim, bool defens
 {
     int ow = reg.get<Owner>(e).id;
     Pos p = reg.get<Pos>(e);
-    Support s;
-    s.dest = dest;
-    s.home = homeOf(ow, p);
-    s.victim = uint8_t(victim);
-    s.defense = defense;
+    Support sp;
+    sp.dest = dest;
+    sp.home = homeOf(ow, p);
+    sp.victim = uint8_t(victim);
+    sp.defense = defense;
     reg.remove<Attack>(e);
-    reg.emplace_or_replace<Support>(e, s);
+    reg.emplace_or_replace<Support>(e, sp);
     if (!route)
         return; // a ship carries the unit; it is ordered to the fight after landing
     reg.emplace_or_replace<AMove>(e, AMove{dest});

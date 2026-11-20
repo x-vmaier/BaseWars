@@ -114,8 +114,8 @@ void Replication::buildingFields(entt::entity e, const Info &in, uint8_t &state,
     prog = uint8_t(std::min(1.f, b.progress) * 100.f);
 
     float tot = 0;
-    for (float s : b.stock)
-        tot += s;
+    for (float amount : b.stock)
+        tot += amount;
     stock = uint16_t(std::min(tot, 65000.f));
 }
 

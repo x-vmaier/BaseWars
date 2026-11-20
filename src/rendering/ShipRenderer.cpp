@@ -65,7 +65,7 @@ void drawHull(const ShipPose &p)
     Color hullB = tier == 3 ? rgb(108, 72, 48) : (tier == 2 ? rgb(128, 90, 56) : rgb(138, 96, 56));
     Color edge = rgb(70, 44, 26);
 
-    DrawEllipse(int(px), int(py + 6 * s), int(46 * s), int(12 * s), rgb(0, 40, 80, 70));
+    DrawEllipse(int(px), int(py + 6 * s), 46 * s, 12 * s, rgb(0, 40, 80, 70));
     Vector2 a{px - 44 * s * d, py - 10 * s}, b{px + 44 * s * d, py - 10 * s}, c2{px + 30 * s * d, py + 8 * s},
         e{px - 30 * s * d, py + 8 * s};
     DrawTriangle(a, e, c2, hullA);
@@ -163,7 +163,7 @@ void ShipRenderer::drawShip(float px, float py, int owner, bool flip, bool hover
 
     drawCrew(pose, flip, hover, t, id, troops);
     if (hover)
-        DrawEllipseLines(int(px), int(py - 4), int(50 * s), int(16 * s), WHITE);
+        DrawEllipseLines(int(px), int(py - 4), 50 * s, 16 * s, WHITE);
 }
 
 // Overlay above an own/allied ship: tier name and load.

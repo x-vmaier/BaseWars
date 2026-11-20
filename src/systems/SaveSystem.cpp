@@ -37,11 +37,25 @@ void writePlayer(Writer &w, int i, const Profile &p)
     for (int k = K_Pawn; k <= K_Monk; k++)
         w.put<uint8_t>(uint8_t(std::max<int>(1, p.ulevel[k])));
     w.put<uint32_t>(uint32_t(p.expl.size()));
-    for (auto &[k, b] : p.expl)
+    std::vector<int64_t> keys; // sorted: saves are byte-stable (selftest saveload compares them)
+    for (auto &kv : p.expl)
+        keys.push_back(kv.first);
+    std::sort(keys.begin(), keys.end());
+    for (int64_t k : keys)
     {
         w.put<int64_t>(k);
-        w.bytes(b.data(), 32);
+        w.bytes(p.expl.at(k).data(), 32);
     }
+}
+
+// Hash sets are written in key order so saves are byte-stable (selftest saveload compares them).
+void putSorted(Writer &w, const std::unordered_set<int64_t> &set)
+{
+    std::vector<int64_t> keys(set.begin(), set.end());
+    std::sort(keys.begin(), keys.end());
+    w.put<uint32_t>(uint32_t(keys.size()));
+    for (int64_t k : keys)
+        w.put<int64_t>(k);
 }
 
 void readPlayer(Reader &r, Profile &p)
@@ -144,6 +158,20 @@ void readUnitJobs(Reader &r, entt::registry &reg, entt::entity e, uint8_t fl)
 }
 } // namespace
 
+// Entities matching `keep`, ordered by uid: registry iteration order depends on creation history, saves must not.
+template <class F> std::vector<entt::entity> SaveSystem::byUid(F keep)
+{
+    std::vector<entt::entity> v;
+    reg.view<Uid>().each([&](entt::entity e, const Uid &)
+    {
+        if (keep(e))
+            v.push_back(e);
+    });
+    std::sort(v.begin(), v.end(),
+              [&](entt::entity a, entt::entity b) { return reg.get<Uid>(a).id < reg.get<Uid>(b).id; });
+    return v;
+}
+
 void SaveSystem::saveGame()
 {
     Writer w;
@@ -192,9 +220,7 @@ void SaveSystem::writeWorldState(Writer &w)
     for (float d : world.facDonated)
         w.put<float>(d);
 
-    w.put<uint32_t>(uint32_t(world.regionsDone.size()));
-    for (auto k : world.regionsDone)
-        w.put<int64_t>(k);
+    putSorted(w, world.regionsDone);
 
     w.put<uint32_t>(uint32_t(world.towns.size()));
     for (auto &t : world.towns)
@@ -206,27 +232,18 @@ void SaveSystem::writeWorldState(Writer &w)
             .put<uint8_t>(t.alive ? 1 : 0)
             .put<double>(t.respawnAt);
 
-    w.put<uint32_t>(uint32_t(world.spawned.size()));
-    for (auto k : world.spawned)
-        w.put<int64_t>(k);
+    putSorted(w, world.spawned);
 }
 
 void SaveSystem::writeEntities(Writer &w)
 {
-    uint32_t saved = 0;
-    reg.view<Uid>().each([&](entt::entity e, const Uid &)
-    {
-        if (!world.ephemeral(e))
-            saved++;
-    });
-    w.put<uint32_t>(saved);
-
-    reg.view<Uid, Owner, Info, Health>().each(
-        [&](entt::entity e, const Uid &uid, const Owner &o, const Info &in, const Health &h)
-    {
-        if (!world.ephemeral(e))
-            writeEntity(w, e, uid, o, in, h);
-    });
+    std::vector<entt::entity> es;
+    for (auto e : byUid([&](entt::entity x) { return !world.ephemeral(x); }))
+        if (reg.all_of<Owner, Info, Health>(e))
+            es.push_back(e);
+    w.put<uint32_t>(uint32_t(es.size()));
+    for (auto e : es)
+        writeEntity(w, e, reg.get<Uid>(e), reg.get<Owner>(e), reg.get<Info>(e), reg.get<Health>(e));
 }
 
 void SaveSystem::writeEntity(Writer &w, entt::entity e, const Uid &uid, const Owner &o, const Info &in, const Health &h)
@@ -401,8 +418,8 @@ void SaveSystem::readBuilding(Reader &r, entt::entity e, Kind k, uint32_t uid)
     b.tx = r.get<int32_t>();
     b.ty = r.get<int32_t>();
     b.progress = r.get<float>();
-    for (float &s : b.stock)
-        s = r.get<float>();
+    for (float &amount : b.stock)
+        amount = r.get<float>();
     b.respawn = r.get<float>();
     b.haulPct = r.get<uint8_t>();
     reg.emplace<Building>(e, b);
@@ -456,9 +473,7 @@ void SaveSystem::readOptionalSections(Reader &r)
 
 void SaveSystem::worldSave(Writer &w)
 {
-    w.put<uint32_t>(uint32_t(world.cleared.size()));
-    for (auto k : world.cleared)
-        w.put<int64_t>(k);
+    putSorted(w, world.cleared);
 }
 
 void SaveSystem::worldLoad(Reader &r)
@@ -474,12 +489,8 @@ void SaveSystem::worldLoad(Reader &r)
 
 void SaveSystem::shipsSave(Writer &w)
 {
-    std::vector<entt::entity> ships;
-    reg.view<Ship>().each([&](entt::entity e, const Ship &s)
-    {
-        if (!s.pax.empty())
-            ships.push_back(e);
-    });
+    std::vector<entt::entity> ships =
+        byUid([&](entt::entity e) { return reg.all_of<Ship>(e) && !reg.get<Ship>(e).pax.empty(); });
     w.put<uint32_t>(uint32_t(ships.size()));
     for (auto e : ships)
     {
@@ -528,12 +539,8 @@ void SaveSystem::saveBase(Writer &w)
 
     writeBasePlayers(w);
 
-    std::vector<entt::entity> es;
-    reg.view<Uid>().each([&](entt::entity e, const Uid &)
-    {
-        if (reg.any_of<BFlags, Moving, RelocNew, TrainQ, Support, SiteJob>(e))
-            es.push_back(e);
-    });
+    std::vector<entt::entity> es =
+        byUid([&](entt::entity e) { return reg.any_of<BFlags, Moving, RelocNew, TrainQ, Support, SiteJob>(e); });
     w.put<uint32_t>(uint32_t(es.size()));
     for (auto e : es)
         writeBaseEntity(w, e);

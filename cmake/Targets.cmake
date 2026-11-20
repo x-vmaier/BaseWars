@@ -19,6 +19,7 @@ bw_collect_sources(BW_COMMON_SOURCES common)
 add_library(bw_common STATIC ${BW_COMMON_SOURCES})
 target_include_directories(bw_common PUBLIC "${BW_SRC}")
 target_link_libraries(bw_common PUBLIC EnTT::EnTT steamworks)
+bw_apply_compiler_policy(bw_common)
 
 if(WIN32)
     target_link_libraries(bw_common PUBLIC ws2_32 winmm)
@@ -32,6 +33,7 @@ add_executable(server
     "${BW_SRC}/networking/SteamServerNet.cpp"
 )
 target_link_libraries(server PRIVATE bw_common)
+bw_apply_compiler_policy(server)
 bw_copy_steam_runtime(server)
 
 add_custom_command(TARGET server POST_BUILD
@@ -49,6 +51,7 @@ add_executable(client
     "${BW_SRC}/networking/ServerBrowser.cpp"
 )
 target_link_libraries(client PRIVATE bw_common raylib)
+bw_apply_compiler_policy(client)
 bw_copy_steam_runtime(client)
 bw_link_assets(client)
 
