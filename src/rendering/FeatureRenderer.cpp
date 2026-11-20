@@ -25,6 +25,13 @@ void FeatureRenderer::frame()
             mineCtr.push_back({g.x, g.y});
     });
 
+    ownFeet.clear();
+    W.reg.view<RPos, Info>().each([&](const RPos &p, const Info &i)
+    {
+        if (i.owner == W.me && !isBuilding(i.kind) && !aboardUnit(i))
+            ownFeet.push_back({p.x * TILE, p.y * TILE});
+    });
+
     int placing = app.placement.buildKind;
     if (placing >= 0 && placing < K_Count && hasTag(Kind(placing), KT_GoldBoosted) && !app.overUI(ui::mouse()))
     {
@@ -74,6 +81,32 @@ void FeatureRenderer::goldGlints(float cx, float by, uint32_t h, double t, bool 
     }
 }
 
+// A unit is hidden when its foot is above the tree's foot (drawn earlier) and lies inside the canopy box; the head
+// reaches ~60 px above the foot, so the box is extended downwards by that. Only own units count.
+float FeatureRenderer::canopyAlpha(int x, int y, float cx, float by, float top, float halfW)
+{
+    constexpr float MIN_ALPHA = .38f, FADE_PER_SEC = 4.f;
+    bool hidden = false;
+    for (const Vector2 &f : ownFeet)
+        if (f.y < by && f.y > by - top && std::fabs(f.x - cx) < halfW)
+        {
+            hidden = true;
+            break;
+        }
+
+    int64_t key = chunkKey(x, y);
+    auto it = fade.find(key);
+    if (it == fade.end() && !hidden)
+        return 1.f;
+    float &a = it == fade.end() ? fade.emplace(key, 1.f).first->second : it->second;
+    float step = FADE_PER_SEC * GetFrameTime();
+    a = hidden ? std::max(MIN_ALPHA, a - step) : std::min(1.f, a + step);
+    float out = a;
+    if (!hidden && a >= 1.f)
+        fade.erase(key);
+    return out;
+}
+
 namespace
 {
 // Sprite drawers per feature type; trees and bushes sway, rocks are static.
@@ -81,7 +114,8 @@ void drawTree(const FeatureView &fv, const char *a, const char *b, float w, floa
 {
     Anim a1 = mkAnim(std::string("Terrain/Resources/Wood/Trees/Tree") + (fv.h & 1 ? a : b) + ".png", int(w), int(h), 6,
                      w / 2, anchorY);
-    drawAnim(a1, frameFor(a1, fv.t, float(fv.h % 8)), fv.cx, fv.by, false, 1.f);
+    drawAnim(a1, frameFor(a1, fv.t, float(fv.h % 8)), fv.cx, fv.by, false, 1.f,
+             rgb(255, 255, 255, int(fv.alpha * 255.f)));
 }
 
 void drawPine(const FeatureView &fv)
@@ -159,6 +193,10 @@ void FeatureRenderer::queue(const TerrainView &v, int x0, int y0, int x1, int y1
                 continue; // only the building's own tiles hide features (neighbours must stay clickable/visible)
 
             FeatureView fv = makeView(f, x, y, t);
+            if (f == F_Pine)
+                fv.alpha = canopyAlpha(x, y, fv.cx, fv.by, 200.f, 62.f);
+            else if (f == F_Oak)
+                fv.alpha = canopyAlpha(x, y, fv.cx, fv.by, 140.f, 66.f);
             if (fv.hover)
                 queueTooltip(f, x, y, fv.cx, fv.by, items);
 
@@ -172,6 +210,7 @@ FeatureView FeatureRenderer::makeView(uint8_t f, int x, int y, double t) const
     FeatureView fv{};
     fv.f = f;
     fv.t = t;
+    fv.alpha = 1.f;
     fv.h = hash2(x, y, W.seed + 31);
     fv.cx = (float(x) + .5f) * TILE + float(int(fv.h & 15) - 8);
     fv.by = (float(y) + 1.f) * TILE - 6 - float((fv.h >> 4) & 7);

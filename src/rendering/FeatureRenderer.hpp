@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class App;
@@ -21,6 +22,7 @@ struct FeatureView
     uint8_t f, js;
     bool hover, nearMine;
     float cx, by, jp;
+    float alpha; // canopy fade (1 = opaque), trees only
     uint32_t h;
     double t;
 };
@@ -54,6 +56,9 @@ class FeatureRenderer
     bool goldNearMine(int x, int y) const;
     static void goldGlints(float cx, float by, uint32_t h, double t, bool strong);
     void queueTooltip(uint8_t f, int x, int y, float cx, float by, DrawList &items);
+    float canopyAlpha(int x, int y, float cx, float by, float top, float halfW);
     App &app;
-    std::vector<Vector2> mineCtr; // centres (tiles) of own mines and the mine being placed
+    std::vector<Vector2> mineCtr;            // centres (tiles) of own mines and the mine being placed
+    std::vector<Vector2> ownFeet;            // world-pixel foot points of own units (canopy occlusion)
+    std::unordered_map<int64_t, float> fade; // per-tree alpha keyed by tile; entries drop back to 1 and are erased
 };
