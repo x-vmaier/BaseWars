@@ -21,7 +21,9 @@ Only the first tasks are specified in detail below. Every later task has its ful
 * Tuning values go in `ServerConfig` + `config/server.cfg` (documented, defaults reproduce the described behaviour); shared rules in `Progression.hpp`.
 * New persistent state is written/read in `SaveSystem` and bumps `SAVE_MAGIC`. Anything that can dangle gets an invariant in `World::checkInvariants()`.
 * Protocol is append-only; T19a is the one planned break.
-* Every task adds at least one selftest, documents new env hooks in `ARCHITECTURE.md`, and lists in "only verified by reading" whatever could not be run.
+* Every task adds at least one concise selftest (core assertions + invariants, no boilerplate), documents new env hooks in `ARCHITECTURE.md`, and lists in "only verified by reading" whatever could not be run.
+  Purely visual / UI / shader / audio tasks (e.g. T18c, T16a, T28a rendering parts) may skip the new C++ selftest if existing selftests stay green and a build/screenshot check passes.
+* Token economy: intermediate steps run only an incremental release build and the one relevant selftest; the full `tools/check.sh` (asan + all selftests + format) runs once before the final commit.
 * Art: only the Tiny Swords assets in `assets/`, plus generated map art (T21a) and generated sounds (T28a).
 * Every task leaves saves loadable (or cleanly migrated) and the game shippable.
 

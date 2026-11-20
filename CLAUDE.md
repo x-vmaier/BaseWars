@@ -13,7 +13,8 @@ The owner does not approve plans and does not playtest every task. You work auto
    Write a plan of at most 15 lines (design, files, order, the selftest you will add) and continue immediately.
 3. Decide small things yourself and log them as one line in the Decisions log (`Txx: decision - reason`).
    **Ask the owner only before irreversible choices** (protocol format, save format, deleting player data) when the task text does not already decide it.
-4. Work in small steps. After each step build warning-free, run `tools/check.sh`, fix, commit.
+4. Work in small steps. Between steps use only the **fast loop**: an incremental release build (warning-free) and the single relevant `server --selftest <name>`; fix, commit when green.
+   Run the full `tools/check.sh` (asan, all selftests, format) **once at the end, before the final commit** - never after every step.
 5. Finish with the close-out below, then stop and report.
 
 ### Task size
@@ -40,6 +41,9 @@ A contradiction between two rules is resolved in favour of the Design goals in `
 
 * `tools/check.sh` is the gate: release + asan builds with zero warnings, every `server --selftest`, clang-format check. Docs-sync and style greps are **advisory warnings**, not failures.
 * Every task adds at least one selftest scenario that asserts behaviour with numbers (headless, fixed seed, no Steam, fast-forwarded ticks). Selftests also run `World::checkInvariants()`.
+  Keep it **concise and focused**: core assertions and invariants only, no bloated boilerplate (reuse `Fixture` helpers, one short function per scenario).
+  **Exception:** purely visual, UI, shader or audio tasks need no new C++ selftest; the existing selftests staying green plus a build and (optionally) a `BW_SHOT` check suffice. Say so in the report.
+* The safety net itself stays intact: never delete or weaken an existing selftest or invariant to save effort.
 * Test unhappy paths where relevant: save/reload mid-action, disconnect/reconnect, destroyed target, empty/full inventory, two players interacting.
 * **Stuck-state rule:** every player-facing state (defeat, resettle offer, pending build, queue, convoy, voyage) has a guaranteed exit (timeout, cancel, auto-resolve) proven by a selftest.
 * Visible changes (UI, rendering) get one scripted client run with `BW_SHOT` that you view yourself and judge. Screenshots are **optional evidence, never part of the gate** (the client run is flaky).
