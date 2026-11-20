@@ -4,6 +4,7 @@
  */
 #include "systems/Replication.hpp"
 
+#include "common/Snapshot.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -14,45 +15,75 @@
 #include <cstring>
 #include <string>
 
+// One snapshot = several independent unreliable chunks (each below SNAPSHOT_MTU); a lost chunk only delays its
+// entities until the next snapshot, which is complete again (full state, no deltas).
 void Replication::sendState(int id)
 {
     Profile &p = world.pl[id];
     auto src = world.sourcesFor(id);
     SrcGrid grid(src);
 
-    Writer w;
-    w.put<uint8_t>(S_State);
+    Writer globals;
     for (int r = 0; r < R_Count; r++)
-        w.put<float>(p.res[r]);
+        globals.put<float>(p.res[r]);
     for (int f = 0; f < FACTION_COUNT; f++)
-        w.put<int8_t>(int8_t(std::lround(p.rep[f])));
+        globals.put<int8_t>(int8_t(std::lround(p.rep[f])));
     for (int k = K_Pawn; k <= K_Monk; k++)
-        w.put<uint8_t>(uint8_t(std::max<int>(1, p.ulevel[k])));
+        globals.put<uint8_t>(uint8_t(std::max<int>(1, p.ulevel[k])));
 
-    // Entity and effect counts are patched in after the records are written.
-    size_t cp = w.b.size();
-    w.put<uint16_t>(0);
-    uint16_t n = 0;
+    struct Chunk
+    {
+        Writer ents, fx;
+        uint16_t nEnt = 0, nFx = 0;
+    };
+    std::vector<Chunk> chunks(1);
+    // Returns the chunk with room for `add` more bytes (a new one if needed), or null at the chunk cap.
+    auto roomFor = [&](size_t add) -> Chunk *
+    {
+        auto used = [&](const Chunk &c)
+        { return SNAP_HEADER_BYTES + (&c == &chunks[0] ? globals.b.size() : 0) + 4 + c.ents.b.size() + c.fx.b.size(); };
+        if (used(chunks.back()) + add > SNAPSHOT_MTU)
+        {
+            if (int(chunks.size()) >= SNAPSHOT_MAX_CHUNKS)
+                return nullptr;
+            chunks.emplace_back();
+        }
+        return &chunks.back();
+    };
+
+    Writer rec;
     reg.view<Uid, Owner, Info, Health>().each(
         [&](entt::entity e, const Uid &uid, const Owner &o, const Info &in, const Health &h)
     {
-        if (writeStateEntity(w, id, grid, e, uid, o, in, h))
-            n++;
+        rec.b.clear();
+        if (!writeStateEntity(rec, id, grid, e, uid, o, in, h))
+            return;
+        if (Chunk *c = roomFor(rec.b.size()))
+        {
+            c->ents.bytes(rec.b.data(), rec.b.size());
+            c->nEnt++;
+        }
     });
-    std::memcpy(&w.b[cp], &n, 2);
-
-    size_t ep = w.b.size();
-    w.put<uint16_t>(0);
-    uint16_t ne = 0;
     for (auto &f : world.effects)
         if (grid.seen(f.x, f.y, 3.f) || grid.seen(f.x2, f.y2, 3.f))
-        {
-            w.put<uint8_t>(f.type).put<float>(f.x).put<float>(f.y).put<float>(f.x2).put<float>(f.y2);
-            ne++;
-        }
-    std::memcpy(&w.b[ep], &ne, 2);
+            if (Chunk *c = roomFor(17))
+            {
+                c->fx.put<uint8_t>(f.type).put<float>(f.x).put<float>(f.y).put<float>(f.x2).put<float>(f.y2);
+                c->nFx++;
+            }
 
-    world.net.send(p.conn, w);
+    for (size_t i = 0; i < chunks.size(); i++)
+    {
+        Writer w;
+        putSnapHeader(w, {uint32_t(world.tick), p.lastInputSeq, uint8_t(i), uint8_t(chunks.size())});
+        if (i == 0)
+            w.bytes(globals.b.data(), globals.b.size());
+        w.put<uint16_t>(chunks[i].nEnt);
+        w.bytes(chunks[i].ents.b.data(), chunks[i].ents.b.size());
+        w.put<uint16_t>(chunks[i].nFx);
+        w.bytes(chunks[i].fx.b.data(), chunks[i].fx.b.size());
+        world.net.send(p.conn, w, false);
+    }
 }
 
 bool Replication::writeStateEntity(Writer &w, int id, const SrcGrid &grid, entt::entity e, const Uid &uid,

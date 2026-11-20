@@ -3,10 +3,12 @@
  * @brief Headless selftest registry and helpers (`server --selftest <name|list|all>`).
  */
 #pragma once
+#include "common/Snapshot.hpp"
 #include "server/Sim.hpp"
 
 #include <cstdio>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace selftest
@@ -36,6 +38,7 @@ class Fixture
     // First legal site for `k` near the player's Town Hall (placement rules of the real server); false if none.
     bool findSite(int id, Kind k, int &tx, int &ty);
     uint64_t nextConn = 1000;
+    std::unordered_map<uint64_t, uint32_t> seqOf; // last command seq `send` stamped per connection
 };
 
 // Collects failures; a scenario passes when none were recorded.
@@ -67,6 +70,7 @@ void netGarbageTest(Ctx &);
 void invariantsTest(Ctx &);
 void identityTest(Ctx &);
 void defeatTest(Ctx &);
+void netSnapshotTest(Ctx &);
 
 int runCli(const std::string &what);
 

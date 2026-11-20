@@ -21,6 +21,7 @@ struct ServerConfig
         0, 1, 1, 1, 1, 1, 1, 0}; // indexed by Biome enum (Ocean, Plains, Forest, Highlands, Desert, Flowers, Snow, ...)
     float clearTimeScale = 1.f;  // multiplier on how long clearing an obstacle takes
     // ---- connection
+    int snapshotInterval = 2;   // simulation ticks between S_State snapshots (TICK_HZ / n snapshots per second)
     double authTimeoutS = 15.0; // a hello whose Steam ticket verdict has not arrived by then is dropped
     // ---- defeat and resettlement
     double defeatRuinHours = 24.0;       // real hours a defeated town stays as a burning ruin (wall clock, persisted)

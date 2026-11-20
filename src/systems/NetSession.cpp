@@ -5,6 +5,7 @@
 #include "systems/NetSession.hpp"
 
 #include "common/NameToken.hpp"
+#include "common/Snapshot.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -23,6 +24,7 @@ void NetSession::bindConnection(uint64_t conn, int id, uint64_t steamId, const s
     p.conn = conn;
     p.steamId = steamId;
     p.lastSeen = nowSec();
+    p.lastInputSeq = 0;
     p.sentFog.clear();
     p.sentTerr.clear();
 
@@ -42,6 +44,14 @@ void NetSession::reject(uint64_t conn, const char *why)
 
 void NetSession::onHello(uint64_t conn, Reader &r)
 {
+    uint16_t version = r.get<uint16_t>();
+    if (r.ok && version != PROTOCOL_VERSION)
+    {
+        reject(conn, ("Version mismatch: this server speaks protocol " + std::to_string(PROTOCOL_VERSION) +
+                      ", your game " + std::to_string(version) + ". Update the game.")
+                         .c_str());
+        return;
+    }
     uint64_t steamId = r.get<uint64_t>();
     size_t ticketLen = r.get<uint16_t>();
     const uint8_t *t = r.bytes(ticketLen);
@@ -224,6 +234,7 @@ void NetSession::sendWelcome(uint64_t conn, int id)
     const Profile &p = world.pl[id];
     Writer w;
     w.put<uint8_t>(S_Welcome)
+        .put<uint16_t>(PROTOCOL_VERSION)
         .put<uint8_t>(uint8_t(id))
         .put<uint32_t>(world.seed)
         .put<float>(p.cam.x)

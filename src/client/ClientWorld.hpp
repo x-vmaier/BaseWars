@@ -6,6 +6,7 @@
 #include "client/ClientCommon.hpp"
 #include "client/ClientState.hpp"
 #include "client/Components.hpp"
+#include "common/Snapshot.hpp"
 
 #include <entt/entt.hpp>
 
@@ -39,6 +40,10 @@ struct ClientWorld
     entt::registry reg;
     std::unordered_map<uint32_t, entt::entity> ents; // server id -> entity
     uint32_t stamp = 0;
+    SnapshotTracker snap;     // chunk bookkeeping of the newest S_State tick
+    bool snapPartial = false; // the previous tick ended with missing chunks (occupancy still to rebuild)
+    uint32_t serverTick = 0;  // tick of the newest snapshot
+    uint32_t ackedSeq = 0;    // last command seq the server had processed in that snapshot (for T19c)
 
     // transient effects
     std::vector<Fx> fxs;

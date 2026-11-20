@@ -87,7 +87,7 @@ void Sim::replicate()
             continue;
         if (world.tick % 10 == 0)
             sys.repl.sendQueues(id);
-        if (world.tick % 2 == 0)
+        if (world.tick % cfg().snapshotInterval == 0)
             sys.repl.sendState(id);
         if (world.tick % 8 == 0)
             sys.repl.sendPaths(id);
@@ -96,7 +96,7 @@ void Sim::replicate()
         if (world.tick % 10 == 0)
             sys.repl.sendFog(id);
     }
-    if (world.tick % 2 == 0)
+    if (world.tick % cfg().snapshotInterval == 0)
         world.effects.clear();
 
     if (world.tick % 20 == 0)

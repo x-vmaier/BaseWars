@@ -76,6 +76,13 @@ void PacketHandler::onWelcome(Reader &r)
 {
     ClientWorld &w = app.world;
     Camera2D &cam = app.cam;
+    uint16_t version = r.get<uint16_t>();
+    if (r.ok && version != PROTOCOL_VERSION)
+    {
+        app.session.backToMenu("Version mismatch: server protocol " + std::to_string(version) + ", this game " +
+                               std::to_string(PROTOCOL_VERSION) + ". Update the game.");
+        return;
+    }
     w.me = r.get<uint8_t>();
     w.seed = r.get<uint32_t>();
     float cx = r.get<float>(), cy = r.get<float>();
@@ -103,28 +110,45 @@ void PacketHandler::onWelcome(Reader &r)
     SetWindowTitle("Base Wars - connected");
 }
 
+// One S_State chunk (see Replication::sendState): applied on arrival; entities missing from a whole tick are removed
+// only once every chunk of that tick has arrived, so a lost chunk never deletes anything.
 void PacketHandler::onState(Reader &r)
 {
     if (!app.session.welcomed)
         return;
 
     ClientWorld &w = app.world;
+    SnapHeader h = getSnapHeader(r);
+    bool startsTick = false;
+    if (!r.ok)
+        return;
+    auto result = w.snap.add(h, startsTick);
+    if (result == SnapshotTracker::Result::Reject)
+        return;
+    if (startsTick)
+    {
+        if (w.snapPartial)
+            w.rebuildOcc(); // the previous tick never completed
+        ++w.stamp;
+        w.serverTick = h.tick;
+        w.ackedSeq = h.ackSeq;
+        w.snapPartial = true;
+    }
 
-    for (float &v : w.res)
-        v = r.get<float>();
-    for (int &f : w.facRep)
-        f = r.get<int8_t>();
-    for (int &u : w.unitLvl)
-        u = r.get<uint8_t>();
+    if (h.index == 0)
+    {
+        for (float &v : w.res)
+            v = r.get<float>();
+        for (int &f : w.facRep)
+            f = r.get<int8_t>();
+        for (int &u : w.unitLvl)
+            u = r.get<uint8_t>();
+    }
 
     int cnt = r.get<uint16_t>();
-    ++w.stamp;
-
     for (int i = 0; i < cnt; i++)
         if (!readEntity(r))
             return;
-
-    removeUnseen();
 
     int ne = r.get<uint16_t>();
     for (int i = 0; i < ne; i++)
@@ -135,7 +159,12 @@ void PacketHandler::onState(Reader &r)
             break;
         addFx(t, x, y, x2, y2);
     }
-    w.rebuildOcc();
+    if (result == SnapshotTracker::Result::Complete)
+    {
+        removeUnseen();
+        w.rebuildOcc();
+        w.snapPartial = false;
+    }
 }
 
 // False when the packet is malformed (the rest of the state is dropped).

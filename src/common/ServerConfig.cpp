@@ -74,6 +74,8 @@ void applyWorldGen(ServerConfig &c, const Entry &e)
 
 void applyNpcs(ServerConfig &c, const Entry &e)
 {
+    e.I("snapshot_interval_ticks", c.snapshotInterval);
+    c.snapshotInterval = std::clamp(c.snapshotInterval, 1, 10);
     e.D("auth_timeout_s", c.authTimeoutS);
     e.D("defeat_ruin_hours", c.defeatRuinHours);
     e.D("resettle_offer_timeout_s", c.resettleOfferTimeoutS);

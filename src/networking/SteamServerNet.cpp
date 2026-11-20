@@ -4,6 +4,8 @@
  */
 #include "networking/SteamServerNet.hpp"
 
+#include "networking/FakeNet.hpp"
+
 #include <steam/isteamnetworkingutils.h>
 #include <steam/steam_api.h>
 
@@ -111,6 +113,7 @@ bool SteamServerNet::start(uint16_t port, const std::string &serverName, bool lo
         SteamNetworkingUtils()->InitRelayNetworkAccess();
     }
 
+    applyFakeNetworkEnv();
     g_queue = &queue;
     g_net = this;
     devAuth = localOnly;
@@ -198,12 +201,17 @@ bool SteamServerNet::poll(NetEvent &out)
     return true;
 }
 
-void SteamServerNet::send(uint64_t conn, const Writer &w)
+void SteamServerNet::send(uint64_t conn, const Writer &w, bool reliable)
 {
     sent++;
+    if (tap)
+        tap(conn, w.b, reliable);
     if (running)
-        sockets()->SendMessageToConnection(HSteamNetConnection(conn), w.b.data(), uint32_t(w.b.size()),
-                                           k_nSteamNetworkingSend_Reliable | k_nSteamNetworkingSend_NoNagle, nullptr);
+        sockets()->SendMessageToConnection(
+            HSteamNetConnection(conn), w.b.data(), uint32_t(w.b.size()),
+            (reliable ? k_nSteamNetworkingSend_Reliable : k_nSteamNetworkingSend_Unreliable) |
+                k_nSteamNetworkingSend_NoNagle,
+            nullptr);
 }
 
 void SteamServerNet::flush()

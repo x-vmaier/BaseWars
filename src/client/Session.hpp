@@ -40,13 +40,18 @@ class Session
     void initIdentity(); // reads BW_DEV_ID
     uint64_t myId() const { return devId ? devId : (steam.ok ? steam.id : 0); }
     std::string resolveNames(const std::string &text) const; // replaces server name tokens with Steam persona names
-    void refreshNames(); // re-resolves roster names once per second (async Steam lookups)
-    void send(const Writer &w) { cnet.send(w); }
+    void refreshNames();        // re-resolves roster names once per second (async Steam lookups)
+    void send(const Writer &w); // stamps every command except C_Hello with the next sequence number
+    uint32_t cmdSeq = 0;        // last sequence number sent on this connection
     void sendHello();
     void joinServer(const ServerEntry &e);
     void backToMenu(const std::string &why);
     void pump(); // drain transport events
-    void resetFlags() { welcomed = lost = connected = helloSent = false; }
+    void resetFlags()
+    {
+        welcomed = lost = connected = helloSent = false;
+        cmdSeq = 0;
+    }
     static bool parseAddr(const std::string &s, std::string &host, uint16_t &port);
 
   private:

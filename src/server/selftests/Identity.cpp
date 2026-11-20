@@ -114,7 +114,12 @@ void asyncVerdicts(Ctx &t)
     t.check(usedSlots(f.world) == none, "nothing is created before the verdict");
     {
         Writer w; // a second hello on the same connection is ignored
-        w.put<uint8_t>(C_Hello).put<uint64_t>(31).put<uint16_t>(1).put<uint8_t>('x').put<uint16_t>(0);
+        w.put<uint8_t>(C_Hello)
+            .put<uint16_t>(PROTOCOL_VERSION)
+            .put<uint64_t>(31)
+            .put<uint16_t>(1)
+            .put<uint8_t>('x')
+            .put<uint16_t>(0);
         f.send(70, w);
     }
     t.check(f.sys.session.pendingCount() == 1, "one pending hello per connection");

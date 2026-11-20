@@ -2,6 +2,7 @@
  * @file NetGarbage.cpp
  * @brief Selftest: malformed, oversized and out-of-range packets never crash or corrupt the server.
  */
+#include "common/Snapshot.hpp"
 #include "server/SelfTests.hpp"
 
 #include <climits>
@@ -73,20 +74,22 @@ void netGarbageTest(Ctx &t)
     }
     t.check(usedProfiles(f.world) == usedBefore, "garbage hellos create no profile");
 
-    // 3. A joined player sending garbage of every type: no crash, state stays consistent.
+    // 3. A joined player sending garbage of every type behind a valid, increasing seq: no crash, state stays
+    // consistent.
+    uint32_t seq = 0;
     for (int type = 0; type < 256; type++)
         for (auto &p : pay)
         {
             std::vector<uint8_t> d{uint8_t(type)};
             d.insert(d.end(), p.begin(), p.end());
-            f.sys.packets.onPacket(500, d);
+            f.sys.packets.onPacket(500, withSeq(d, ++seq));
         }
     f.run(10);
     t.invariants(f, "after garbage from a joined player");
     t.check(f.hallOf(id) != entt::null, "player's Town Hall still exists");
 
     // 4. Targeted out-of-range values.
-    auto send = [&](const Writer &w) { f.sys.packets.onPacket(500, w.b); };
+    auto send = [&](const Writer &w) { f.sys.packets.onPacket(500, withSeq(w.b, ++seq)); };
     for (int32_t bad : {INT32_MIN, -1, 1 << 30, INT32_MAX})
     {
         Writer b;

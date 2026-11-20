@@ -289,6 +289,9 @@ void ClientWorld::clear()
     ripples.clear();
     me = 0;
     stamp = 0;
+    snap.reset();
+    snapPartial = false;
+    serverTick = ackedSeq = 0;
 }
 
 void ClientWorld::interpolate(float dt)

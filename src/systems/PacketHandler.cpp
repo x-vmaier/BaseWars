@@ -34,6 +34,10 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
         return;
 
     Profile &p = world.pl[id];
+    uint32_t seq = r.get<uint32_t>();
+    if (!r.ok || seq <= p.lastInputSeq)
+        return; // missing, replayed or reordered envelope: commands are only accepted in increasing seq order
+    p.lastInputSeq = seq;
     if (s.defeat.blocked(id) && type != C_Cam && type != C_Chat && type != C_Resettle && type != C_ResettleAccept)
         return; // a defeated player may only look around, chat and resettle
     switch (type)

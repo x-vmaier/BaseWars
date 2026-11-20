@@ -50,6 +50,7 @@ struct Profile
     uint64_t steamId = 0;
     std::string name; // runtime-only name token (NameToken.hpp), never saved or client-chosen
     uint64_t lastSeen = 0;
+    uint32_t lastInputSeq = 0; // newest client command seq accepted on this connection (echoed in snapshots)
     float res[R_Count]{};
     bool allied[MAX_PLAYERS + 1]{}, pending[MAX_PLAYERS + 1]{}; // pending[x] = I invited x
     Pos cam{0, 0};

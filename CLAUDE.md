@@ -8,7 +8,7 @@ The owner does not approve plans and does not playtest every task. You work auto
 
 ## Session protocol (one task per session)
 
-1. Take the first Roadmap row in `TODO.md` with status `todo` (currently **T19a**). Skip `blocked` rows.
+1. Take the first Roadmap row in `TODO.md` with status `todo` (currently **T19b**). Skip `blocked` rows.
 2. Read the task text (in `TODO.md`, or in `BACKLOG.md` if it is not listed there; move its spec into `TODO.md` first) and the code it names.
    Write a plan of at most 15 lines (design, files, order, the selftest you will add) and continue immediately.
 3. Decide small things yourself and log them as one line in the Decisions log (`Txx: decision - reason`).
@@ -70,7 +70,7 @@ A contradiction between two rules is resolved in favour of the Design goals in `
 * **Identity is the authenticated 64-bit SteamID** (T18a: verified via Steam auth tickets; `--local` accepts dev ids only). Never key ownership, saves or names on machine ids, local files, IPs or connection slots; never trust a client-sent name.
 * **Server authority:** the server owns all simulation state. A feature with new state needs: component + system, replication, `SaveSystem` entry (bump `SAVE_MAGIC`), `server.cfg` tunables, an invariant if it can dangle.
 * **New content goes through the registries** (`KindDefs.hpp` entry + `KT_*` tag, `KindFactories.cpp`, drawer/art tables). No `switch` or `if (kind == ...)` chains.
-* **Protocol:** append-only; T19a is the one planned break (sequence envelope, tick-numbered snapshots, protocol version). After it, keep new messages inside that scheme.
+* **Protocol:** append-only inside the T19a envelope (`PROTOCOL_VERSION`, command seq, tick-numbered unreliable `S_State` chunks under `SNAPSHOT_MTU`). Frequent state goes into snapshot chunks, never into a big message; one-off events stay reliable.
 * **Real time vs sim time:** anything that must survive restarts or offline time stores a wall-clock expiry, never a tick count.
 * **Fairness:** a threat the player cannot see coming or counter is a bug. Anything that can destroy progress needs a telegraph and a cap. Threats come only from the Pacing Director (after T25a) or explicit player action.
 * **Assets:** only the Tiny Swords Free Pack in `assets/`. The Enemy Pack is not in the repo; never invent sprites or reference missing files. Generated map art (T21a) and sounds (T28a) are the only exceptions.

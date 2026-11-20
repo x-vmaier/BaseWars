@@ -7,6 +7,7 @@
 #include "client/App.hpp"
 
 #include "common/NameToken.hpp"
+#include "common/Snapshot.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -90,10 +91,22 @@ void Session::backToMenu(const std::string &why)
     app.mainMenu.refresh();
 }
 
+void Session::send(const Writer &w)
+{
+    if (w.b.empty() || w.b[0] == C_Hello)
+    {
+        cnet.send(w);
+        return;
+    }
+    Writer stamped;
+    stamped.b = withSeq(w.b, ++cmdSeq);
+    cnet.send(stamped);
+}
+
 void Session::sendHello()
 {
     Writer w;
-    w.put<uint8_t>(C_Hello);
+    w.put<uint8_t>(C_Hello).put<uint16_t>(PROTOCOL_VERSION);
     // Dev ids use the dev ticket (accepted by `--local` servers only); otherwise Steam signs our real SteamID.
     bool dev = devId != 0 || !steam.requestTicket();
     w.put<uint64_t>(myId());
@@ -122,6 +135,7 @@ void Session::pump()
         {
         case NetEvent::Connect:
             connected = true;
+            cmdSeq = 0;
             if (!helloSent)
             {
                 sendHello();

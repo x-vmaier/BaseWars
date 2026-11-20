@@ -4,6 +4,8 @@
  */
 #include "networking/SteamClientNet.hpp"
 
+#include "networking/FakeNet.hpp"
+
 #include <steam/isteamnetworkingutils.h>
 #include <steam/steam_api.h>
 
@@ -62,6 +64,7 @@ bool SteamClientNet::connectIP(const std::string &ip, uint16_t port)
     if (addr.m_port == 0)
         addr.m_port = port;
 
+    applyFakeNetworkEnv();
     g_queue = &queue;
     SteamNetworkingConfigValue_t opt[2] = {statusOption(), {}};
     opt[1].SetInt32(k_ESteamNetworkingConfig_IP_AllowWithoutAuth, 1);
@@ -78,6 +81,7 @@ bool SteamClientNet::connectSteam(uint64_t serverSteamId)
     SteamNetworkingIdentity ident;
     ident.Clear();
     ident.SetSteamID64(serverSteamId);
+    applyFakeNetworkEnv();
     g_queue = &queue;
     auto opt = statusOption();
     conn = SteamNetworkingSockets()->ConnectP2P(ident, 0, 1, &opt); // routed through Steam Datagram Relay

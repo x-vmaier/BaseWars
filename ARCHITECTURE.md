@@ -33,7 +33,7 @@ Headers sit beside their `.cpp`. No `.inc` files. Files should stay readable (gu
 
 * `tools/check.sh` is the gate: release + asan builds, all selftests, clang-format check. Docs-sync (every `BW_*` env hook and selftest name appears in this file) and header checks are advisory warnings.
 * **Selftests:** `server --selftest <name|list|all>`. Headless: no Steam, fixed seed, fast-forwarded ticks, deterministic, exit 0/1. Registered by name in `src/server/SelfTests.cpp`, one file per feature under `src/server/selftests/`.
-  Every feature task adds a scenario with numeric assertions. Baseline: `boot`, `saveload` (save -> load -> save byte-identical, so saves must be written in a deterministic order), `economy`, `raid`, `net-garbage`, `invariants` (the checker catches an orphaned job), `identity` (SteamID-only ownership, forged / pending / timed-out logins), `defeat` (burning ruin, resettle offers, blocked commands, timeouts).
+  Every feature task adds a scenario with numeric assertions. Baseline: `boot`, `saveload` (save -> load -> save byte-identical, so saves must be written in a deterministic order), `economy`, `raid`, `net-garbage`, `invariants` (the checker catches an orphaned job), `identity` (SteamID-only ownership, forged / pending / timed-out logins), `defeat` (burning ruin, resettle offers, blocked commands, timeouts), `net-snapshot` (chunk size cap, lost chunks, seq echo / replay rejection, protocol version).
   Scenarios use `selftest::Fixture` (a `Sim` = World + Systems, offline transport, fake connections via `join`, `run(seconds)`); `Sim` (`src/server/Sim.cpp`) holds the tick order shared with the real server loop.
 * **Invariants:** `World::checkInvariants()` (always on in selftests, `BW_INVARIANTS=1` in real runs): stored entities valid, no job / ship / caravan / garrison referencing a dead entity, resources >= 0, footprints do not overlap, at most one Town Hall per owner, timed states have expiries.
   A new component that can dangle adds its check here.
@@ -46,7 +46,12 @@ Headers sit beside their `.cpp`. No `.inc` files. Files should stay readable (gu
 * Steam GameServer + Steam Networking Sockets only. The server opens an IP listen socket (direct, `IP_AllowWithoutAuth`) and a P2P listen socket (Steam Datagram Relay, reachable by SteamID).
 * `server <port> <seed> <savefile> <name> [--local]`: `--local` skips the Steam backend login (direct IP only). The Steam client must run for both executables except for `--selftest`.
 * Client: `client --connect host:port` joins directly; the menu has Internet / Friends / Direct tabs.
-* Current state (changes in T19a-c): fixed 20 Hz tick, `S_State` every 2nd tick, everything reliable, client smooths `RPos` towards `Goal` (`ClientWorld::interpolate`).
+* **Envelope (T19a, `common/Snapshot.hpp`, `PROTOCOL_VERSION` = 2):** `C_Hello` = `u16 version, ...`; `S_Welcome` starts with `u16 version`; a mismatch is refused with a text (server) / back to the menu (client).
+  Every client command except `C_Hello` carries a `u32 seq` right after the type byte (`Session::send` stamps it, strictly increasing per connection; the server drops missing / replayed / reordered seqs and keeps `Profile::lastInputSeq`).
+* **Snapshots:** the server runs a fixed 20 Hz tick; every `snapshot_interval_ticks` (default 2) each online player gets one full `S_State`, sent **unreliable** as chunks of at most `SNAPSHOT_MTU` (1100) bytes.
+  Chunk = `S_State, u32 tick, u32 ackSeq (last command seq processed), u8 index, u8 count`, then (index 0 only) resources / reputation / unit levels, `u16 n` entity records, `u16 n` effects.
+  Chunks apply on arrival; entities missing from a tick are removed only when every chunk of that tick arrived (`SnapshotTracker`), so a lost chunk delays its entities by one snapshot and never deletes anything. Effects in a lost chunk are lost (cosmetic).
+  All other messages (chat, fog, roster, queues, defeat, ...) stay reliable. The client smooths `RPos` towards `Goal` (`ClientWorld::interpolate`) until T19b; `ClientWorld::serverTick` / `ackedSeq` are kept for T19b / T19c.
 * `BW_NETLOG=1` prints Steam connection state transitions.
 * **Identity (T18a):** `C_Hello` = `u64 steamId, u16 len + auth ticket, friends`. The server asks `SteamServerNet::beginAuth` (Steam `BeginAuthSession`, verdict as `NetEvent::Auth`; pending hellos expire after `auth_timeout_s`).
   Profiles are keyed only by the verified SteamID; a second login of an online id replaces the old session. `--local` servers (and selftests) accept only `DEV_TICKET` for ids < 2^32 (`BW_DEV_ID` on the client). Real servers run in Steam authentication mode.
@@ -55,7 +60,7 @@ Headers sit beside their `.cpp`. No `.inc` files. Files should stay readable (gu
 ## Conventions
 
 * The server is authoritative; the client sends `C_*` commands and renders `S_*` messages. Network input is validated (range, owner, rate, size).
-* Protocol: append new enumerators to the END of the `C_*` / `S_*` group of `Msg` in `Shared.hpp`. (T19a is the one planned break.)
+* Protocol: append new enumerators to the END of the `C_*` / `S_*` group of `Msg` in `Shared.hpp`; T19a was the one planned break, so bump `PROTOCOL_VERSION` only for another deliberate one. New client commands get the seq automatically; new frequent state goes into snapshot chunks, one-off events stay reliable.
 * Savegame (BW10): bump `SAVE_MAGIC` (`SaveSystem.hpp`) when the layout changes; an older format is moved aside (`.bad`) and a fresh world starts.
   A damaged optional section is skipped; an unreadable mandatory part stops the server instead of overwriting.
 * Tuning belongs in `ServerConfig` + `config/server.cfg`; shared gate/cost rules in `Progression.hpp`.
@@ -89,7 +94,7 @@ Client: `BW_SHOT`, `BW_SHOT_FRAMES`, `BW_CAM`, `BW_ZOOM`, `BW_CMD`, `BW_MOUSE`, 
 `BW_SITE` verbs: `build`, `upgrade`, `train:<building kind>:<unit kind>@<frame>`, `repair`, `cancel`, `ctx`, `donate`, `alloc`, `dispose`, `quota`.
 Server: `BW_RICH`, `BW_AGGRO`, `BW_REVEAL`, `BW_RAIDNOW`, `BW_SEEALL`, `BW_BASETEST`, `BW_BASESPEED`, `BW_BASEDEBUG`, `BW_HURT`, `BW_SPAWN`, `BW_ARMY`, `BW_PATROLNOW`, `BW_WORLDLOG`, `BW_DEFEAT=<seconds>[,offer]` (defeat every online player once the world clock passes it; `,offer` also asks for the first resettlement site), `BW_INVARIANTS` (log invariant violations once per second). Flag: `server --selftest <name|list|all>`.
 Instant timers for fast testing are `debug_instant_*` in `config/server.cfg`.
-Client `BW_DEV_ID=<n>` (n < 2^32): identity for `--local` servers without Steam login. Hooks arrive with their tasks and are added here then: fake latency/loss (T19a), `BW_PACING` (T25a).
+Client `BW_DEV_ID=<n>` (n < 2^32): identity for `--local` servers without Steam login. `BW_NETLAG=<ms>` / `BW_NETLOSS=<percent>` (either executable): Steam fake send lag / loss, set on both sides for a symmetric link. Hooks arrive with their tasks and are added here then: `BW_PACING` (T25a).
 
 ## Planned architecture
 

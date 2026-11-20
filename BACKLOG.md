@@ -5,16 +5,6 @@ Roadmap order, status and the task rules live in `TODO.md`. Task ids, "Done when
 
 ## Networking (three steps; T19a is the single deliberate protocol break)
 
-### T19a Fixed timestep, tick snapshots, command sequence envelope (size M)
-
-Following Gambetta's Fast-Paced Multiplayer for an open-world RTS on Steam Networking Sockets. First inspect `ServerMain.cpp`, `Steam*Net.*` (all sends are reliable today), `Replication.cpp` (`sendState` every 2nd tick, paths every 8th), `client/PacketHandler.cpp` (`onState`).
-
-* Fixed simulation timestep (`TICK_HZ`; `server.cfg` value only if the tick-based timers allow it), commands processed in fixed `dt` steps from a queue, snapshot rate in `server.cfg`.
-* Tick-numbered snapshots; frequent state over unreliable / sequenced sends, each message < ~1200 bytes or split by interest area / chunk (an unreliable message that fragments is lost if any fragment is lost). Reliable only for one-off events (chat, joins, defeat, contracts, must-not-drop effects).
-* Protocol break (once): sequence number on every client command, snapshot header with tick and `lastProcessedInputSeq`, protocol version in `C_Hello` / `S_Welcome` (mismatch -> clear error). Document in `ARCHITECTURE.md`. Saves unaffected.
-* Hook: fake latency / loss via `SteamNetworkingUtils` config values (env), selftest-visible.
-* Done when: selftest `net-snapshot` (messages stay under the size cap with a large world; a dropped unreliable snapshot does not desync the client state after the next one; protocol version mismatch is rejected); a scripted client run still plays normally (screenshot).
-
 ### T19b Client entity interpolation buffer (size M)
 
 * Per-entity ring buffer of timestamped snapshots (client component); render time = `estimatedServerTime - interpolationDelay` (100-150 ms or ~2x snapshot interval; client setting); interpolate between the two bracketing snapshots every frame;

@@ -39,7 +39,9 @@ class SteamServerNet
     bool relayActive() const { return advertised; }
     void publish(int players, int maxPlayers, const std::string &map);
     bool poll(NetEvent &out);
-    void send(uint64_t conn, const Writer &w);
+    // reliable = false: sequenced, may be dropped (S_State chunks). Selftests observe every message through `tap`.
+    void send(uint64_t conn, const Writer &w, bool reliable = true);
+    std::function<void(uint64_t conn, const std::vector<uint8_t> &, bool reliable)> tap;
     void kick(uint64_t conn, bool linger);
     // Identity: checks that `ticket` proves the connection owns SteamID `claimedId`. Real servers ask Steam (verdict
     // may be Pending); `--local` and selftests accept only the dev ticket for small ids (never a real SteamID).

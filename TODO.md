@@ -48,6 +48,7 @@ Only the first tasks are specified in detail below. Every later task has its ful
 | T18a | Identity: verified SteamID is the only owner key (Steam auth tickets, `--local` dev ids), names resolved client-side from Steam, no name editing, SAVE_MAGIC BWS9, selftest `identity` |
 | T18b | Defeat flow: burning `K_Ruin` (shared `Ruin` component, wall-clock expiry), defeat banner naming the conqueror, Resettle -> offered site (friend > clan/ally > other) with Accept / next site, commands blocked meanwhile, offer timeout auto-accepts, SAVE_MAGIC BW10, selftest `defeat` |
 | T18c | Tree canopy fade: pines/oaks fade to ~38% alpha (4/s) while an own unit stands behind the canopy box; per-tree alpha map in `FeatureRenderer`, picking/draw order untouched |
+| T19a | Protocol v2: version in hello / welcome, command seq envelope, tick-numbered unreliable S_State chunks (< 1100 B, whole-tick removal rule), `snapshot_interval_ticks`, `BW_NETLAG` / `BW_NETLOSS`, selftest `net-snapshot` |
 | T13 | Biome label, minimap trees, chat/build menu layout, high-contrast bars |
 
 ## Roadmap (do in this order)
@@ -56,7 +57,6 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 | # | Task | Size | Status | Why here |
 | --- | --- | --- | --- | --- |
-| 5 | **T19a** Networking: fixed step, tick snapshots, sequence envelope (protocol break) | M | todo | Later features replicate on this |
 | 6 | **T19b** Entity interpolation buffer | M | todo | Removes unit stutter |
 | 7 | **T19c** Command prediction + reconciliation | M | todo | Removes input lag |
 | 8 | **T25a** Pacing Director v1 | M | todo | Stress/relief rhythm is the core experience |
@@ -108,6 +108,10 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 * T18b: the offer timeout uses `world.clock` and only counts while the player is online (reset on login); the ruin expiry is wall-clock (`defeat_ruin_hours`). A defeated player whose ruin has burnt down is offered a site automatically, which then times out - so every state has an exit.
 * T18b: clan members keep the old homeless flow (place the free hall near the clan) - the spec only covers players without a clan hall; old data without a hall and without defeat state enters the resettle flow without a ruin.
 * T18c: occlusion = own unit foot above the tree foot and inside a fixed canopy box (no pixel test); fade state lives only in the renderer.
+* T19a: the server loop was already a fixed 20 Hz step with packets drained between ticks, so `TICK_HZ` stays a constant (tick timers depend on it); only the snapshot interval is a `server.cfg` value.
+* T19a: snapshots are full state (no deltas) in independent chunks; removal of unseen entities waits for a whole tick - simpler and loss-tolerant, at the cost of ~N packets per snapshot in huge views (delta / interest culling later if needed).
+* T19a: sequence numbers are enforced strictly increasing (older / equal seq dropped) - the transport is ordered and reliable for commands, so a violation means a replay or bug.
+* T19a: fake lag / loss uses Steam's `FakePacketLag_Send` / `FakePacketLoss_Send` globals (env), the selftest drops chunks itself through `SteamServerNet::tap`.
 * T18b: new messages are appended after `S_Econ` (`C_Resettle`, `C_ResettleAccept`, `S_Defeat`) to keep the protocol append-only.
 
 ## Current task specs
@@ -116,6 +120,9 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 ## Known gaps / follow-ups
 
+* **T19a gate:** release build + all 9 selftests, asan build + `boot`, `saveload`, `economy`, `net-garbage`, `identity`, `defeat`, `net-snapshot` passed; asan `raid` / `invariants` skipped (as before, `raid` takes 15+ min); clang-format applied by hand (`check.sh` cannot load vcvars from git-bash).
+* **T19a only verified by reading / partly run:** no real client session after the break (Steam client unavailable here; the server binary boots with `BW_NETLAG` / `BW_NETLOSS` set); the client chunk handling (`PacketHandler::onState`), version check on `S_Welcome`, `Session::send` stamping and the Steam fake-lag settings were built but not run end to end. Selftest covers the server side and a mirror of the client rule. Needs one scripted `BW_SHOT` run and one with `BW_NETLAG=120 BW_NETLOSS=3`.
+* **T19a gaps:** effects (explosions, arrows) in a lost chunk are never shown; a huge view needs many chunks per snapshot (255 chunk cap, ~11k entities, extra entities dropped); `lastInputSeq` is not persisted across reconnects (restarts at 0 with the new connection).
 * **T18c only verified by reading / build:** no `BW_SHOT` before/after was taken (needs a Steam client); the canopy boxes (pine 200x124 px, oak 140x132 px above the foot) and the 0.38 min alpha are guesses to eyeball. Visual task: no new selftest. Own ships/aboard units are excluded. `tools/check.sh` cannot start vcvars from git-bash (quoting of `BW_VCVARS`); its steps were run by hand (release+asan build, all selftests in release, clang-format).
 * **T18b only verified by reading:** the cause of the "endless" damage vignette (it was only re-triggered by HP drops of own entities; the client now ignores them and zeroes `damage` / `shake` while defeated - not reproduced before the fix); `Resettle` / `Accept` mouse clicks (the screenshots show banner and offer, the clicks were exercised only through the packets in `defeat`); the UI at scale != 1 (offer footprint is converted to the UI scale, never viewed); banner with a named conqueror (screenshot run used `BW_DEFEAT` = unknown attacker); ruin art is procedural (Tiny Swords has no ruin sprite) and looks rough.
 * **T18b gaps:** a clan member who leaves the clan while homeless (`ClanSystem::respawnNormally`) still respawns instantly; offers do not check `clearingOk` again on Accept (only footprint free + land); the offered site is revealed to the player (their explored area grows).
