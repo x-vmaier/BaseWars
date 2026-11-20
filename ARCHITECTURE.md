@@ -70,6 +70,26 @@ One registry per family; ids (`enum Kind`) are persisted and sent, so append onl
 * **Draw queue rule:** renderers enqueue `DrawItem{sortY, callable}`. The callable calls one named method and contains no logic.
 * **Never** add a per-type `switch` / `if` chain in a system or UI file; extend the table or add a component and system instead.
 
+## Planned architecture (not implemented yet; see `TODO.md` for the order and details)
+
+Keep these in mind so new code does not fight the next tasks. Update this section when a task lands (move the text into the sections above).
+
+* **Identity (T18).** Today: profile matched by client `uuid`, client-sent name and `steamId` in `C_Hello`. Planned: the server authenticates the SteamID (auth ticket or
+  connection identity), profiles and saves are keyed only by it, names come from Steam persona names, no client-editable name. Dev mode (`--local`) gets an explicit fake-id path.
+* **Defeat / ruins (T18, T20).** One shared `Ruin` component (expiry in real time, burning flag) used by a defeated town (24 h default, `server.cfg`) and by destroyed buildings
+  (rebuild at reduced cost / time). Per-profile defeat and resettlement state is server-side and persisted; the resettlement offer is chosen by the server (friend -> clan member ->
+  other player) and only Accept places the Town Hall.
+* **Networking (T19).** Today: fixed 20 Hz server tick, `S_State` every 2nd tick (10 Hz), everything sent reliable, client smooths `RPos` towards `Goal`
+  (`ClientWorld::interpolate`). Planned: tick-numbered snapshots over unreliable / sequenced sends (reliable for one-off events), per-entity snapshot ring buffer on the client with
+  rendering at `serverTime - interpolationDelay`, command sequence numbers with `lastProcessedInputSeq` in state updates, prediction + reconciliation for the local player's commands.
+  The server stays authoritative. Messages must stay under ~1200 bytes or be split.
+* **Combat (T20).** Role / armor class in `KindDef` and a `server.cfg` damage matrix replace `damageVs` / `armorOf`; `Garrison` component (like `Aboard`) for walls and watchtowers;
+  offline protection and the peace shield are server-side, real-time and persisted.
+* **World map (T21).** Parchment / ink rendering in `BigMap` + `Minimap` + `MapOverlay`: per-chunk cached static layers, animated ocean by phase, generated PNG icons under
+  `assets/ui/`, dashed territory and route lines, local persisted markers with optional clan-shared markers (appended protocol messages).
+* **Content systems (T22, T23).** `Contract`, `Opportunity`, `Salvage`, `FishShoal`, `Stealth`, `Stance`, enemy archetype components: each is a component + system registered through
+  `KindFactories` / `Systems.hpp`, replicated through the normal state path, saved, and tuned in `server.cfg`. Tactical slow-motion has an open authoritative-server question (T23a).
+
 ## Test hooks (env vars)
 
 Client: `BW_SHOT`, `BW_SHOT_FRAMES`, `BW_CAM`, `BW_ZOOM`, `BW_CMD`, `BW_MOUSE`, `BW_UI`, `BW_SCALE`, `BW_MENU`, `BW_SITE`, `BW_THTAB`, `BW_THHOVER`, `BW_THCLICK`, `BW_WIN`. `BW_SITE` verbs: `build`, `upgrade`, `train:<building kind>:<unit kind>@<frame>` (new), `repair`, `cancel`, `ctx`, `donate`, `alloc`, `dispose`, `quota`.

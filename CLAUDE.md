@@ -1,11 +1,12 @@
 # Base Wars - agent handoff
 
-C++23 RTS (EnTT + Raylib + Steamworks). One authoritative `server`, one `client`. **Read `TODO.md` first** (status + remaining tasks T13b, T14-T17),
-then `ARCHITECTURE.md` (layout, conventions, extension recipes, test hooks). Branch: `feature/prompt-implementation`. Work is committed through T13.
+C++23 RTS (EnTT + Raylib + Steamworks). One authoritative `server`, one `client`. **Read `TODO.md` first** (status, the ordered Roadmap and the task details),
+then `ARCHITECTURE.md` (layout, conventions, extension recipes, planned architecture, test hooks). Branch: `feature/prompt-implementation`. Work is committed through T13b.
 
 ## Session protocol (read this first)
 
-1. Do **only the first unfinished task** in `TODO.md` (currently **T13b**). Never start the next task in the same session.
+1. Do **only the first unfinished task in the Roadmap table of `TODO.md`** (currently **T18**; task ids are stable names, the Roadmap order is what counts, e.g. T18 and T19 come
+   before T14). Never start the next task in the same session.
 2. Start in plan mode: read the relevant code, then show a short plan (design + file list + order) and wait for approval before editing.
 3. Work in small steps. After each step: build warning-free, run the game, and verify the result (see "Definition of done").
 4. Stop after the task. Update `TODO.md` (move it to Done, list what was only read-verified), update `ARCHITECTURE.md` if structure or extension points changed, commit, report.
@@ -28,6 +29,18 @@ then `ARCHITECTURE.md` (layout, conventions, extension recipes, test hooks). Bra
 * Known flakiness: ~1 in 3 scripted client runs time out without a screenshot (re-run); the client segfaults in `steamclient.so` at exit (ignore).
 
 ## Rules that bit us
+
+* **Identity is the authenticated 64-bit SteamID** (planned fix in T18; until it lands the server still matches by `uuid`, do not extend that). Never key ownership, saves or
+  names on machine ids, local files, IPs or connection slots, and never accept a player name from the client: names come from Steam.
+* **Server authority:** the server owns all simulation state (combat, health, resources, pathfinding, timers, rewards, ruins, shields). The client renders, predicts (after T19) and
+  sends commands. A feature that needs new state also needs: a component + system on the server, replication, a `SaveSystem` entry (bump `SAVE_MAGIC`), `server.cfg` tunables.
+* **New content goes through the registries** (`KindDefs.hpp` entry + `KT_*` tag, `KindFactories.cpp` hooks, drawer / art tables). Never add a `switch` or `if (kind == ...)` chain.
+* **Protocol:** append-only; T19 deliberately breaks it once (command sequence envelope, tick-numbered snapshots, protocol version). After T19 every client command carries a sequence
+  number and every state message a tick; keep new messages inside that scheme.
+* **Assets:** only the Tiny Swords Free Pack that is in `assets/` may be used (units / buildings in 5 colors, terrain, VFX, UI). The Enemy Pack and any audio are **not** in the
+  repo; do not invent sprites or reference missing files. Generated map / UI art (T21) is the only exception, produced by a script in `tools/`.
+* Screenshot runs: the tiling window manager gives the client a random window size per run, so compare before / after images only at the same size (re-run until equal) and expect
+  moving units and foliage to differ between any two runs.
 
 * Protocol is append-only: new `Msg` enumerators go at the END of the `C_*` / `S_*` group. Bump `SAVE_MAGIC` (`SaveSystem.hpp`) when the save layout changes.
 * Tunables -> `ServerConfig` + `config/server.cfg` (documented); gate/cost/time rules -> `src/common/Progression.hpp` (shared by client and server).
