@@ -109,7 +109,8 @@ void persistence(Ctx &t)
         fastTimers();
         int id = a.join(1, 1000);
         hostileAll(a.world, id);
-        a.run(14); // grace is over: a warning is running
+        for (int i = 0; i < 40 && a.world.bp[id].pacing.phase != PH_Warning; i++)
+            a.run(1); // timings are random: wait for the warning
         Pacing &p = a.world.bp[id].pacing;
         t.check(p.phase == PH_Warning && p.raiders >= 2, "a warning with a planned raid size is running");
         p.factor = 1.3f;

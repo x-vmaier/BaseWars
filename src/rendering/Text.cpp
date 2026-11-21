@@ -5,16 +5,17 @@
 #include "rendering/Text.hpp"
 
 #include "rendering/Assets.hpp"
+#include "ui/UiScale.hpp"
 
 #include <algorithm>
+#include <map>
 #include <spdlog/spdlog.h>
 #include <sstream>
 #include <vector>
 
 namespace
 {
-constexpr int ATLAS_SIZE = 80; // glyph sampling resolution; drawing scales down from it
-constexpr int MIN_SIZE = 16;   // below this glyphs turn to mush
+constexpr int MIN_SIZE = 16; // below this glyphs turn to mush
 constexpr int MAX_SIZE = 160;
 constexpr float PIXEL_SHRINK = .42f;
 constexpr float SIZE_BOOST = 1.3f; // layouts were written for a 10 px bitmap font; real fonts read smaller
@@ -39,10 +40,12 @@ const FaceFile FACES[] = {
     {"fonts/PressStart2P.ttf", 0.f},
 };
 
+// Glyphs are rasterised at the size they are drawn on screen (logical size x UI scale), one atlas per face and pixel
+// size, drawn 1:1 with bilinear filtering: a big atlas scaled down (even with mipmaps) looks blurry.
 struct FontCache
 {
-    Font font[3]{};
-    bool tried[3]{};
+    std::map<int, Font> font; // key = face * 1000 + pixel size; an empty Font = file missing
+    bool warned[3]{};
 
     static std::vector<int> glyphs()
     {
@@ -56,28 +59,31 @@ struct FontCache
         return g;
     }
 
-    bool loaded(int i) const { return font[i].texture.id != 0; }
+    bool available(TextFace f, int px) { return get(f, px).texture.id != fallback().texture.id; }
 
-    // The face, loaded on first use; the raylib default font when its file is missing.
-    const Font &get(TextFace f)
+    // The face at `px` pixels, loaded on first use; the raylib default font when its file is missing.
+    const Font &get(TextFace f, int px)
     {
-        int i = int(f);
-        if (!tried[i])
+        int key = int(f) * 1000 + px;
+        auto it = font.find(key);
+        if (it == font.end())
         {
-            tried[i] = true;
+            if (font.size() > 64)
+                unload(); // sizes pile up when the UI scale is dragged
             auto g = glyphs();
-            font[i] = LoadFontEx(asset(FACES[i].path).c_str(), ATLAS_SIZE, g.data(), int(g.size()));
-            if (font[i].texture.id == GetFontDefault().texture.id)
-                font[i] = Font{}; // LoadFontEx hands back the default font on failure
-            if (loaded(i))
+            Font ft = LoadFontEx(asset(FACES[int(f)].path).c_str(), px, g.data(), int(g.size()));
+            if (ft.texture.id == GetFontDefault().texture.id)
+                ft = Font{}; // LoadFontEx hands back the default font on failure
+            if (ft.texture.id != 0)
+                SetTextureFilter(ft.texture, TEXTURE_FILTER_BILINEAR);
+            else if (!warned[int(f)])
             {
-                GenTextureMipmaps(&font[i].texture);
-                SetTextureFilter(font[i].texture, TEXTURE_FILTER_TRILINEAR);
+                warned[int(f)] = true;
+                spdlog::warn("game font {} missing: falling back to the raylib default font", FACES[int(f)].path);
             }
-            else
-                spdlog::warn("game font {} missing: falling back to the raylib default font", FACES[i].path);
+            it = font.emplace(key, ft).first;
         }
-        return loaded(i) ? font[i] : fallback();
+        return it->second.texture.id != 0 ? it->second : fallback();
     }
 
     static const Font &fallback()
@@ -89,13 +95,10 @@ struct FontCache
 
     void unload()
     {
-        for (int i = 0; i < 3; i++)
-        {
-            if (loaded(i))
-                UnloadFont(font[i]);
-            font[i] = Font{};
-            tried[i] = false;
-        }
+        for (auto &[k, ft] : font)
+            if (ft.texture.id != 0)
+                UnloadFont(ft);
+        font.clear();
     }
 };
 
@@ -105,30 +108,36 @@ FontCache &fonts()
     return c;
 }
 
+// Pixel size the glyphs are rasterised at for a logical text size.
+int pixelSize(int size)
+{
+    return std::clamp(int(float(size) * ui::scale() + .5f), 8, 320);
+}
+
 float spacingFor(TextFace face, int size)
 {
-    return fonts().loaded(int(face)) ? FACES[int(face)].spacing * float(size) : float(size) / 10.f;
+    return fonts().available(face, pixelSize(size)) ? FACES[int(face)].spacing * float(size) : float(size) / 10.f;
 }
 } // namespace
 
 void drawText(const char *s, int x, int y, int size, Color c, TextFace face)
 {
     size = effectiveSize(size, face);
-    const Font &f = fonts().get(face);
+    const Font &f = fonts().get(face, pixelSize(size));
     DrawTextEx(f, s, {float(x), float(y)}, float(size), spacingFor(face, size), c);
 }
 
 int measureText(const char *s, int size, TextFace face)
 {
     size = effectiveSize(size, face);
-    const Font &f = fonts().get(face);
+    const Font &f = fonts().get(face, pixelSize(size));
     return int(MeasureTextEx(f, s, float(size), spacingFor(face, size)).x + .5f);
 }
 
 int textHeight(int size, TextFace face)
 {
     size = effectiveSize(size, face);
-    const Font &f = fonts().get(face);
+    const Font &f = fonts().get(face, pixelSize(size));
     return int(MeasureTextEx(f, "Ag", float(size), 0).y + .5f);
 }
 

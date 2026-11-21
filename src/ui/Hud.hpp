@@ -44,7 +44,6 @@ class Hud
     };
     void drawResources();
     void drawNameBanner();
-    void drawPacing();    // phase badge with timer and tension bar
     void drawRaidArrow(); // screen-edge arrow towards the announced raid
     App &app;
     std::vector<LogLine> logs;

@@ -119,6 +119,8 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 * T25a: patrols no longer siege player towns (`PatrolSystem::pickSiege` skips them) - the only threat against players is the director's raid; NPC-vs-NPC sieges are unchanged.
 * T25a: raid size = round((2 + .35 x score) x factor), score = 2 x hall level + .5 x buildings + army units; capped by `pacing_max_raiders` and `pacing_max_base_share` x (buildings + troops). Factor x.7 after > 25% asset loss, x1.1 after <= 5%, clamped .5..`pacing_max_raid_factor`. Size is fixed when the warning starts, so preparing never makes the raid bigger.
 * T25a: `raid_*` config keys were replaced by `pacing_*`; a new town gets `max(first_raid_grace, calm)` of calm. No hostile faction with a town in range = the director just stays calm.
+* T25a (owner follow-up): the HUD shows no phase badge, timer or tension; only an announced raid is telegraphed (arrow, chat text) because of the fairness rule. Director timings are randomised so cycles never repeat.
+* Fonts (owner follow-up): glyph atlases are now built per on-screen pixel size instead of one 80 px atlas scaled down.
 * T19c: only move / attack-move are predicted (marker + local movement start); build / train / etc. stay server-confirmed - the existing pending-site ghosts already give instant feedback and prediction of resource spending would risk wrong state.
 * T19c: rejection is a new reliable `S_CmdReject{seq}` (append-only, no version bump); the server sends it when an order moved no unit or a command was dropped while defeated. Malformed packets get none.
 * T19c: local movement start is a visual offset (2 tiles/s, max 0.6 tile, fades at 6/s), not a simulated unit - no client pathfinding, so nothing to reconcile.

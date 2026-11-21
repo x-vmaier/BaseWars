@@ -62,7 +62,6 @@ void Hud::drawTop()
 {
     drawResources();
     drawNameBanner();
-    drawPacing();
     drawRaidArrow();
 }
 
@@ -259,45 +258,8 @@ void Hud::drawCursor()
     DrawTexturePro(c, {0, 0, 64, 64}, {m.x - 22, m.y - 17, 64, 64}, {0, 0}, 0, WHITE);
 }
 
-// Top centre: phase badge. Calm is a soft green, warning / siege urgent orange / red (pulsing); the bar is the
-// phase's remaining time, the tension pips grow from calm to siege.
-void Hud::drawPacing()
-{
-    const ClientWorld &W = app.world;
-    if (!W.pacing.seen || W.homeless || W.defeat.phase != DF_None)
-        return;
-    const ClientWorld::PacingView &p = W.pacing;
-
-    double left = std::max(0.0, p.endsAt - GetTime());
-    bool urgent = p.phase == PH_Warning || p.phase == PH_Siege;
-    float pulse = urgent ? .75f + .25f * float(std::sin(GetTime() * (p.phase == PH_Siege ? 8.0 : 4.0))) : 1.f;
-    Color tint = p.phase == PH_Calm        ? rgb(140, 200, 140)
-                 : p.phase == PH_Aftermath ? rgb(150, 190, 210)
-                 : p.phase == PH_Warning   ? rgb(255, 170, 60)
-                                           : rgb(235, 70, 60);
-    tint = Fade(tint, pulse);
-
-    std::string label = pacingName(p.phase);
-    if (p.phase == PH_Warning)
-        label += TextFormat(": %s raid, %d raiders", FACTION_NAME[p.faction], p.raiders);
-    std::string timer = p.phase == PH_Siege ? "Defend!" : TextFormat("%d:%02d", int(left) / 60, int(left) % 60);
-
-    const int fs = 15, pad = 10;
-    int w = std::max(180, measureText(label, fs) + measureText(timer, fs) + pad * 4), h = 40;
-    float x = float(ui::screenW()) / 2 - float(w) / 2, y = 8;
-    DrawRectangleRounded({x, y, float(w), float(h)}, .3f, 8, Fade(rgb(30, 26, 22), .82f));
-    DrawRectangleRoundedLines({x, y, float(w), float(h)}, .3f, 8, tint);
-
-    textShadow(label, int(x) + pad, int(y) + 5, fs, tint);
-    textShadow(timer, int(x) + w - pad - measureText(timer, fs), int(y) + 5, fs, WHITE);
-
-    // remaining-time bar
-    float frac = p.phase == PH_Siege ? 1.f : float(std::clamp(left / p.total, 0.0, 1.0));
-    DrawRectangleRec({x + pad, y + h - 12, float(w - 2 * pad), 5}, Fade(BLACK, .5f));
-    DrawRectangleRec({x + pad, y + h - 12, float(w - 2 * pad) * frac, 5}, tint);
-}
-
-// Screen-edge arrow towards the town the raid marches from (warning and siege).
+// Screen-edge arrow towards the town an announced raid marches from. The only HUD trace of the director: the phase
+// itself (calm, aftermath, timers) is never shown, but a raid must be telegraphed (fairness rule).
 void Hud::drawRaidArrow()
 {
     const ClientWorld &W = app.world;

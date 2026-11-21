@@ -44,6 +44,25 @@ constexpr double SIEGE_MAX = 660.0; // raiders expire after 600 s; this is the d
 constexpr float HEAVY_LOSS = .25f, FLAWLESS_LOSS = .05f;
 } // namespace
 
+// Uniform random factor in [lo, hi]: the director never repeats the same timings.
+double PacingSystem::rnd(double lo, double hi)
+{
+    return lo + (hi - lo) * double(world.rng() % 10000) / 9999.0;
+}
+
+// Calm length: usually around the configured value, sometimes a short breather, sometimes a long quiet spell.
+double PacingSystem::calmSeconds()
+{
+    if (fastRaids())
+        return 6.0;
+    double base = cfg().pacingCalmMin * 60.0, roll = rnd(0, 1);
+    if (roll < .15)
+        return base * rnd(.4, .65);
+    if (roll > .85)
+        return base * rnd(1.4, 2.2);
+    return base * rnd(.75, 1.25);
+}
+
 void PacingSystem::enter(Pacing &p, uint8_t phase, double seconds)
 {
     p.phase = phase;
@@ -111,10 +130,11 @@ void PacingSystem::startWarning(int id, Pacing &p, int faction, const Town &from
     int level, buildings, troops;
     assetsOf(id, level, buildings, troops);
     p.faction = uint8_t(faction);
-    p.raiders = uint8_t(raidSize(defenseScore(level, buildings, troops), p.factor, buildings + troops,
-                                 cfg().pacingMaxRaiders, cfg().pacingMaxBaseShare));
+    // every raid is a little stronger or weaker than the plain formula; the caps in raidSize still hold
+    p.raiders = uint8_t(raidSize(defenseScore(level, buildings, troops), p.factor * float(rnd(.8, 1.25)),
+                                 buildings + troops, cfg().pacingMaxRaiders, cfg().pacingMaxBaseShare));
     p.origin = {float(from.cx), float(from.cy)};
-    enter(p, PH_Warning, fastRaids() ? 4.0 : cfg().pacingWarningS);
+    enter(p, PH_Warning, fastRaids() ? 4.0 : cfg().pacingWarningS * rnd(.8, 1.3));
 
     world.say(id, std::string("War horns! A raiding party of the ") + FACTION_NAME[faction] + " (" +
                       std::to_string(p.raiders) + " warriors) will arrive in " + std::to_string(int(p.total)) +
@@ -127,7 +147,7 @@ void PacingSystem::startSiege(int id, Pacing &p)
     assetsOf(id, level, buildings, troops);
     if (!s.raid.spawnRaid(id, p.faction, p.raiders))
     {
-        enter(p, PH_Calm, cfg().pacingCalmMin * 60.0); // town gone or unreachable: no raid, no stuck warning
+        enter(p, PH_Calm, calmSeconds()); // town gone or unreachable: no raid, no stuck warning
         return;
     }
     p.assetsBefore = uint16_t(std::min(buildings + troops, 65535));
@@ -153,13 +173,14 @@ void PacingSystem::endSiege(int id, Pacing &p)
         world.pl[id].res[r] += reward;
     world.say(id, "The raid is over. Survivor reward: " + std::to_string(int(reward)) +
                       " of every resource. Time to rebuild and rest.");
-    enter(p, PH_Aftermath, fastRaids() ? 6.0 : cfg().pacingAftermathMin * 60.0);
+    enter(p, PH_Aftermath, fastRaids() ? 6.0 : cfg().pacingAftermathMin * 60.0 * rnd(.8, 1.5));
 }
 
 // First tick of a player's director: grace period for a new town (or a forced phase for tests).
 void PacingSystem::begin(int id, Pacing &p)
 {
-    double grace = fastRaids() ? 6.0 : std::max(cfg().pacingFirstRaidGraceMin, cfg().pacingCalmMin) * 60.0;
+    double grace =
+        fastRaids() ? 6.0 : std::max(cfg().pacingFirstRaidGraceMin, cfg().pacingCalmMin) * 60.0 * rnd(1, 1.4);
     enter(p, PH_Calm, grace);
 
     int forced = forcedPhase();
@@ -217,8 +238,7 @@ void PacingSystem::tick(int id)
     default:
         if (p.left <= 0)
         {
-            double jitter = .9 + .2 * double(world.rng() % 1000) / 1000.0;
-            enter(p, PH_Calm, fastRaids() ? 6.0 : cfg().pacingCalmMin * 60.0 * jitter);
+            enter(p, PH_Calm, calmSeconds());
         }
         break;
     }
@@ -235,7 +255,7 @@ void PacingSystem::second()
         if (world.bp[id].defeat.phase != DF_None || world.townHallOf(id) == entt::null)
         {
             if (p.phase == PH_Warning || p.phase == PH_Siege)
-                enter(p, PH_Calm, cfg().pacingCalmMin * 60.0);
+                enter(p, PH_Calm, calmSeconds());
             continue;
         }
         if (world.pl[id].online) // offline owner: the director is paused

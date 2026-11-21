@@ -23,6 +23,8 @@ class PacingSystem
     void startWarning(int id, Pacing &p, int faction, const Town &from);
     void startSiege(int id, Pacing &p);
     void endSiege(int id, Pacing &p);
+    double rnd(double lo, double hi);
+    double calmSeconds();
     void enter(Pacing &p, uint8_t phase, double seconds);
     int pickFaction(int id, const Town *&from);
     void assetsOf(int id, int &level, int &buildings, int &troops);
