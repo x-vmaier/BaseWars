@@ -25,6 +25,8 @@ class PauseMenu
     Rectangle row(int i) const;
     Rectangle slider() const;
     Rectangle arrow(int dir) const;
+    Rectangle saveBtn() const;
+    Rectangle hintsBtn() const;
     void dragSlider(const Rectangle &sl);
     void onClick(Vector2 m);
     void drawScaleRow();

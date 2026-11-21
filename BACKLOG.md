@@ -34,15 +34,6 @@ Goal: the stress / relief rhythm. Build it on the existing raid / patrol systems
 * Done when: selftest `pacing` (with fast timers: phases cycle in order, no raid inside aftermath or grace, strength <= cap, adaptive rule moves strength in the right direction, state survives save/reload, offline pause); screenshot of the HUD in Calm and Warning.
 * Hook: `BW_PACING=<phase>` forces a phase. Code: `PatrolSystem`, `FactionSystem`, raid code, `Replication.cpp`, `src/ui/Hud.*`.
 
-### T26 Objectives, onboarding chain and central hints (size M)
-
-* `common/Objectives.hpp`: data table of objectives (condition kind, target count, reward, next id). Persisted per profile; progress reported through an objective event bus in `registry.ctx()` that existing systems post to (built, trained, gathered, survived raid, level reached). No UI polling.
-* First-hour chain (always one short goal visible): gather wood, first house, first farm, train a pawn, survive first warning, Town Hall level 2, first expedition / donation ... each with a small reward and a clear pointer (highlight on the build menu / map).
-  Then medium goals (e.g. 3 raids survived, harbour built) and long goals (Town Hall 10).
-* HUD tracker (one active short goal, one medium), completion banner in the paper / ribbon theme.
-* Move all scattered inline hint strings into one hint table (`ui/Hints.*`) with show-once / cooldown rules and a settings toggle.
-* Done when: selftest `objectives` (chain advances on events, rewards granted once, state survives save/reload, skipped steps resolve); screenshots of the tracker and a hint.
-
 ### T28a Audio system and first feedback pass (size M)
 
 Currently there is no audio and little feedback; this is the cheapest large gain in game feel.

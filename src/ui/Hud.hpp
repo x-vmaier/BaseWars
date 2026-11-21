@@ -44,7 +44,10 @@ class Hud
     };
     void drawResources();
     void drawNameBanner();
-    void drawRaidArrow(); // screen-edge arrow towards the announced raid
+    void drawRaidArrow();  // screen-edge arrow towards the announced raid
+    void drawObjectives(); // goal tracker (one goal per tier) + completion banner
+    void drawObjectiveBanner();
+    void drawObjectivePointer(); // bobbing arrow over the building the active goal points at
     App &app;
     std::vector<LogLine> logs;
     TMap mHud, mRoster;

@@ -14,6 +14,7 @@ struct Settings
 {
     std::string lastServer = "127.0.0.1:7777";
     float uiScale = 1.f; // 0.6 .. 2.0, scales every menu and HUD element
+    bool hints = true;   // show advice hints (ui/Hints)
     int windowMode = 0;  // 0 = windowed, 1 = fullscreen, 2 = borderless windowed
     static constexpr int WINDOW_MODES = 3;
     static const char *modeName(int m) { return m == 1 ? "Fullscreen" : (m == 2 ? "Borderless windowed" : "Windowed"); }
@@ -37,6 +38,8 @@ struct Settings
                 lastServer = v;
             else if (k == "ui_scale")
                 uiScale = std::clamp(float(std::atof(v.c_str())), 0.6f, 2.0f);
+            else if (k == "hints")
+                hints = v != "0";
             else if (k == "window_mode")
                 windowMode = std::clamp(std::atoi(v.c_str()), 0, WINDOW_MODES - 1);
         }
@@ -46,7 +49,8 @@ struct Settings
         std::ofstream f(path(dir));
         if (!f)
             return false;
-        f << "last_server=" << lastServer << "\nui_scale=" << uiScale << "\nwindow_mode=" << windowMode << "\n";
+        f << "last_server=" << lastServer << "\nui_scale=" << uiScale << "\nwindow_mode=" << windowMode
+          << "\nhints=" << (hints ? 1 : 0) << "\n";
         return true;
     }
 };

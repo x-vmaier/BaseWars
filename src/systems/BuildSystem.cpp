@@ -33,6 +33,7 @@ void BuildSystem::onCompleted(entt::entity e)
     world.reveal(ow, int(std::floor(c.x)), int(std::floor(c.y)), KINFO[k].vision);
     world.fx(E_Dust, c.x, c.y);
     world.say(ow, std::string(KINFO[k].name) + " completed.");
+    postObjective(reg, ow, OE_Built, k);
 }
 
 bool BuildSystem::buildingTick(entt::entity e, float dt)

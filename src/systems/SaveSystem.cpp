@@ -567,6 +567,14 @@ void SaveSystem::writeBasePlayers(Writer &w)
         w.put<uint8_t>(pc.phase).put<double>(pc.left).put<double>(pc.total).put<uint8_t>(pc.faction);
         w.put<uint8_t>(pc.raiders).put<float>(pc.factor).put<float>(pc.origin.x).put<float>(pc.origin.y);
         w.put<uint16_t>(pc.assetsBefore).put<uint16_t>(pc.survived);
+        const ObjState &ob = world.bp[i].obj;
+        for (int t = 0; t < OT_Count; t++)
+            w.put<uint8_t>(ob.cur[t]).put<float>(ob.active[t]);
+        w.put<uint16_t>(ob.completed).put<uint16_t>(ob.donations);
+        for (uint32_t g : ob.gathered)
+            w.put<uint32_t>(g);
+        for (uint16_t n : ob.trained)
+            w.put<uint16_t>(n);
         for (uint8_t q : world.bp[i].quota)
             w.put<uint8_t>(q);
         for (uint8_t a : world.bp[i].alloc)
@@ -668,6 +676,18 @@ void SaveSystem::readBasePlayers(Reader &r)
         pc.origin.y = r.get<float>();
         pc.assetsBefore = r.get<uint16_t>();
         pc.survived = r.get<uint16_t>();
+        ObjState ob;
+        for (int t = 0; t < OT_Count; t++)
+        {
+            ob.cur[t] = r.get<uint8_t>();
+            ob.active[t] = r.get<float>();
+        }
+        ob.completed = r.get<uint16_t>();
+        ob.donations = r.get<uint16_t>();
+        for (uint32_t &g : ob.gathered)
+            g = r.get<uint32_t>();
+        for (uint16_t &cnt : ob.trained)
+            cnt = r.get<uint16_t>();
         for (auto &v : q)
             v = r.get<uint8_t>();
         for (auto &v : al)
@@ -690,6 +710,12 @@ void SaveSystem::readBasePlayers(Reader &r)
             pc.factor = std::clamp(pc.factor, .5f, 4.f);
             world.bp[id].pacing = pc;
         }
+        bool obOk = true;
+        for (int t = 0; t < OT_Count; t++)
+            obOk = obOk && (ob.cur[t] == OBJ_None || (ob.cur[t] < OBJ_Count && OBJECTIVES[ob.cur[t]].tier == t)) &&
+                   std::isfinite(ob.active[t]) && ob.active[t] >= 0.f;
+        if (obOk)
+            world.bp[id].obj = ob;
         world.bp[id].friends = fr;
         if (df.phase <= DF_Offered && std::isfinite(df.ruin.x + df.ruin.y + df.site.x + df.site.y))
             world.bp[id].defeat = df;

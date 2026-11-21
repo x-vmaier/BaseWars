@@ -52,6 +52,7 @@ Only the first tasks are specified in detail below. Every later task has its ful
 | T19b | Entity interpolation: per-entity `PosBuffer`, `InterpClock` render clock (delay 2 snapshot intervals), clamped extrapolation, `BW_STUTTER` metric, selftest `interp` |
 | T19c | Command prediction: pending queue of move / attack-move orders, immediate marker + local movement start (bounded offset that fades), `S_CmdReject` rollback (red cross), selftest `net-predict` |
 | T25a | Pacing Director v1: per-player Calm -> Warning -> Siege -> Aftermath (`PacingSystem`), raids only from the director (sized from a defense score, adaptive factor, caps), survivor reward, `S_Pacing` + HUD badge / edge arrow, SAVE_MAGIC BW11, selftest `pacing` |
+| T26 | Objectives: table + event bus, short / medium / long chains with one-time rewards, skipped steps resolve, timeout exit, `S_Objectives`, HUD tracker + completion banner + build-menu / world pointer, central hint table (`ui/Hints`) with settings toggle, SAVE_MAGIC BW12, selftest `objectives` |
 | T13 | Biome label, minimap trees, chat/build menu layout, high-contrast bars |
 
 ## Roadmap (do in this order)
@@ -60,7 +61,6 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 | # | Task | Size | Status | Why here |
 | --- | --- | --- | --- | --- |
-| 9 | **T26** Objectives, onboarding chain, central hints | M | todo | First-hour hook, always a next goal |
 | 10 | **T28a** Audio + first feedback pass | M | todo | Game feel is cheap now, expensive later |
 | 11 | **T14a** Ships as registry kinds, harbour production, crews | M | todo | Naval foundation |
 | 12 | **T14b** Wind, ship combat rules | S | todo | Needs T14a |
@@ -125,14 +125,23 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 * T19c: rejection is a new reliable `S_CmdReject{seq}` (append-only, no version bump); the server sends it when an order moved no unit or a command was dropped while defeated. Malformed packets get none.
 * T19c: local movement start is a visual offset (2 tiles/s, max 0.6 tile, fades at 6/s), not a simulated unit - no client pathfinding, so nothing to reconcile.
 
+* T26: the three chains are short (first-hour steps) / medium / long with one active goal each - the spec's 'survive first warning' and 'donation' sit in the medium chain so a slow raid never blocks the quick short steps.
+* T26: progress uses lifetime counters (gather / train / donate) or live state (build / level / survive) so a step the player already satisfied resolves in one pass; an objective open for `objective_timeout_min` online minutes (20) is skipped without reward - the stuck-state exit.
+* T26: SAVE_MAGIC bumped to BW12 (objective state appended after pacing per player); old BW11 saves are moved aside like earlier formats.
+
 * T19b: no protocol change - velocity / facing are derived from the buffered samples (`aim` still drives attack facing), so `PROTOCOL_VERSION` stays 2.
 * T19b: the render clock slews at most 10% towards its target instead of jumping, so jitter spikes never make units jump; delay = max(150 ms, 2 x smallest recent snapshot interval).
 
 ## Current task specs
 
-(No spec is current: T26 is next; move the next row's spec from `BACKLOG.md` here.)
+(No spec is current: T28a is next; move the next row's spec from `BACKLOG.md` here.)
 
 ## Known gaps / follow-ups
+
+* **T26 gate:** release build warning-free, all 14 selftests (incl. `objectives`), asan build + `objectives`, `boot`, `saveload`, `pacing`, `defeat`, `net-garbage`, `net-snapshot`, `net-predict`; clang-format applied by hand (`check.sh` cannot load vcvars from git-bash); asan `raid` / `invariants` skipped as before.
+* **T26 viewed:** `BW_SHOT` client runs against a `--local` server (no Steam): tracker with goal, hint line, medium and long goal; build menu with the pulsing yellow border on the Lumber Camp row.
+* **T26 only verified by reading:** the completion banner (`Hud::drawObjectiveBanner`, needs a real goal completion in a client run), the world pointer arrow (`drawObjectivePointer`, shown for Town Hall goals), the build-menu tab pulse while the menu is closed, the pause-menu "Hints" button click, the tracker at UI scale != 1 and in narrow windows (it hides when it would touch the resource ribbon). Rewards, chain, timeout and persistence are covered by `objectives`.
+* **T26 gaps:** the spec's "first house / farm / expedition" steps do not exist in the game yet, so the chain uses Lumber Camp, Mine, Pawn, Campfire, Town Hall 2, Storage House, Archery, soldier (add expedition when T14 lands); hints are show-once per session (not saved); the "survive first raid" goal waits for the director's first raid (>= 4 min grace) or its 20 min timeout; rewards ignore storage caps (like the raid reward); lifetime counters are not reset on resettle / clan changes (progress is kept on purpose).
 
 * **Font change (owner requests, outside the roadmap):** Noto Sans body + Press Start 2P for titles / coordinates via `rendering/Text.*` (80 px `LoadFontEx` atlas, mipmapped), main menu enlarged, resource ribbon (scale .75) and name banner enlarged with content centred, side tab icons centred, side tabs moved to `SIDE_Y`. Viewed: main menu, HUD, build menu, Town Hall, social menu. Verified with `BW_SHOT` runs (menu and in-game, which also ran the T19b interpolation against a live `--local` server on Windows without Steam: units moved normally). Still small / unreviewed at scale 1 on 1920x1200: HUD sub-labels, bottom help line (overlaps the welcome line), other panels were not viewed with the new metrics; check `BW_SCALE` 1.25-1.5. `fs / 2` vertical centring elsewhere still uses unboosted sizes (`textHeight` exists).
 
@@ -175,5 +184,5 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 * At UI scale 2.0 in very small windows the minimap overlaps the resource bar and the build menu runs off the bottom (T21d).
 * The biome label hides while the chat bar is open.
 * Raised-chat / social-build keyboard toggles and the greyed Clan-chat tooltip were only verified by reading.
-* Old saves (BWS6 and earlier) are discarded (moved to `.bad`); format is BW11 (BW10 + pacing director state).
+* Old saves (BWS6 and earlier) are discarded (moved to `.bad`); format is BW12 (BW11 + objective state).
 * The tiling WM gives the client a random window size, so `BW_WIN` is ignored.

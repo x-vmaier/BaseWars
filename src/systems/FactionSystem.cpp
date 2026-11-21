@@ -43,6 +43,7 @@ bool FactionSystem::donationReady(int id)
 void FactionSystem::donated(int id)
 {
     world.pl[id].donateReady = world.clock + double(cfg().donationCooldown);
+    postObjective(world.reg, id, OE_Donate);
 }
 
 float FactionSystem::giftMul(int id, int f, int res) const

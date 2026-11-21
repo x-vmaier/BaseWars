@@ -107,6 +107,10 @@ void BuildMenu::drawTab()
     DrawRectangleRounded(tb, .3f, 6, rgb(70, 50, 34, 235));
     DrawRectangleRoundedLinesEx(tb, .3f, 6, 2, rgb(30, 20, 14));
     ui::drawTabIcon(tb, 6, "Icon_01.png");
+    int pk = app.world.objectivePointKind();
+    if (!isOpen && pk >= 0 && std::find(LIST.begin(), LIST.end(), Kind(pk)) != LIST.end())
+        DrawRectangleRoundedLinesEx(tb, .3f, 6, 3,
+                                    Fade(rgb(255, 220, 90), .7f + .3f * float(std::sin(GetTime() * 5.0))));
 }
 
 void BuildMenu::drawItem(int i, bool hov, int gate)
@@ -123,6 +127,9 @@ void BuildMenu::drawItem(int i, bool hov, int gate)
                              : (gate ? rgb(20, 20, 30, 120) : (hov ? rgb(255, 255, 255, 70) : rgb(0, 0, 0, 60))));
     Color dim = gate ? rgb(120, 120, 130, 255) : WHITE;
     drawItemIcon(k, it, dim);
+    if (!gate && app.world.objectivePointKind() == int(k)) // the active goal asks for this building
+        DrawRectangleRoundedLinesEx(it, .2f, 5, 3,
+                                    Fade(rgb(255, 220, 90), .7f + .3f * float(std::sin(GetTime() * 5.0))));
 
     int have = W.countKind(k), th = W.thLevel(), mx = maxCount(k, th);
     textShadow(TextFormat("[%d] %s", i + 1, KINFO[k].name), int(it.x) + 54, int(it.y) + 6, 16, dim);

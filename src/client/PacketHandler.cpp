@@ -524,6 +524,9 @@ bool PacketHandler::basePacket(uint8_t type, Reader &r)
     case S_Pacing:
         onPacing(r);
         return true;
+    case S_Objectives:
+        onObjectives(r);
+        return true;
     default:
         return false;
     }
@@ -616,6 +619,32 @@ void PacketHandler::onPacing(Reader &r)
     v.endsAt = GetTime() + left;
     v.seen = true;
     app.world.pacing = v;
+}
+
+void PacketHandler::onObjectives(Reader &r)
+{
+    ClientWorld::ObjView v = app.world.obj;
+    uint8_t seq = r.get<uint8_t>(), last = r.get<uint8_t>(), rewarded = r.get<uint8_t>();
+    for (int t = 0; t < OT_Count; t++)
+    {
+        v.id[t] = r.get<uint8_t>();
+        v.prog[t] = r.get<uint16_t>();
+        v.left[t] = r.get<uint16_t>();
+        if (v.id[t] != OBJ_None && (v.id[t] >= OBJ_Count || OBJECTIVES[v.id[t]].tier != t))
+            v.id[t] = OBJ_None; // never index the table with a network value unchecked
+    }
+    if (!r.ok)
+        return;
+
+    if (v.seen && seq != v.doneSeq && last < OBJ_Count) // the first message only sets the baseline
+    {
+        v.bannerId = last;
+        v.bannerRewarded = rewarded != 0;
+        v.bannerUntil = GetTime() + 4.5;
+    }
+    v.doneSeq = seq;
+    v.seen = true;
+    app.world.obj = v;
 }
 
 void PacketHandler::onDefeat(Reader &r)

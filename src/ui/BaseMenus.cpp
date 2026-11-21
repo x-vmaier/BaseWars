@@ -145,7 +145,7 @@ void BaseMenus::drawDefeat(Vector2 m)
     while (measureText(by.c_str(), fs) > int(r.width) - 50 && fs > 11)
         fs--;
     drawText(by.c_str(), int(r.x + r.width / 2) - measureText(by.c_str(), fs) / 2, int(r.y) + 62, fs, rgb(70, 45, 30));
-    const char *hint = "Your town is burning. Found a new one elsewhere.";
+    const char *hint = app.hints.get(H_Defeated, true);
     drawText(hint, int(r.x + r.width / 2) - measureText(hint, 14) / 2, int(r.y) + 92, 14, rgb(90, 62, 44));
     Rectangle b = defeatButton(0);
     ui::drawButton(b, "Resettle", true, false, CheckCollisionPointRec(m, b), false, 17);

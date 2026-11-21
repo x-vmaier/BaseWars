@@ -3,6 +3,7 @@
  * @brief Shared server state plus the entity and query helpers every system uses.
  */
 #pragma once
+#include "common/Objectives.hpp"
 #include "common/Pacing.hpp"
 #include "common/Shared.hpp"
 #include "components/Components.hpp"
@@ -101,6 +102,7 @@ struct BaseProf
 { // per-player base mechanics state (saved in the "base" section)
     DefeatState defeat;
     Pacing pacing;
+    ObjState obj; // objectives (saved)
     uint8_t quota[QUOTA_TYPES]{3, 2, 0,
                                0}; // defense quota per QUOTA_KINDS type: troops sent to every attacked clan mate
     uint8_t alloc[R_Count]{100, 100, 100, 100}; // Town Hall storage share per resource (% of the hall's capacity)

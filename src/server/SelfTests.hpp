@@ -68,6 +68,7 @@ void saveloadTest(Ctx &);
 void economyTest(Ctx &);
 void raidTest(Ctx &);
 void pacingTest(Ctx &);
+void objectivesTest(Ctx &);
 void netGarbageTest(Ctx &);
 void invariantsTest(Ctx &);
 void identityTest(Ctx &);

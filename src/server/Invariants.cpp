@@ -124,5 +124,12 @@ std::vector<std::string> World::checkInvariants()
             !(p.factor >= .5f && p.factor <= 4.f))
             c.fail("player " + std::to_string(id) + " has an invalid pacing state", 0);
     }
+    for (int id = 1; id <= MAX_PLAYERS; id++)
+        for (int t = 0; t < OT_Count; t++)
+        {
+            uint8_t o = bp[id].obj.cur[t];
+            if ((o != OBJ_None && (o >= OBJ_Count || OBJECTIVES[o].tier != t)) || !std::isfinite(bp[id].obj.active[t]))
+                c.fail("player " + std::to_string(id) + " has an invalid objective state", 0);
+        }
     return std::move(c.out);
 }

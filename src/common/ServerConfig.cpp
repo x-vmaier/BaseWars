@@ -94,6 +94,7 @@ void applyNpcs(ServerConfig &c, const Entry &e)
     e.I("pacing_max_raiders", c.pacingMaxRaiders);
     e.F("pacing_max_base_share", c.pacingMaxBaseShare);
     e.F("pacing_reward_per_raider", c.pacingRewardPerRaider);
+    e.D("objective_timeout_min", c.objectiveTimeoutMin);
     e.I("patrols_per_town_min", c.patrolsPerTownMin);
     e.I("patrols_per_town_max", c.patrolsPerTownMax);
     e.I("patrol_map_groups", c.patrolMapGroups);
@@ -150,6 +151,7 @@ void clampAll(ServerConfig &c)
     c.pacingMaxRaiders = std::clamp(c.pacingMaxRaiders, 2, 40);
     c.pacingMaxBaseShare = std::clamp(c.pacingMaxBaseShare, .1f, 2.f);
     c.pacingRewardPerRaider = std::max(0.f, c.pacingRewardPerRaider);
+    c.objectiveTimeoutMin = std::max(.05, c.objectiveTimeoutMin);
     c.patrolMapGroups = std::max(0, c.patrolMapGroups);
     c.patrolsPerTownMin = std::max(0, c.patrolsPerTownMin);
     c.patrolsPerTownMax = std::max(c.patrolsPerTownMin, c.patrolsPerTownMax);

@@ -37,6 +37,8 @@ struct ServerConfig
     int pacingMaxRaiders = 14;          // hard cap on one raid's size
     float pacingMaxBaseShare = .5f;     // a raid has at most this share of (buildings + troops) raiders
     float pacingRewardPerRaider = 15.f; // survivor reward: this many of each resource per raider
+    // ---- objectives
+    double objectiveTimeoutMin = 20.0; // online minutes after which a stuck objective resolves without reward
     // ---- patrols
     int patrolsPerTownMin = 1, patrolsPerTownMax = 2; // patrol groups each NPC town maintains
     int patrolMapGroups = 2;     // extra wandering groups per 100 chunks of explored land (map-wide)

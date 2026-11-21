@@ -210,6 +210,7 @@ void ConstructionSystem::finishUpgrade(entt::entity site)
     world.fx(E_Dust, c.x, c.y);
     world.say(reg.get<Owner>(site).id,
               std::string(KINFO[in.kind].name) + " upgraded to level " + std::to_string(in.level) + ".");
+    postObjective(reg, reg.get<Owner>(site).id, OE_Level, in.kind, in.level);
 }
 
 void ConstructionSystem::endJob(entt::entity site)

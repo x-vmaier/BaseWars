@@ -30,6 +30,7 @@
 #include "ui/BuildMenu.hpp"
 #include "ui/Chat.hpp"
 #include "ui/ContextPanel.hpp"
+#include "ui/Hints.hpp"
 #include "ui/Hud.hpp"
 #include "ui/MainMenu.hpp"
 #include "ui/PauseMenu.hpp"
@@ -52,6 +53,7 @@ class App
 
     // ---- shared state
     Settings settings;
+    Hints hints;
     Camera2D cam{};
     ClientWorld world;
     entt::dispatcher disp; // LogEvent -> Hud

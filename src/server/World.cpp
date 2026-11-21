@@ -190,6 +190,8 @@ float World::storeCargo(entt::entity st, float *cargo)
             reg.get<Building>(st).stock[r] += add;
         cargo[r] -= add;
         stored += add;
+        if (isPlayer(o) && add > 0)
+            postObjective(reg, o, OE_Gather, r, add);
     }
     return stored;
 }
@@ -211,6 +213,8 @@ float World::creditRes(int id, int r, float amt)
         return 0;
     float keep = std::clamp(allocRoom(id, r), 0.f, amt);
     pl[id].res[r] += keep;
+    if (keep > 0)
+        postObjective(reg, id, OE_Gather, r, keep);
     if (amt - keep > .01f)
         noteDiscard(id, r, amt - keep);
     return keep;

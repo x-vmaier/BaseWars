@@ -70,6 +70,17 @@ Rectangle PauseMenu::arrow(int dir) const
     return dir < 0 ? Rectangle{r.x + 96, r.y + 2, 30, 30} : Rectangle{r.x + r.width - 30, r.y + 2, 30, 30};
 }
 
+Rectangle PauseMenu::saveBtn() const
+{
+    Rectangle r = row(2);
+    return {r.x, r.y, r.width * .58f, r.height};
+}
+Rectangle PauseMenu::hintsBtn() const
+{
+    Rectangle r = row(2);
+    return {r.x + r.width * .6f, r.y, r.width * .4f, r.height};
+}
+
 void PauseMenu::input()
 {
     Vector2 m = ui::mouse();
@@ -118,7 +129,12 @@ void PauseMenu::onClick(Vector2 m)
         setWindowMode(s.windowMode + 1);
         return;
     }
-    if (CheckCollisionPointRec(m, row(2)))
+    if (CheckCollisionPointRec(m, hintsBtn()))
+    {
+        s.hints = !s.hints;
+        return;
+    }
+    if (CheckCollisionPointRec(m, saveBtn()))
     {
         if (s.save(std::string(GetApplicationDirectory())))
             savedAt = GetTime();
@@ -201,8 +217,10 @@ void PauseMenu::drawWindowRow(Vector2 m)
 void PauseMenu::drawButtons(Vector2 m)
 {
     bool saved = GetTime() - savedAt < 2.0;
-    ui::drawButton(row(2), saved ? "Saved!" : "Save settings", true, false, CheckCollisionPointRec(m, row(2)), false,
-                   15);
+    ui::drawButton(saveBtn(), saved ? "Saved!" : "Save settings", true, false, CheckCollisionPointRec(m, saveBtn()),
+                   false, 15);
+    ui::drawButton(hintsBtn(), app.settings.hints ? "Hints: on" : "Hints: off", true, false,
+                   CheckCollisionPointRec(m, hintsBtn()), false, 15);
     ui::drawButton(row(3), "Resume", true, false, CheckCollisionPointRec(m, row(3)), false, 15);
     ui::drawButton(row(4), "Leave to main menu", true, false, CheckCollisionPointRec(m, row(4)), false, 15);
     ui::drawButton(row(5), "Quit game", true, true, CheckCollisionPointRec(m, row(5)), false, 15);

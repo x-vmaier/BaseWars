@@ -47,6 +47,7 @@ entt::entity TrainingSystem::spawnTrained(entt::entity be, Kind k)
     else
         world.fx(E_Dust, at.x, at.y);
 
+    postObjective(reg, id, OE_Trained, k);
     // trained pawns stay free: they hunt sheep on their own instead of being bound to a building
     return u;
 }

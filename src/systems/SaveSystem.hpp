@@ -7,7 +7,7 @@
 
 struct Systems;
 
-inline constexpr uint32_t SAVE_MAGIC = 0x31315742u; // "BW11" (BW10 + pacing director state)
+inline constexpr uint32_t SAVE_MAGIC = 0x32315742u; // "BW12" (BW11 + objective state)
 
 class SaveSystem
 {

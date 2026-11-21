@@ -167,6 +167,7 @@ void PacingSystem::endSiege(int id, Pacing &p)
         p.factor *= 1.1f;
     p.factor = std::clamp(p.factor, .5f, cfg().pacingMaxRaidFactor);
     p.survived++;
+    postObjective(reg, id, OE_Raid);
 
     float reward = cfg().pacingRewardPerRaider * float(p.raiders);
     for (int r = 0; r < R_Count; r++)

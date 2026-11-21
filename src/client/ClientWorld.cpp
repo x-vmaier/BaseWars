@@ -263,6 +263,14 @@ int ClientWorld::buildGateErr(Kind k) const
     return buildGate(k, thLevel(), countKind(k));
 }
 
+int ClientWorld::objectivePointKind() const
+{
+    for (int t = 0; t < OT_Count; t++)
+        if (obj.id[t] < OBJ_Count && OBJECTIVES[obj.id[t]].pointKind >= 0)
+            return OBJECTIVES[obj.id[t]].pointKind;
+    return -1;
+}
+
 float ClientWorld::donateWait() const
 {
     return float(std::max(0.0, donateReadyAt - GetTime()));

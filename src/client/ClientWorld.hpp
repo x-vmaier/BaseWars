@@ -6,6 +6,7 @@
 #include "client/ClientCommon.hpp"
 #include "client/ClientState.hpp"
 #include "client/Components.hpp"
+#include "common/Objectives.hpp"
 #include "common/Pacing.hpp"
 #include "common/Snapshot.hpp"
 
@@ -83,6 +84,16 @@ struct ClientWorld
         Pos origin{0, 0}; // town the raid marches from
         bool seen = false;
     } pacing;
+    struct ObjView
+    { // S_Objectives: active goal per tier, completion banner
+        bool seen = false;
+        uint8_t doneSeq = 0, id[OT_Count] = {OBJ_None, OBJ_None, OBJ_None};
+        uint16_t prog[OT_Count]{}, left[OT_Count]{};
+        int bannerId = -1; // objective just completed / skipped
+        bool bannerRewarded = false;
+        double bannerUntil = 0; // local GetTime()
+    } obj;
+    int objectivePointKind() const; // building kind the first active objective points at (-1 none)
 
     // ---- terrain
     int biomeAt(int x, int y) const;

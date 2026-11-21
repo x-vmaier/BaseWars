@@ -63,6 +63,8 @@ void Hud::drawTop()
     drawResources();
     drawNameBanner();
     drawRaidArrow();
+    drawObjectives();
+    drawObjectivePointer();
 }
 
 void Hud::drawResources()
@@ -93,10 +95,9 @@ void Hud::drawResources()
         textShadow(name, int(x + iconPx + gap), int(top) + vh - 4, nameFs,
                    food ? rgb(255, 200, 150) : rgb(230, 220, 200));
     }
-    if (W.res[R_Meat] < 60.f && app.session.welcomed)
-        textShadow(
-            "Low food! Free pawns hunt sheep; Harbours fish. Food pays for units, buildings, upgrades and repairs.",
-            int(h.x) + 8, int(h.y + h.height) + 2, 12, rgb(255, 160, 130));
+    if (const char *hint =
+            W.res[R_Meat] < 60.f && app.session.welcomed ? app.hints.get(H_LowFood, app.settings.hints) : nullptr)
+        textShadow(hint, int(h.x) + 8, int(h.y + h.height) + 2, 12, rgb(255, 160, 130));
 }
 
 void Hud::drawNameBanner()
@@ -130,9 +131,10 @@ void Hud::drawLog()
     double now = GetTime();
     float chatW = std::min(388.f, float(sw) - 16);
     int maxW = std::max(160, int(float(sw) - chatW - 8 - 14 - 16));
-    auto help = wrapText(
-        "LMB select/attack  RMB command/menu  M move  A attack  B build  P players  H home  Arrows/MMB pan  Wheel zoom",
-        maxW, 11);
+    const char *helpText = app.hints.get(H_Controls, app.settings.hints);
+    auto help = wrapText(helpText ? helpText : "", maxW, 11);
+    if (!helpText)
+        help.clear();
     int helpLh = textHeight(11) + 1, logLh = textHeight(16) + 2;
     for (size_t i = 0; i < help.size(); i++)
         textShadow(help[i], 14, sh - 6 - helpLh * int(help.size() - i), 11, rgb(210, 214, 225, 200));
@@ -152,9 +154,14 @@ void Hud::drawLog()
     }
     Input::Mode mode = app.input.mode;
     if (mode != Input::M_None)
-        textShadow(mode == Input::M_Move ? "MOVE: click a destination"
-                                         : "ATTACK: click a target or ground (attack-move)",
-                   sw / 2 - 150, 16, 20, rgb(255, 230, 120));
+        textShadow(app.hints.get(mode == Input::M_Move ? H_MoveMode : H_AttackMode, true), sw / 2 - 150, 16, 20,
+                   rgb(255, 230, 120));
+    else if (app.placement.active())
+        if (const char *hint = app.hints.get(H_Placing, app.settings.hints))
+        {
+            int w = measureText(hint, 15);
+            textShadow(hint, sw / 2 - w / 2, 16, 15, rgb(255, 235, 170));
+        }
 }
 
 // Bottom right, under the chat bar: name of the biome under the mouse (skipped while the open chat's help line would

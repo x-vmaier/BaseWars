@@ -18,6 +18,7 @@
 #include "systems/HuntSystem.hpp"
 #include "systems/NavalSystem.hpp"
 #include "systems/NetSession.hpp"
+#include "systems/ObjectiveSystem.hpp"
 #include "systems/PacingSystem.hpp"
 #include "systems/PacketHandler.hpp"
 #include "systems/PatrolSystem.hpp"
@@ -36,8 +37,8 @@ struct Systems
         : spawn(w, *this), session(w, *this), packets(w, *this), repl(w, *this), build(w, *this), units(w, *this),
           env(w, *this), training(w, *this), fire(w, *this), territory(w, *this), clearing(w, *this), convoy(w, *this),
           hunt(w, *this), faction(w, *this), town(w, *this), patrol(w, *this), raid(w, *this), pacing(w, *this),
-          clan(w, *this), defense(w, *this), naval(w, *this), ferry(w, *this), combat(w, *this), save(w, *this),
-          construction(w, *this), defeat(w, *this)
+          objectives(w, *this), clan(w, *this), defense(w, *this), naval(w, *this), ferry(w, *this), combat(w, *this),
+          save(w, *this), construction(w, *this), defeat(w, *this)
     {
     }
     Systems(const Systems &) = delete;
@@ -61,6 +62,7 @@ struct Systems
     PatrolSystem patrol;
     RaidSystem raid;
     PacingSystem pacing;
+    ObjectiveSystem objectives;
     ClanSystem clan;
     DefenseSystem defense;
     NavalSystem naval;

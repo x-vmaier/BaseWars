@@ -26,6 +26,8 @@ const Scenario SCENARIOS[] = {
     {"net-snapshot", "chunked unreliable snapshots, lost chunks, command seq ack, protocol version", netSnapshotTest},
     {"pacing", "pacing director: phase cycle, grace / aftermath, strength cap, adaptive factor, save, offline pause",
      pacingTest},
+    {"objectives", "objectives: chains advance on events / state, skipped steps resolve, rewards once, timeout, save",
+     objectivesTest},
     {"defeat", "defeat: burning ruin, resettle offers, blocked commands, timeouts", defeatTest},
     {"net-predict", "command prediction: reject message, pending queue ack / rollback / expiry, bounded local offset",
      netPredictTest},
