@@ -20,15 +20,13 @@ int raiders(World &w)
 void raidTest(Ctx &t)
 {
     Fixture f;
-    cfg().raidInterval = 1e7; // exactly one raid per faction
-    cfg().raidIntervalRandom = 1;
+    cfg().pacingFirstRaidGraceMin = cfg().pacingCalmMin = .05; // the director sends the raid within seconds ...
+    cfg().pacingWarningS = 2;
+    cfg().pacingAftermathMin = 1e4; // ... and exactly one
     int id = f.join(1);
     World &w = f.world;
     for (int fac = 0; fac < FACTION_COUNT; fac++)
-    {
         w.pl[id].rep[fac] = -50.f;
-        w.pl[id].raidNext[fac] = w.clock + 2.0;
-    }
 
     f.run(10);
     int spawned = raiders(w);

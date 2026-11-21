@@ -3,6 +3,7 @@
  * @brief Shared server state plus the entity and query helpers every system uses.
  */
 #pragma once
+#include "common/Pacing.hpp"
 #include "common/Shared.hpp"
 #include "components/Components.hpp"
 #include "networking/SteamServerNet.hpp"
@@ -59,7 +60,7 @@ struct Profile
     std::unordered_set<int64_t> sentTerr;
     double lastWarn = -100;
     uint8_t clan = 0, ulevel[K_Count]{};
-    double raidNext[FACTION_COUNT]{}, lastLootWarn = -100;
+    double lastLootWarn = -100;
     float rep[FACTION_COUNT]{};
     double helpCool[FACTION_COUNT]{};
     double donateReady = 0;                     // donation / clan transfer cooldown (world clock)
@@ -83,9 +84,23 @@ struct DefeatState
     double offerAt = 0; // world.clock when the offer was made; only counts while online (reset on login)
 };
 
+// Pacing Director state of one player (saved). Timers count down only while the owner is online (offline pause).
+struct Pacing
+{
+    uint8_t phase = PH_Calm;
+    double left = -1, total = 1; // seconds left / total of the phase; left < 0 = not started yet
+    uint8_t faction = 0;         // faction of the announced / running raid
+    uint8_t raiders = 0;         // planned raid size (announced at the start of the warning)
+    float factor = 1.f;          // adaptive strength factor: heavy losses lower it, a flawless defense raises it
+    Pos origin{0, 0};            // town the raid marches from (warning arrow)
+    uint16_t assetsBefore = 0;   // buildings + troops when the siege began
+    uint16_t survived = 0;       // raids survived
+};
+
 struct BaseProf
 { // per-player base mechanics state (saved in the "base" section)
     DefeatState defeat;
+    Pacing pacing;
     uint8_t quota[QUOTA_TYPES]{3, 2, 0,
                                0}; // defense quota per QUOTA_KINDS type: troops sent to every attacked clan mate
     uint8_t alloc[R_Count]{100, 100, 100, 100}; // Town Hall storage share per resource (% of the hall's capacity)

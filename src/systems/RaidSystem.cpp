@@ -1,6 +1,6 @@
 /**
  * @file RaidSystem.cpp
- * @brief Faction raiding parties against hostile players.
+ * @brief Faction raiding parties against hostile players (when and how strong: PacingSystem).
  */
 #include "systems/RaidSystem.hpp"
 
@@ -36,18 +36,17 @@ const Town *RaidSystem::nearestTown(int f, Pos tp)
     return best;
 }
 
-void RaidSystem::spawnRaid(int player, int f)
+bool RaidSystem::spawnRaid(int player, int f, int n)
 {
     auto th = world.townHallOf(player);
     if (th == entt::null)
-        return;
+        return false;
     Pos tp = world.posOf(th);
 
     const Town *best = nearestTown(f, tp);
     if (!best)
-        return;
+        return false;
 
-    int n = 3 + std::min(6, int(world.clock / 900.0)) + int(world.rng() % 2);
     int sent = 0;
 
     static const Kind mix[] = {K_Warrior, K_Archer, K_Lancer, K_Warrior, K_Archer};
@@ -74,8 +73,9 @@ void RaidSystem::spawnRaid(int player, int f)
     }
 
     if (sent)
-        world.say(player, std::string("A raiding party of the ") + FACTION_NAME[f] + " marches on your base from (" +
-                              std::to_string(best->cx) + ", " + std::to_string(best->cy) + ")!");
+        world.say(player,
+                  std::string("The raiding party of the ") + FACTION_NAME[f] + " is marching on your base! Defend it!");
+    return sent > 0;
 }
 
 void RaidSystem::runRaider(entt::entity e, Unit &u, Raider &rd, float dt)
@@ -96,41 +96,5 @@ void RaidSystem::runRaider(entt::entity e, Unit &u, Raider &rd, float dt)
         rd.repath = 4.f;
         world.order(e, tp, 0, 40000);
         reg.emplace_or_replace<AMove>(e, AMove{tp});
-    }
-}
-
-void RaidSystem::raidTick()
-{
-    for (int id = 1; id <= MAX_PLAYERS; id++)
-    {
-        if (!world.pl[id].used || world.townHallOf(id) == entt::null)
-            continue;
-        for (int f = 0; f < FACTION_COUNT; f++)
-        {
-            // peace: no raids
-            if (world.pl[id].rep[f] > float(HOSTILE_REP))
-            {
-                world.pl[id].raidNext[f] = 0;
-                continue;
-            }
-
-            static const bool fastRaids = std::getenv("BW_RAIDNOW") != nullptr; // test hook
-            if (world.pl[id].raidNext[f] <= 0)
-            {
-                world.pl[id].raidNext[f] =
-                    world.clock +
-                    (fastRaids
-                         ? 6.0
-                         : cfg().raidFirstDelay + double(world.rng() % uint32_t(std::max(1.0, cfg().raidFirstRandom))));
-                continue;
-            }
-
-            if (world.clock >= world.pl[id].raidNext[f])
-            {
-                spawnRaid(id, f);
-                world.pl[id].raidNext[f] = world.clock + cfg().raidInterval +
-                                           double(world.rng() % uint32_t(std::max(1.0, cfg().raidIntervalRandom)));
-            }
-        }
     }
 }

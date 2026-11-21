@@ -534,8 +534,8 @@ void SaveSystem::shipsLoad(Reader &r)
 
 void SaveSystem::saveBase(Writer &w)
 {
-    // "BSE2": per-type quotas + storage shares.
-    w.put<uint32_t>(0x32455342u);
+    // "BSE3": per-type quotas + storage shares + pacing state.
+    w.put<uint32_t>(0x33455342u);
 
     writeBasePlayers(w);
 
@@ -563,6 +563,10 @@ void SaveSystem::writeBasePlayers(Writer &w)
         w.put<uint8_t>(df.phase).put<uint8_t>(df.conqueror).put<uint8_t>(df.tries);
         w.put<float>(df.ruin.x).put<float>(df.ruin.y).put<float>(df.site.x).put<float>(df.site.y);
         w.put<double>(df.offerAt);
+        const Pacing &pc = world.bp[i].pacing;
+        w.put<uint8_t>(pc.phase).put<double>(pc.left).put<double>(pc.total).put<uint8_t>(pc.faction);
+        w.put<uint8_t>(pc.raiders).put<float>(pc.factor).put<float>(pc.origin.x).put<float>(pc.origin.y);
+        w.put<uint16_t>(pc.assetsBefore).put<uint16_t>(pc.survived);
         for (uint8_t q : world.bp[i].quota)
             w.put<uint8_t>(q);
         for (uint8_t a : world.bp[i].alloc)
@@ -624,7 +628,7 @@ void SaveSystem::writeBaseEntity(Writer &w, entt::entity e)
 
 void SaveSystem::loadBase(Reader &r)
 {
-    if (r.get<uint32_t>() != 0x32455342u)
+    if (r.get<uint32_t>() != 0x33455342u)
     {
         r.ok = false;
         return;
@@ -653,6 +657,17 @@ void SaveSystem::readBasePlayers(Reader &r)
         df.site.x = r.get<float>();
         df.site.y = r.get<float>();
         df.offerAt = r.get<double>();
+        Pacing pc;
+        pc.phase = r.get<uint8_t>();
+        pc.left = r.get<double>();
+        pc.total = r.get<double>();
+        pc.faction = r.get<uint8_t>();
+        pc.raiders = r.get<uint8_t>();
+        pc.factor = r.get<float>();
+        pc.origin.x = r.get<float>();
+        pc.origin.y = r.get<float>();
+        pc.assetsBefore = r.get<uint16_t>();
+        pc.survived = r.get<uint16_t>();
         for (auto &v : q)
             v = r.get<uint8_t>();
         for (auto &v : al)
@@ -669,6 +684,12 @@ void SaveSystem::readBasePlayers(Reader &r)
         for (int k = 0; k < R_Count; k++)
             world.bp[id].alloc[k] = std::min<uint8_t>(al[k], 100);
         world.bp[id].homeless = hl != 0;
+        if (pc.phase < PH_Count && pc.faction < FACTION_COUNT && std::isfinite(pc.left + pc.total + pc.factor) &&
+            std::isfinite(pc.origin.x + pc.origin.y) && pc.total >= 1.0)
+        {
+            pc.factor = std::clamp(pc.factor, .5f, 4.f);
+            world.bp[id].pacing = pc;
+        }
         world.bp[id].friends = fr;
         if (df.phase <= DF_Offered && std::isfinite(df.ruin.x + df.ruin.y + df.site.x + df.site.y))
             world.bp[id].defeat = df;

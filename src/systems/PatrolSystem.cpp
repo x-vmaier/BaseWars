@@ -210,8 +210,8 @@ bool PatrolSystem::pickSiege(PatGroup &g, Pos from, int owner)
         if (i.kind != K_TownHall || bb.progress < 1.f || !world.hostile(owner, o.id) ||
             world.dying.count(reg.get<Uid>(b).id))
             return;
-        if (isPlayer(o.id) && !world.pl[o.id].online)
-            return; // players are only besieged while they can defend
+        if (isPlayer(o.id))
+            return; // threats against players come only from the Pacing Director
 
         Pos c = footCenter(i.kind, bb.tx, bb.ty);
         float d = std::hypot(c.x - from.x, c.y - from.y);
@@ -232,8 +232,6 @@ bool PatrolSystem::pickSiege(PatGroup &g, Pos from, int owner)
     g.wpUntil = world.clock + 420.0;
 
     int to = reg.get<Owner>(best).id;
-    if (isPlayer(to))
-        world.say(to, std::string("A ") + FACTION_NAME[owner - FACTION_BASE] + " patrol is marching on your town!");
 
     static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;
     if (logIt)

@@ -20,10 +20,14 @@ void Sim::baseSecond()
     sys.session.authSecond();
     sys.clan.homelessSecond();
     sys.defeat.second();
+    sys.pacing.second();
     sys.faction.demandSecond();
     for (int id = 1; id <= MAX_PLAYERS; id++)
         if (world.pl[id].online)
+        {
             sys.repl.sendBaseInfo(id);
+            sys.pacing.send(id);
+        }
 }
 
 void Sim::pollNet()
@@ -73,7 +77,6 @@ void Sim::slowSystems(const std::vector<entt::entity> &units, const std::vector<
         sys.faction.callHelp();
         sys.convoy.updateSpotting();
         sys.convoy.spawnHauls();
-        sys.raid.raidTick();
     }
     if (world.tick % 4 == 0)
         sys.env.explore(units, blds);

@@ -521,6 +521,9 @@ bool PacketHandler::basePacket(uint8_t type, Reader &r)
     case S_Defeat:
         onDefeat(r);
         return true;
+    case S_Pacing:
+        onPacing(r);
+        return true;
     default:
         return false;
     }
@@ -595,6 +598,24 @@ void PacketHandler::onBaseInfo(Reader &r)
         app.placement.buildKind = -1;
 
     w.wasHomeless = w.homeless;
+}
+
+void PacketHandler::onPacing(Reader &r)
+{
+    ClientWorld::PacingView v;
+    v.phase = r.get<uint8_t>();
+    double left = r.get<uint16_t>();
+    v.total = std::max<double>(1, r.get<uint16_t>());
+    v.raiders = r.get<uint8_t>();
+    v.faction = r.get<uint8_t>();
+    v.hasOrigin = r.get<uint8_t>() != 0;
+    v.origin = {r.get<float>(), r.get<float>()};
+    if (!r.ok || v.phase >= PH_Count || v.faction >= FACTION_COUNT || !std::isfinite(v.origin.x + v.origin.y))
+        return;
+
+    v.endsAt = GetTime() + left;
+    v.seen = true;
+    app.world.pacing = v;
 }
 
 void PacketHandler::onDefeat(Reader &r)

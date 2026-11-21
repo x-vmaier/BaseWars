@@ -51,6 +51,7 @@ Only the first tasks are specified in detail below. Every later task has its ful
 | T19a | Protocol v2: version in hello / welcome, command seq envelope, tick-numbered unreliable S_State chunks (< 1100 B, whole-tick removal rule), `snapshot_interval_ticks`, `BW_NETLAG` / `BW_NETLOSS`, selftest `net-snapshot` |
 | T19b | Entity interpolation: per-entity `PosBuffer`, `InterpClock` render clock (delay 2 snapshot intervals), clamped extrapolation, `BW_STUTTER` metric, selftest `interp` |
 | T19c | Command prediction: pending queue of move / attack-move orders, immediate marker + local movement start (bounded offset that fades), `S_CmdReject` rollback (red cross), selftest `net-predict` |
+| T25a | Pacing Director v1: per-player Calm -> Warning -> Siege -> Aftermath (`PacingSystem`), raids only from the director (sized from a defense score, adaptive factor, caps), survivor reward, `S_Pacing` + HUD badge / edge arrow, SAVE_MAGIC BW11, selftest `pacing` |
 | T13 | Biome label, minimap trees, chat/build menu layout, high-contrast bars |
 
 ## Roadmap (do in this order)
@@ -59,7 +60,6 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 | # | Task | Size | Status | Why here |
 | --- | --- | --- | --- | --- |
-| 8 | **T25a** Pacing Director v1 | M | todo | Stress/relief rhythm is the core experience |
 | 9 | **T26** Objectives, onboarding chain, central hints | M | todo | First-hour hook, always a next goal |
 | 10 | **T28a** Audio + first feedback pass | M | todo | Game feel is cheap now, expensive later |
 | 11 | **T14a** Ships as registry kinds, harbour production, crews | M | todo | Naval foundation |
@@ -114,6 +114,11 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 * T19a: fake lag / loss uses Steam's `FakePacketLag_Send` / `FakePacketLoss_Send` globals (env), the selftest drops chunks itself through `SteamServerNet::tap`.
 * T18b: new messages are appended after `S_Econ` (`C_Resettle`, `C_ResettleAccept`, `S_Defeat`) to keep the protocol append-only.
 
+* T25a: the director state is per player (`BaseProf::pacing`, saved in the base section) instead of one `registry.ctx()` singleton - towns are per player and timers must pause per owner while offline.
+* T25a: timers are remaining seconds that only count down while the owner is online (offline pause), so they need no wall-clock expiry and survive restarts.
+* T25a: patrols no longer siege player towns (`PatrolSystem::pickSiege` skips them) - the only threat against players is the director's raid; NPC-vs-NPC sieges are unchanged.
+* T25a: raid size = round((2 + .35 x score) x factor), score = 2 x hall level + .5 x buildings + army units; capped by `pacing_max_raiders` and `pacing_max_base_share` x (buildings + troops). Factor x.7 after > 25% asset loss, x1.1 after <= 5%, clamped .5..`pacing_max_raid_factor`. Size is fixed when the warning starts, so preparing never makes the raid bigger.
+* T25a: `raid_*` config keys were replaced by `pacing_*`; a new town gets `max(first_raid_grace, calm)` of calm. No hostile faction with a town in range = the director just stays calm.
 * T19c: only move / attack-move are predicted (marker + local movement start); build / train / etc. stay server-confirmed - the existing pending-site ghosts already give instant feedback and prediction of resource spending would risk wrong state.
 * T19c: rejection is a new reliable `S_CmdReject{seq}` (append-only, no version bump); the server sends it when an order moved no unit or a command was dropped while defeated. Malformed packets get none.
 * T19c: local movement start is a visual offset (2 tiles/s, max 0.6 tile, fades at 6/s), not a simulated unit - no client pathfinding, so nothing to reconcile.
@@ -123,12 +128,15 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 ## Current task specs
 
-(No spec is current: T25a is next; move the next row's spec from `BACKLOG.md` here.)
+(No spec is current: T26 is next; move the next row's spec from `BACKLOG.md` here.)
 
 ## Known gaps / follow-ups
 
 * **Font change (owner requests, outside the roadmap):** Noto Sans body + Press Start 2P for titles / coordinates via `rendering/Text.*` (80 px `LoadFontEx` atlas, mipmapped), main menu enlarged, resource ribbon (scale .75) and name banner enlarged with content centred, side tab icons centred, side tabs moved to `SIDE_Y`. Viewed: main menu, HUD, build menu, Town Hall, social menu. Verified with `BW_SHOT` runs (menu and in-game, which also ran the T19b interpolation against a live `--local` server on Windows without Steam: units moved normally). Still small / unreviewed at scale 1 on 1920x1200: HUD sub-labels, bottom help line (overlaps the welcome line), other panels were not viewed with the new metrics; check `BW_SCALE` 1.25-1.5. `fs / 2` vertical centring elsewhere still uses unboosted sizes (`textHeight` exists).
 
+* **T25a gate:** release build warning-free, all 13 selftests (incl. `pacing`, adapted `raid`), asan build + `boot`, `saveload`, `pacing`, `defeat`, `net-garbage`, `net-snapshot`, `net-predict`; clang-format applied by hand (`check.sh` cannot load vcvars from git-bash); asan `raid` / `invariants` skipped as before.
+* **T25a only verified by reading:** the client side (`PacketHandler::onPacing`, `Hud::drawPacing` badge, `Hud::drawRaidArrow` edge arrow) was built but not run: no Steam client here, so no Calm / Warning screenshots. Run `BW_PACING=warning` (server) + `BW_SHOT` to judge them. The raid fights themselves (hall loss during a siege) are only covered by `raid`, which does not assert the outcome.
+* **T25a gaps:** no horn sound (T28a) - the warning is a chat line + HUD; no minimap marker for the raid origin (T21d); the siege ends only when all raiders are dead or expire (a stuck raider is recalled after 660 s); offline players' bases are paused for new raids but raiders already on the way keep fighting (T20c); the reward is added straight to the player's resources (ignores storage caps); hostile patrols that meet a player town still attack it (only their deliberate sieges were removed).
 * **T19c gate:** release build warning-free, all 12 selftests, asan build + `boot`, `saveload`, `net-garbage`, `net-snapshot`, `net-predict`, `defeat`; clang-format applied by hand (`check.sh` cannot load vcvars from git-bash); asan `raid` / `invariants` skipped as before.
 * **T19c only verified by reading:** `Commands::predict` / `ClientWorld::interpolate` offset / `rollBack` / red-cross marker / `PacketHandler` ack and reject handling were built but not run in a real client (no Steam). The selftest covers the server reject rule and the `PendingQueue` / `PredOffset` logic with a 150 ms ack model. Owner playtest checkpoint now due: right-click orders should react at once without rubber-banding; an order to an unreachable spot flashes a red cross.
 * **T19c gaps:** a move that only partly fails (some units unreachable) is not rolled back; other commands show no optimistic state beyond existing ghosts; the offset speed is a constant, not the unit's real speed; SDR still untested.
@@ -165,5 +173,5 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 * At UI scale 2.0 in very small windows the minimap overlaps the resource bar and the build menu runs off the bottom (T21d).
 * The biome label hides while the chat bar is open.
 * Raised-chat / social-build keyboard toggles and the greyed Clan-chat tooltip were only verified by reading.
-* Old saves (BWS6 and earlier) are discarded (moved to `.bad`); format is BW10 (BWS9 + defeat state and ruins).
+* Old saves (BWS6 and earlier) are discarded (moved to `.bad`); format is BW11 (BW10 + pacing director state).
 * The tiling WM gives the client a random window size, so `BW_WIN` is ignored.

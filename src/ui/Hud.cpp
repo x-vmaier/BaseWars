@@ -10,7 +10,9 @@
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <string>
 
 namespace
 {
@@ -60,6 +62,8 @@ void Hud::drawTop()
 {
     drawResources();
     drawNameBanner();
+    drawPacing();
+    drawRaidArrow();
 }
 
 void Hud::drawResources()
@@ -253,4 +257,74 @@ void Hud::drawCursor()
     }
     Texture2D c = tex(std::string("UI Elements/UI Elements/Cursors/") + file);
     DrawTexturePro(c, {0, 0, 64, 64}, {m.x - 22, m.y - 17, 64, 64}, {0, 0}, 0, WHITE);
+}
+
+// Top centre: phase badge. Calm is a soft green, warning / siege urgent orange / red (pulsing); the bar is the
+// phase's remaining time, the tension pips grow from calm to siege.
+void Hud::drawPacing()
+{
+    const ClientWorld &W = app.world;
+    if (!W.pacing.seen || W.homeless || W.defeat.phase != DF_None)
+        return;
+    const ClientWorld::PacingView &p = W.pacing;
+
+    double left = std::max(0.0, p.endsAt - GetTime());
+    bool urgent = p.phase == PH_Warning || p.phase == PH_Siege;
+    float pulse = urgent ? .75f + .25f * float(std::sin(GetTime() * (p.phase == PH_Siege ? 8.0 : 4.0))) : 1.f;
+    Color tint = p.phase == PH_Calm        ? rgb(140, 200, 140)
+                 : p.phase == PH_Aftermath ? rgb(150, 190, 210)
+                 : p.phase == PH_Warning   ? rgb(255, 170, 60)
+                                           : rgb(235, 70, 60);
+    tint = Fade(tint, pulse);
+
+    std::string label = pacingName(p.phase);
+    if (p.phase == PH_Warning)
+        label += TextFormat(": %s raid, %d raiders", FACTION_NAME[p.faction], p.raiders);
+    std::string timer = p.phase == PH_Siege ? "Defend!" : TextFormat("%d:%02d", int(left) / 60, int(left) % 60);
+
+    const int fs = 15, pad = 10;
+    int w = std::max(180, measureText(label, fs) + measureText(timer, fs) + pad * 4), h = 40;
+    float x = float(ui::screenW()) / 2 - float(w) / 2, y = 8;
+    DrawRectangleRounded({x, y, float(w), float(h)}, .3f, 8, Fade(rgb(30, 26, 22), .82f));
+    DrawRectangleRoundedLines({x, y, float(w), float(h)}, .3f, 8, tint);
+
+    textShadow(label, int(x) + pad, int(y) + 5, fs, tint);
+    textShadow(timer, int(x) + w - pad - measureText(timer, fs), int(y) + 5, fs, WHITE);
+
+    // remaining-time bar
+    float frac = p.phase == PH_Siege ? 1.f : float(std::clamp(left / p.total, 0.0, 1.0));
+    DrawRectangleRec({x + pad, y + h - 12, float(w - 2 * pad), 5}, Fade(BLACK, .5f));
+    DrawRectangleRec({x + pad, y + h - 12, float(w - 2 * pad) * frac, 5}, tint);
+}
+
+// Screen-edge arrow towards the town the raid marches from (warning and siege).
+void Hud::drawRaidArrow()
+{
+    const ClientWorld &W = app.world;
+    const ClientWorld::PacingView &p = W.pacing;
+    if (!p.seen || !p.hasOrigin || p.phase == PH_Calm || W.defeat.phase != DF_None)
+        return;
+
+    Vector2 s = GetWorldToScreen2D({p.origin.x * TILE, p.origin.y * TILE}, app.cam);
+    float sc = ui::scale(), sw = float(ui::screenW()), sh = float(ui::screenH());
+    s = {s.x / sc, s.y / sc};
+    const float m = 46.f;
+    if (s.x > m && s.x < sw - m && s.y > m && s.y < sh - m)
+        return; // the origin is on screen already
+
+    Vector2 c = {sw / 2, sh / 2}, d = {s.x - c.x, s.y - c.y};
+    float len = std::hypot(d.x, d.y);
+    if (len < 1.f)
+        return;
+    d = {d.x / len, d.y / len};
+    float k = std::min((sw / 2 - m) / std::max(.001f, std::fabs(d.x)), (sh / 2 - m) / std::max(.001f, std::fabs(d.y)));
+    Vector2 at = {c.x + d.x * k, c.y + d.y * k}, side = {-d.y, d.x};
+    float pulse = .7f + .3f * float(std::sin(GetTime() * 5.0));
+    Color col = Fade(p.phase == PH_Siege ? rgb(235, 70, 60) : rgb(255, 170, 60), pulse);
+    Vector2 tip = {at.x + d.x * 18, at.y + d.y * 18},
+            a = {at.x - d.x * 10 + side.x * 14, at.y - d.y * 10 + side.y * 14},
+            b = {at.x - d.x * 10 - side.x * 14, at.y - d.y * 10 - side.y * 14};
+    DrawTriangle(tip, b, a, col); // raylib culls clockwise triangles: draw both windings
+    DrawTriangle(tip, a, b, col);
+    DrawTriangleLines(tip, b, a, Fade(BLACK, .7f));
 }

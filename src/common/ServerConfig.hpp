@@ -31,9 +31,12 @@ struct ServerConfig
     int townMinDistance = 45;       // minimum tiles between an NPC town and any player Town Hall
     int hostileFactionPercent = 25; // % of factions that start hostile to a newcomer
     int factionWarPercent = 30; // % of faction pairs at war with each other (their patrols attack each other's towns)
-    // ---- raids
-    double raidFirstDelay = 180.0, raidFirstRandom = 120.0;  // seconds until a hostile faction's first raid on a player
-    double raidInterval = 360.0, raidIntervalRandom = 420.0; // seconds between later raids
+    // ---- Pacing Director (calm -> warning -> siege -> aftermath, per player; timers pause while offline)
+    double pacingCalmMin = 7.0, pacingWarningS = 75.0, pacingAftermathMin = 3.0, pacingFirstRaidGraceMin = 4.0;
+    float pacingMaxRaidFactor = 1.5f;   // adaptive strength factor cap (floor is .5)
+    int pacingMaxRaiders = 14;          // hard cap on one raid's size
+    float pacingMaxBaseShare = .5f;     // a raid has at most this share of (buildings + troops) raiders
+    float pacingRewardPerRaider = 15.f; // survivor reward: this many of each resource per raider
     // ---- patrols
     int patrolsPerTownMin = 1, patrolsPerTownMax = 2; // patrol groups each NPC town maintains
     int patrolMapGroups = 2;     // extra wandering groups per 100 chunks of explored land (map-wide)

@@ -24,6 +24,8 @@ const Scenario SCENARIOS[] = {
     {"net-garbage", "malformed / oversized / out-of-range packets", netGarbageTest},
     {"identity", "SteamID-only ownership: separate towns, reconnects, forged / unanswered logins", identityTest},
     {"net-snapshot", "chunked unreliable snapshots, lost chunks, command seq ack, protocol version", netSnapshotTest},
+    {"pacing", "pacing director: phase cycle, grace / aftermath, strength cap, adaptive factor, save, offline pause",
+     pacingTest},
     {"defeat", "defeat: burning ruin, resettle offers, blocked commands, timeouts", defeatTest},
     {"net-predict", "command prediction: reject message, pending queue ack / rollback / expiry, bounded local offset",
      netPredictTest},

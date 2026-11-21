@@ -7,7 +7,7 @@
 
 struct Systems;
 
-inline constexpr uint32_t SAVE_MAGIC = 0x30315742u; // "BW10" (BWS9 + defeat / resettle state, burning ruins)
+inline constexpr uint32_t SAVE_MAGIC = 0x31315742u; // "BW11" (BW10 + pacing director state)
 
 class SaveSystem
 {

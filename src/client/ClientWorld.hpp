@@ -6,6 +6,7 @@
 #include "client/ClientCommon.hpp"
 #include "client/ClientState.hpp"
 #include "client/Components.hpp"
+#include "common/Pacing.hpp"
 #include "common/Snapshot.hpp"
 
 #include <entt/entt.hpp>
@@ -74,6 +75,14 @@ struct ClientWorld
         Pos ruin{0, 0}, site{0, 0};
         double offerEndsAt = 0; // local GetTime() when the server accepts the offer by itself
     } defeat;
+    struct PacingView
+    { // S_Pacing: Pacing Director phase of my town
+        int phase = PH_Calm, raiders = 0, faction = 0;
+        double endsAt = 0, total = 1; // local GetTime() when the phase ends; its length in seconds
+        bool hasOrigin = false;
+        Pos origin{0, 0}; // town the raid marches from
+        bool seen = false;
+    } pacing;
 
     // ---- terrain
     int biomeAt(int x, int y) const;

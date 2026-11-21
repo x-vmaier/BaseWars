@@ -134,7 +134,9 @@ enum Msg : uint8_t
     C_ResettleAccept, // [defeat] no payload: found the Town Hall at the offered site
     S_Defeat,         // [defeat] u8 phase (DefeatPhase), then if phase != 0: str conqueror, str clan, f32 ruin x,y,
                       // f32 site x,y, u16 seconds left of the offer
-    S_CmdReject       // [predict] u32 seq: the server refused / could not carry out that predicted command (reliable)
+    S_CmdReject,      // [predict] u32 seq: the server refused / could not carry out that predicted command (reliable)
+    S_Pacing // [pacing] u8 phase, u16 seconds left, u16 total, u8 raiders, u8 faction, u8 hasOrigin, f32 x, f32 y,
+             // once per second (reliable)
 };
 // S_BaseInfo: u8 quota (total), u8 homeless, u8 moving, u8 move %, then u8 x4 quota per QUOTA_KINDS type and u8 x
 // R_Count storage shares %.

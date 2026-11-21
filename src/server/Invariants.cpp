@@ -117,5 +117,12 @@ std::vector<std::string> World::checkInvariants()
     for (int id = 1; id <= MAX_PLAYERS; id++)
         if (bp[id].defeat.phase > DF_Offered || (bp[id].defeat.phase != DF_None && halls[id] > 0))
             c.fail("player " + std::to_string(id) + " has a defeat state but a Town Hall or an invalid phase", 0);
+    for (int id = 1; id <= MAX_PLAYERS; id++)
+    {
+        const Pacing &p = bp[id].pacing;
+        if (p.phase >= PH_Count || !std::isfinite(p.left) || p.left > 1e6 || !(p.total >= 1.0) ||
+            !(p.factor >= .5f && p.factor <= 4.f))
+            c.fail("player " + std::to_string(id) + " has an invalid pacing state", 0);
+    }
     return std::move(c.out);
 }

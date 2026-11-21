@@ -1,6 +1,6 @@
 /**
  * @file RaidSystem.hpp
- * @brief Faction raiding parties against hostile players.
+ * @brief Faction raiding parties against hostile players (when and how strong: PacingSystem).
  */
 #pragma once
 #include "server/World.hpp"
@@ -12,12 +12,12 @@ class RaidSystem
   public:
     RaidSystem(World &world, Systems &s) : world(world), reg(world.reg), s(s) {}
 
-    void spawnRaid(int player, int f);
+    // Sends `n` raiders of faction `f` from its nearest town; false if there is none or nobody could be sent.
+    bool spawnRaid(int player, int f, int n);
     void runRaider(entt::entity e, Unit &u, Raider &rd, float dt);
-    void raidTick();
+    const Town *nearestTown(int f, Pos tp);
 
   private:
-    const Town *nearestTown(int f, Pos tp);
     World &world;
     entt::registry &reg;
     Systems &s;
