@@ -52,6 +52,14 @@ struct Fx
     double t;
 }; // S_State effect events
 
+struct DmgNum
+{
+    float x, y; // tiles
+    int amt;
+    bool mine; // own unit / building hurt (red) or an enemy one (white)
+    double t;
+}; // floating damage number
+
 struct Ghost
 {
     Kind kind;

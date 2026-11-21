@@ -11,8 +11,9 @@
 
 namespace
 {
-Shader shOutline{}, shDissolve{};
-bool okOutline = false, okDissolve = false;
+Shader shOutline{}, shDissolve{}, shFlash{};
+bool okOutline = false, okDissolve = false, okFlash = false;
+int locFlash = -1;
 // Uniform locations. outline: uvRect/texelSize/outlineColor/thickness/time; dissolve: uvRect/texSize/progress/seed.
 int locOut[5]{-1, -1, -1, -1, -1}, locDis[4]{-1, -1, -1, -1};
 } // namespace
@@ -21,6 +22,9 @@ void loadSpriteShaders()
 {
     shOutline = loadShader("outline.fs", okOutline);
     shDissolve = loadShader("dissolve.fs", okDissolve);
+    shFlash = loadShader("flash.fs", okFlash);
+    if (okFlash)
+        locFlash = GetShaderLocation(shFlash, "amount");
     if (okOutline)
     {
         const char *n[5] = {"uvRect", "texelSize", "outlineColor", "thickness", "time"};
@@ -39,6 +43,14 @@ void drawSprite(Texture2D t, Rectangle src, Rectangle dst, Color tint, int mode,
 {
     if (t.id == 0)
         return;
+    if (mode == SM_Flash && okFlash && prog > 0.f)
+    {
+        SetShaderValue(shFlash, locFlash, &prog, SHADER_UNIFORM_FLOAT);
+        BeginShaderMode(shFlash);
+        DrawTexturePro(t, src, dst, {0, 0}, 0, tint);
+        EndShaderMode();
+        return;
+    }
     bool shaded = (mode == 1 && okOutline) || (mode == 2 && okDissolve);
     if (!shaded)
     {

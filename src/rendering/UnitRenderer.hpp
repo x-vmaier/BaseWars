@@ -21,6 +21,7 @@ struct UnitView
     uint32_t id;
     Color outline;
     double t;
+    float flash; // hit flash amount
 };
 
 // One entry of the unit drawer table (UnitRenderer.cpp). A kind drawn like a plain humanoid needs no entry.

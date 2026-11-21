@@ -3,6 +3,7 @@
  * @brief Client entry point: window setup, config.txt / settings.txt / profile loading, optional auto-join.
  */
 #include "client/App.hpp"
+#include "client/AudioSystem.hpp"
 #include "common/Log.hpp"
 #include "rendering/Text.hpp"
 
@@ -99,6 +100,7 @@ int main(int argc, char **argv)
     PauseMenu::applyWindowMode(app.settings.windowMode);
 
     findAssets();
+    audio::init();
 
     std::string autoJoin; // "--connect host:port" joins immediately; screenshot runs join the configured server
 
@@ -110,6 +112,7 @@ int main(int argc, char **argv)
         autoJoin = app.session.ip + ":" + std::to_string(app.session.port);
 
     app.run(autoJoin);
+    audio::shutdown();
     unloadFonts();
     CloseWindow();
     spdlog::shutdown();

@@ -5,6 +5,7 @@
 #include "ui/PauseMenu.hpp"
 
 #include "client/App.hpp"
+#include "client/AudioSystem.hpp"
 #include "rendering/Text.hpp"
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
@@ -57,11 +58,11 @@ Rectangle PauseMenu::row(int i) const
 {
     Rectangle r = rect();
     float pad = float(mPause.padding);
-    return {r.x + pad + 10, r.y + pad + 34 + float(i) * 46.f, r.width - 2 * pad - 20, 34};
+    return {r.x + pad + 10, r.y + pad + 34 + float(i) * 40.f, r.width - 2 * pad - 20, 34};
 }
-Rectangle PauseMenu::slider() const
+Rectangle PauseMenu::slider(int rowIdx) const
 {
-    Rectangle r = row(0);
+    Rectangle r = row(rowIdx);
     return {r.x + 96, r.y + 20, r.width - 96 - 56, 14};
 }
 Rectangle PauseMenu::arrow(int dir) const
@@ -72,12 +73,12 @@ Rectangle PauseMenu::arrow(int dir) const
 
 Rectangle PauseMenu::saveBtn() const
 {
-    Rectangle r = row(2);
+    Rectangle r = row(4);
     return {r.x, r.y, r.width * .58f, r.height};
 }
 Rectangle PauseMenu::hintsBtn() const
 {
-    Rectangle r = row(2);
+    Rectangle r = row(4);
     return {r.x + r.width * .6f, r.y, r.width * .4f, r.height};
 }
 
@@ -88,32 +89,41 @@ void PauseMenu::input()
     if (IsKeyPressed(KEY_ESCAPE))
     {
         isOpen = false;
-        sliderDrag = false;
+        sliderDrag = -1;
         return;
     }
 
-    Rectangle sl = slider();
-    if (lp && CheckCollisionPointRec(m, {sl.x - 12, sl.y - 12, sl.width + 24, sl.height + 24}))
-        sliderDrag = true;
-    if (sliderDrag)
+    for (int rowIdx : {0, 2, 3})
     {
-        dragSlider(sl);
+        Rectangle sl = slider(rowIdx);
+        if (lp && CheckCollisionPointRec(m, {sl.x - 12, sl.y - 12, sl.width + 24, sl.height + 24}))
+            sliderDrag = rowIdx;
+    }
+    if (sliderDrag >= 0)
+    {
+        dragSlider();
         return;
     }
     if (lp)
         onClick(m);
 }
 
-void PauseMenu::dragSlider(const Rectangle &sl)
+void PauseMenu::dragSlider()
 {
     if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT))
     {
-        sliderDrag = false;
+        if (sliderDrag != 0)
+            audio::play(audio::C_UiClick); // let go of a volume slider: hear the new level
+        sliderDrag = -1;
         return;
     }
     // The slider rectangle is in scaled UI space, the raw mouse position is not.
+    Rectangle sl = slider(sliderDrag);
     float k = std::clamp((::GetMousePosition().x / ui::scale() - sl.x) / sl.width, 0.f, 1.f);
-    app.settings.uiScale = std::clamp(std::round((0.6f + 1.4f * k) * 20.f) / 20.f, 0.6f, 2.0f);
+    if (sliderDrag == 0)
+        app.settings.uiScale = std::clamp(std::round((0.6f + 1.4f * k) * 20.f) / 20.f, 0.6f, 2.0f);
+    else
+        (sliderDrag == 2 ? app.settings.masterVolume : app.settings.sfxVolume) = std::round(k * 20.f) / 20.f;
 }
 
 void PauseMenu::onClick(Vector2 m)
@@ -142,18 +152,18 @@ void PauseMenu::onClick(Vector2 m)
             app.msg("Could not write settings.txt");
         return;
     }
-    if (CheckCollisionPointRec(m, row(3)))
+    if (CheckCollisionPointRec(m, row(5)))
     {
         isOpen = false;
         return;
     }
-    if (CheckCollisionPointRec(m, row(4)))
+    if (CheckCollisionPointRec(m, row(6)))
     {
         isOpen = false;
         app.session.backToMenu("You left the game.");
         return;
     }
-    if (CheckCollisionPointRec(m, row(5)))
+    if (CheckCollisionPointRec(m, row(7)))
     {
         app.wantQuit = true;
         return;
@@ -172,6 +182,8 @@ void PauseMenu::draw()
 
     drawScaleRow();
     drawWindowRow(m);
+    drawVolumeRow(2, "Master", app.settings.masterVolume);
+    drawVolumeRow(3, "Effects", app.settings.sfxVolume);
     drawButtons(m);
 }
 
@@ -179,7 +191,7 @@ void PauseMenu::drawScaleRow()
 {
     const Settings &s = app.settings;
     Color ink = rgb(70, 45, 30);
-    Rectangle row0 = row(0), sl = slider();
+    Rectangle row0 = row(0), sl = slider(0);
     drawText("UI scale", int(row0.x), int(row0.y) + 14, 15, ink);
 
     float k = (s.uiScale - 0.6f) / 1.4f;
@@ -189,6 +201,15 @@ void PauseMenu::drawScaleRow()
     DrawCircleLines(int(sl.x + sl.width * k), int(sl.y + sl.height / 2), 11, rgb(60, 40, 28));
     drawText(TextFormat("%d%%", int(std::lround(s.uiScale * 100.f))), int(row0.x + row0.width) - 46, int(row0.y) + 14,
              15, ink);
+}
+
+void PauseMenu::drawVolumeRow(int rowIdx, const char *label, float value)
+{
+    Color ink = rgb(70, 45, 30);
+    Rectangle r = row(rowIdx), sl = slider(rowIdx);
+    drawText(label, int(r.x), int(r.y) + 14, 15, ink);
+    ui::sliderTrack(sl, value, sliderDrag == rowIdx);
+    drawText(TextFormat("%d%%", int(std::lround(value * 100.f))), int(r.x + r.width) - 46, int(r.y) + 14, 15, ink);
 }
 
 void PauseMenu::drawWindowRow(Vector2 m)
@@ -221,7 +242,7 @@ void PauseMenu::drawButtons(Vector2 m)
                    false, 15);
     ui::drawButton(hintsBtn(), app.settings.hints ? "Hints: on" : "Hints: off", true, false,
                    CheckCollisionPointRec(m, hintsBtn()), false, 15);
-    ui::drawButton(row(3), "Resume", true, false, CheckCollisionPointRec(m, row(3)), false, 15);
-    ui::drawButton(row(4), "Leave to main menu", true, false, CheckCollisionPointRec(m, row(4)), false, 15);
-    ui::drawButton(row(5), "Quit game", true, true, CheckCollisionPointRec(m, row(5)), false, 15);
+    ui::drawButton(row(5), "Resume", true, false, CheckCollisionPointRec(m, row(5)), false, 15);
+    ui::drawButton(row(6), "Leave to main menu", true, false, CheckCollisionPointRec(m, row(6)), false, 15);
+    ui::drawButton(row(7), "Quit game", true, true, CheckCollisionPointRec(m, row(7)), false, 15);
 }

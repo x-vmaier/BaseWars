@@ -1,6 +1,6 @@
 /**
  * @file PauseMenu.hpp
- * @brief Pause menu (Esc): UI scale slider, window mode, save settings, resume, leave, quit.
+ * @brief Pause menu (Esc): UI scale / volume sliders, window mode, save settings, resume, leave, quit.
  */
 #pragma once
 #include "rendering/Assets.hpp"
@@ -23,11 +23,12 @@ class PauseMenu
   private:
     Rectangle rect() const;
     Rectangle row(int i) const;
-    Rectangle slider() const;
+    Rectangle slider(int rowIdx) const; // rows 0 (UI scale), 2 (master volume), 3 (effects volume)
     Rectangle arrow(int dir) const;
     Rectangle saveBtn() const;
     Rectangle hintsBtn() const;
-    void dragSlider(const Rectangle &sl);
+    void dragSlider();
+    void drawVolumeRow(int rowIdx, const char *label, float value);
     void onClick(Vector2 m);
     void drawScaleRow();
     void drawWindowRow(Vector2 m);
@@ -35,6 +36,6 @@ class PauseMenu
 
     App &app;
     TMap mPause;
-    bool sliderDrag = false;
+    int sliderDrag = -1; // row of the slider being dragged, -1 = none
     double savedAt = -100;
 };

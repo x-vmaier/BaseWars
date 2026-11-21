@@ -33,6 +33,7 @@ UnitView UnitRenderer::makeView(const RPos &p, const Info &i, const Face &fc, ui
     v.biome = biome;
     v.id = id;
     v.t = t;
+    v.flash = W.flashOf(id);
 
     if (drawerOf(i.kind).fixedOutline)
         v.outline = rgb(255, 235, 140);
@@ -63,7 +64,8 @@ void UnitRenderer::drawUnit(const UnitView &v) const
     DrawEllipse(int(v.px), int(v.py + 2), 16, 6, rgb(0, 0, 0, 60));
     if (v.selected)
         DrawEllipseLines(int(v.px), int(v.py + 2), 24, 10, rgb(255, 235, 90));
-    drawAnim(a, frameFor(a, v.t, float(v.id % 7)), v.px, v.py + 6, v.left, 1.f, WHITE, v.hover ? 1 : 0, v.outline);
+    drawAnim(a, frameFor(a, v.t, float(v.id % 7)), v.px, v.py + 6, v.left, 1.f, WHITE,
+             v.flash > 0 ? SM_Flash : (v.hover ? SM_Outline : SM_Plain), v.outline, v.flash);
 
     drawLabels(v);
     if ((i.state & 7) == US_Extinguish)

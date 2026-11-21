@@ -271,6 +271,12 @@ int ClientWorld::objectivePointKind() const
     return -1;
 }
 
+float ClientWorld::flashOf(uint32_t id) const
+{
+    auto it = hitAt.find(id);
+    return it == hitAt.end() ? 0.f : std::clamp(.8f * (1.f - float(GetTime() - it->second) / .2f), 0.f, .8f);
+}
+
 float ClientWorld::donateWait() const
 {
     return float(std::max(0.0, donateReadyAt - GetTime()));
@@ -294,6 +300,8 @@ void ClientWorld::clear()
     facTowns.clear();
     fxs.clear();
     ghosts.clear();
+    dmgNums.clear();
+    hitAt.clear();
     pendingSites.clear();
     jobs.clear();
     markers.clear();

@@ -30,6 +30,7 @@ BuildingView BuildingRenderer::makeView(const RPos &p, const Info &i, uint32_t i
     v.bottom = float(v.ty + ki.fh) * TILE;
     v.prog = std::clamp(float(i.prog) / 100.f, 0.f, 1.f);
     v.hpFrac = i.hp / std::max(1.f, i.maxhp);
+    v.flash = W.flashOf(id);
     v.selected = selected;
     v.hover = hover;
     v.remembered = remembered;
@@ -139,7 +140,7 @@ void BuildingRenderer::drawSpriteBody(const BuildingView &v) const
     Rectangle src{0, sy, s.artW, s.artH - sy};
     Rectangle dst{v.cx - dw / 2, v.bottom - 6 - s.artBottom * s.scale + (s.artH * s.scale - dh), dw, dh};
 
-    drawSprite(bt, src, dst, v.tint, v.hover ? 1 : 0, v.oc);
+    drawSprite(bt, src, dst, v.tint, v.flash > 0 ? SM_Flash : (v.hover ? SM_Outline : SM_Plain), v.oc, v.flash);
 }
 
 // Last known state of an NPC town building outside vision.

@@ -93,7 +93,7 @@ One registry per family; ids (`enum Kind`) are persisted and sent, so append onl
 * **New effect type:** add an `EffectType`, then one entry in `src/rendering/FxDrawers.cpp`.
 * **New behaviour flag:** add a `KindTag` and test it with `hasTag(kind, KT_*)`; never compare kinds in a system or UI file.
 * **New system / mechanic:** component, system registered in `Systems.hpp`, replication in `Replication.cpp`, save entry in `SaveSystem`, tunables in `ServerConfig` + `server.cfg`, an invariant if it references entities, a selftest.
-* **New sound cue (from T28a):** one entry in the sound table (event or effect type -> sample, volume, pitch range); samples come from `tools/gen_sounds.py`.
+* **New sound cue (T28a):** append a `Cue` in `src/client/AudioSystem.hpp`, add its row to `TABLE` in `AudioSystem.cpp` (sample, volume, pitch range, cooldown), generate the sample in `tools/gen_sounds.py` (writes `assets/sounds/*.wav`), then call `audio::play` / `audio::playAt(cue, tileX, tileY)` from the place that sees the event.
 * **New objective / hint (T26):** one row in `OBJECTIVES[]` (`src/common/Objectives.hpp`, add the id to `ObjId`, link it with `next`) or one entry in the hint table (`ui/Hints.cpp`); progress goes through `postObjective`, never polled in UI code. A new condition type needs one `ObjCond` + a `progressOf` case.
 * **Draw queue rule:** renderers enqueue `DrawItem{sortY, callable}`; the callable calls one named method and has no logic.
 
@@ -103,7 +103,7 @@ Client: `BW_SHOT`, `BW_SHOT_FRAMES`, `BW_CAM`, `BW_ZOOM`, `BW_CMD`, `BW_MOUSE`, 
 `BW_SITE` verbs: `build`, `upgrade`, `train:<building kind>:<unit kind>@<frame>`, `repair`, `cancel`, `ctx`, `donate`, `alloc`, `dispose`, `quota`.
 Server: `BW_RICH`, `BW_AGGRO`, `BW_REVEAL`, `BW_RAIDNOW`, `BW_SEEALL`, `BW_BASETEST`, `BW_BASESPEED`, `BW_BASEDEBUG`, `BW_HURT`, `BW_SPAWN`, `BW_ARMY`, `BW_PATROLNOW`, `BW_WORLDLOG`, `BW_DEFEAT=<seconds>[,offer]` (defeat every online player once the world clock passes it; `,offer` also asks for the first resettlement site), `BW_INVARIANTS` (log invariant violations once per second). Flag: `server --selftest <name|list|all>`.
 Instant timers for fast testing are `debug_instant_*` in `config/server.cfg`.
-Client `BW_DEV_ID=<n>` (n < 2^32): identity for `--local` servers without Steam login. `BW_NETLAG=<ms>` / `BW_NETLOSS=<percent>` (either executable): Steam fake send lag / loss, set on both sides for a symmetric link. Client `BW_STUTTER`, `BW_INTERP_MS` (T19b). Server `BW_PACING=<calm|warning|siege|aftermath>` starts every director in that phase (T25a); `BW_RAIDNOW` makes grace / calm / warning seconds-short. Hooks arrive with their tasks and are added here then.
+Client `BW_DEV_ID=<n>` (n < 2^32): identity for `--local` servers without Steam login. `BW_NETLAG=<ms>` / `BW_NETLOSS=<percent>` (either executable): Steam fake send lag / loss, set on both sides for a symmetric link. Client `BW_STUTTER`, `BW_INTERP_MS` (T19b). Client `BW_AUDIOLOG=1` logs every cue that fires (`audio cue: <name> vol=..`, also without a device); `BW_AUDIO=0` disables the audio device (T28a). Server `BW_PACING=<calm|warning|siege|aftermath>` starts every director in that phase (T25a); `BW_RAIDNOW` makes grace / calm / warning seconds-short. Hooks arrive with their tasks and are added here then.
 
 ## Planned architecture
 
@@ -114,4 +114,5 @@ The design of each upcoming system is in its task spec (`TODO.md` / `BACKLOG.md`
 * Persistent identity is the authenticated SteamID (T18a); names are resolved client-side from Steam.
 * Shared `Ruin` component + `K_Ruin` kind (T18b, `DefeatSystem`: ruin, S_Defeat, C_Resettle / C_ResettleAccept) is reused for destroyed buildings (T20d).
 * Audio and feedback are client-only presentation driven by server fx events; no audio device = disabled.
+  `audio::` (`client/AudioSystem.*`): table of cues with 3 alias voices each, per-cue cooldown, random pitch, falloff by distance to the camera (28 tiles), `Settings::masterVolume` / `sfxVolume` (`master_volume` / `sfx_volume` in `settings.txt`). Hit flash: `SM_Flash` in `Sprites`, amount from `ClientWorld::flashOf`. Floating damage numbers: `ClientWorld::dmgNums` drawn by `EffectsRenderer::queueDamageNumbers`.
 * Tactical slow-motion (T23a) is client presentation only.

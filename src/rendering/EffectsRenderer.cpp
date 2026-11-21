@@ -94,6 +94,17 @@ void drawDrop(const DropFx &f, double age)
     textShadow(s, int(f.x * TILE) - w / 2, int(ty), fs, c);
 }
 
+void drawDmgNum(const DmgNum &d, double age)
+{
+    float life = float(age) / 1.0f;
+    std::string s = "-" + std::to_string(d.amt);
+    int fs = d.amt >= 20 ? 20 : 16, w = measureText(s.c_str(), fs);
+    float pop = life < .12f ? 1.f + (1.f - life / .12f) * .4f : 1.f; // small pop-in
+    Color c = d.mine ? rgb(255, 90, 80) : rgb(255, 250, 235);
+    c.a = uint8_t(255 * std::clamp((1.f - life) * 2.5f, 0.f, 1.f));
+    textShadow(s, int(d.x * TILE) - w / 2, int(d.y * TILE - 46.f - life * 40.f), int(float(fs) * pop), c);
+}
+
 void drawBuildingFire(const BuildingView &v, int fw, int fh)
 {
     float cx = v.cx, bottom = v.bottom, w = float(fw) * TILE, h = float(fh) * TILE;
@@ -191,6 +202,23 @@ void EffectsRenderer::queueFx(DrawList &items, double t)
     }
 
     std::erase_if(fxs, [&](const Fx &f) { return t - f.t > (f.type == E_Explosion ? 1.6 : 1.0); });
+}
+
+// damage numbers rising above hurt units / buildings
+void EffectsRenderer::queueDamageNumbers(DrawList &items, double t)
+{
+    auto &nums = app.world.dmgNums;
+    for (auto &n : nums)
+    {
+        double age = t - n.t;
+        if (age < 0 || age > 1.0)
+            continue;
+
+        DmgNum d = n;
+        items.push_back({d.y * TILE + 70.f, [=] { drawDmgNum(d, age); }});
+    }
+
+    std::erase_if(nums, [&](const DmgNum &n) { return t - n.t > 1.1; });
 }
 
 // bouncing resource drops

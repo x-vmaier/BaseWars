@@ -9,10 +9,11 @@ enum SpriteMode
 {
     SM_Plain = 0,
     SM_Outline = 1,
-    SM_Dissolve = 2
+    SM_Dissolve = 2,
+    SM_Flash = 3 // white hit flash, `prog` = amount
 };
 
-void loadSpriteShaders(); // outline.fs + dissolve.fs (cached uniform locations)
+void loadSpriteShaders(); // outline.fs + dissolve.fs + flash.fs (cached uniform locations)
 void drawSprite(Texture2D t, Rectangle src, Rectangle dst, Color tint, int mode, Color oc = WHITE, float prog = 0,
                 float sd = 0);
 // Draws an animation frame with its foot point at (footWX, footWY).

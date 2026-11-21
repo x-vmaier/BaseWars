@@ -4,6 +4,7 @@
  */
 #include "ui/Widgets.hpp"
 
+#include "client/AudioSystem.hpp"
 #include "common/Shared.hpp"
 #include "rendering/Bars.hpp"
 #include "rendering/Text.hpp"
@@ -30,6 +31,20 @@ const TMap &titleMap()
 
 void drawButton(Rectangle r, const std::string &label, bool enabled, bool red, bool hover, bool pressed, int fs)
 {
+    // Hovered + mouse held = pressed look; a click or a new hover plays its cue (once per frame the button is drawn).
+    static Rectangle lastHover{};
+    static double lastLive = -10;
+    bool live = hover && enabled;
+    if (live && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+        audio::play(audio::C_UiClick);
+    else if (live && (lastHover.x != r.x || lastHover.y != r.y || GetTime() - lastLive > .15))
+        audio::play(audio::C_UiHover);
+    if (live)
+    {
+        lastHover = r;
+        lastLive = GetTime();
+    }
+    pressed = pressed || (live && IsMouseButtonDown(MOUSE_BUTTON_LEFT));
     const TMap &m = red ? (pressed ? mBtnRP : mBtnR) : (pressed ? mBtnP : mBtn);
     drawTMap(m, r, enabled ? (hover ? rgb(255, 255, 255) : rgb(238, 238, 238)) : rgb(140, 140, 140, 220));
     int tw = measureText(label.c_str(), fs);

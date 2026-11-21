@@ -82,13 +82,20 @@ void Hud::drawResources()
         // food (meat) pays for every unit, building, upgrade and repair
         bool food = r == R_Meat, low = food && W.res[r] < 60.f;
         Color c = low ? (std::fmod(GetTime(), 1.0) < .5 ? rgb(255, 110, 90) : rgb(255, 200, 120)) : WHITE;
+        if (prevRes[r] >= 0 && W.res[r] > prevRes[r] + .5f)
+            pulseAt[r] = GetTime();
+        prevRes[r] = W.res[r];
+        float pulse = std::clamp(1.f - float(GetTime() - pulseAt[r]) / .5f, 0.f, 1.f);
+        if (pulse > 0)
+            c = rgb(255, 255, int(255 - 110 * pulse)); // brief golden brightening
         std::string value = std::to_string(int(W.res[r]));
         const char *name = food ? "Food" : RES_NAME[r];
 
         int textW = std::max(measureText(value, valueFs), measureText(name, nameFs));
         int vh = textHeight(valueFs), nh = textHeight(nameFs);
         float groupW = iconPx + gap + float(textW), x = bandL + slot * (float(r) + .5f) - groupW / 2;
-        ui::drawResourceIcon(r, x, cy - iconPx / 2, iconPx / 64.f);
+        float grow = 1.f + .3f * pulse * pulse; // icon swells from its centre
+        ui::drawResourceIcon(r, x - iconPx * (grow - 1.f) / 2, cy - iconPx * grow / 2, iconPx * grow / 64.f);
 
         float top = cy - float(vh + nh - 4) / 2;
         textShadow(value, int(x + iconPx + gap), int(top), valueFs, c);

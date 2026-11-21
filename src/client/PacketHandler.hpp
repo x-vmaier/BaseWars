@@ -27,6 +27,8 @@ class PacketHandler
     void onShipsPaths(Reader &r);
     bool readEntity(Reader &r);
     void removeUnseen();
+    void onHurt(uint32_t id, uint8_t owner, float lost, float x, float y);
+    void onBuildingDestroyed(float x, float y);
     void worldPacket(const uint8_t *d, size_t n); // S_Cleared / S_ClearJobs / S_Drop
     bool basePacket(uint8_t type, Reader &r);     // S_Queue / S_Alert / S_BaseInfo / S_Jobs / S_Econ
     void onCleared(Reader &r);

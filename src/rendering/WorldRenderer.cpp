@@ -28,6 +28,7 @@ void WorldRenderer::draw(float t)
     effects.queueGhosts(items, t);
     effects.queueFx(items, t);
     effects.queueDrops(items, t);
+    effects.queueDamageNumbers(items, t);
     buildings.queuePendingSites(items);
     buildings.queuePlacementGhost(items);
 

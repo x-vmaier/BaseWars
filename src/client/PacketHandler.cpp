@@ -5,6 +5,7 @@
 #include "client/PacketHandler.hpp"
 
 #include "client/App.hpp"
+#include "client/AudioSystem.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -77,6 +78,11 @@ void PacketHandler::addFx(uint8_t type, float x, float y, float x2, float y2)
         float d = std::hypot(x * TILE - app.cam.target.x, y * TILE - app.cam.target.y) / TILE;
         app.post.shake = std::max(app.post.shake, std::clamp(14.f - d * .6f, 0.f, 14.f));
     }
+
+    static constexpr audio::Cue CUE[] = {audio::C_Explosion, audio::C_Count, audio::C_Splash, audio::C_Arrow,
+                                         audio::C_Heal,      audio::C_Count, audio::C_Arrow,  audio::C_Splash};
+    if (type < std::size(CUE) && CUE[type] != audio::C_Count && GetTime() > w.quietUntil)
+        audio::playAt(CUE[type], x, y);
 }
 
 void PacketHandler::onWelcome(Reader &r)
@@ -112,6 +118,7 @@ void PacketHandler::onWelcome(Reader &r)
     if (const char *z = std::getenv("BW_ZOOM"))
         cam.zoom = float(std::atof(z));
 
+    w.quietUntil = GetTime() + 2.5;
     app.session.welcomed = true;
     app.session.screen = Screen::Playing;
     SetWindowTitle("Base Wars - connected");
@@ -208,6 +215,8 @@ bool PacketHandler::readEntity(Reader &r)
         reg.emplace<Motion>(e).buf.push(w.serverTick, x, y);
         reg.emplace<Info>(e, inf);
         reg.emplace<Seen>(e, Seen{w.stamp});
+        if (ow == w.me && GetTime() > w.quietUntil)
+            audio::playAt(isBuilding(k) ? audio::C_Build : (k == K_Ship ? audio::C_ShipHorn : audio::C_Count), x, y);
         return true;
     }
 
@@ -218,6 +227,8 @@ bool PacketHandler::readEntity(Reader &r)
         app.post.damage = std::min(.7f, app.post.damage + .12f);
         app.post.shake = std::max(app.post.shake, 3.f);
     }
+    if (hp < old.hp - .5f && GetTime() > w.quietUntil)
+        onHurt(id, inf.owner, old.hp - hp, x, y);
     old = inf;
     reg.get<Goal>(e) = Goal{x, y};
     reg.get<Motion>(e).buf.push(w.serverTick, x, y);
@@ -262,7 +273,12 @@ void PacketHandler::removeUnseen()
         bool arrived = !isBuilding(in.kind) && (in.state & UNIT_CONVOY_FLAG) &&
                        w.nearStorage(rp.x, rp.y); // convoys / haulers delivered: no ash ghost
         if (vis && !remembered && !arrived)
+        {
             w.ghosts.push_back({in.kind, in.owner, 1, rp.x, rp.y, reg.get<Face>(e).left, GetTime()});
+            if (isBuilding(in.kind))
+                onBuildingDestroyed(rp.x, rp.y);
+        }
+        w.hitAt.erase(id);
 
         w.ents.erase(id);
         app.input.forget(id);
@@ -271,6 +287,30 @@ void PacketHandler::removeUnseen()
 
         reg.destroy(e);
     }
+}
+
+// Visible hp loss: white flash, floating number, hit sound. Burning ticks are throttled per entity.
+void PacketHandler::onHurt(uint32_t id, uint8_t owner, float lost, float x, float y)
+{
+    ClientWorld &w = app.world;
+    double t = GetTime();
+    auto it = w.hitAt.find(id);
+    bool fresh = it == w.hitAt.end() || t - it->second > .35;
+    w.hitAt[id] = t;
+    if (!fresh)
+        return;
+
+    w.dmgNums.push_back({x, y, std::max(1, int(lost + .5f)), owner == w.me, t});
+    if (w.dmgNums.size() > 60)
+        w.dmgNums.erase(w.dmgNums.begin());
+    audio::playAt(audio::C_Hit, x, y);
+}
+
+void PacketHandler::onBuildingDestroyed(float x, float y)
+{
+    float d = std::hypot(x * TILE - app.cam.target.x, y * TILE - app.cam.target.y) / TILE;
+    app.post.shake = std::max(app.post.shake, std::clamp(10.f - d * .5f, 0.f, 10.f));
+    audio::playAt(audio::C_Destroy, x, y);
 }
 
 void PacketHandler::onFog(Reader &r)
@@ -494,6 +534,8 @@ void PacketHandler::onDrop(Reader &r)
     if (!r.ok || f.res >= R_Count)
         return;
 
+    static constexpr audio::Cue CUE[R_Count] = {audio::C_Chop, audio::C_Coin, audio::C_Mine, audio::C_Coin};
+    audio::playAt(CUE[f.res], f.x, f.y);
     w.drops.push_back(f);
     if (w.drops.size() > 80)
         w.drops.erase(w.drops.begin());
@@ -616,6 +658,8 @@ void PacketHandler::onPacing(Reader &r)
     if (!r.ok || v.phase >= PH_Count || v.faction >= FACTION_COUNT || !std::isfinite(v.origin.x + v.origin.y))
         return;
 
+    if (v.phase == PH_Warning && app.world.pacing.phase != PH_Warning && app.world.pacing.seen)
+        audio::play(audio::C_Horn); // the raid telegraph (fairness rule) also sounds
     v.endsAt = GetTime() + left;
     v.seen = true;
     app.world.pacing = v;
@@ -641,6 +685,7 @@ void PacketHandler::onObjectives(Reader &r)
         v.bannerId = last;
         v.bannerRewarded = rewarded != 0;
         v.bannerUntil = GetTime() + 4.5;
+        audio::play(audio::C_Victory);
     }
     v.doneSeq = seq;
     v.seen = true;

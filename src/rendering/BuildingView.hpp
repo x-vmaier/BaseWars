@@ -12,7 +12,7 @@ struct BuildingView
     Info i;
     uint32_t id;
     int tx, ty;
-    float cx, bottom, prog, hpFrac;
+    float cx, bottom, prog, hpFrac, flash;
     bool selected, hover, remembered, moving, working, crippled, hasJob;
     Color oc, tint;
     int col;

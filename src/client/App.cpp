@@ -4,6 +4,7 @@
  */
 #include "client/App.hpp"
 
+#include "client/AudioSystem.hpp"
 #include "rendering/Sprites.hpp"
 #include "ui/UiScale.hpp"
 #include "ui/Widgets.hpp"
@@ -133,6 +134,8 @@ void App::run(const std::string &autoJoin)
         session.refreshNames();
         disp.update();
         post.ensureTargets();
+        audio::setVolumes(settings.masterVolume, settings.sfxVolume);
+        audio::setListener(cam.target.x / TILE, cam.target.y / TILE);
 
         bool playing = session.playing();
         if (playing)

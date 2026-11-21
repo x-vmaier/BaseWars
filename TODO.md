@@ -53,6 +53,7 @@ Only the first tasks are specified in detail below. Every later task has its ful
 | T19c | Command prediction: pending queue of move / attack-move orders, immediate marker + local movement start (bounded offset that fades), `S_CmdReject` rollback (red cross), selftest `net-predict` |
 | T25a | Pacing Director v1: per-player Calm -> Warning -> Siege -> Aftermath (`PacingSystem`), raids only from the director (sized from a defense score, adaptive factor, caps), survivor reward, `S_Pacing` + HUD badge / edge arrow, SAVE_MAGIC BW11, selftest `pacing` |
 | T26 | Objectives: table + event bus, short / medium / long chains with one-time rewards, skipped steps resolve, timeout exit, `S_Objectives`, HUD tracker + completion banner + build-menu / world pointer, central hint table (`ui/Hints`) with settings toggle, SAVE_MAGIC BW12, selftest `objectives` |
+| T28a | Audio + feedback: `audio::` cue table (15 generated samples, per-cue cooldown / pitch variance / 3 voices, positional falloff, no device = silent), `BW_AUDIOLOG`, master / effects sliders in the pause menu, white hit-flash shader, floating damage numbers, camera shake on building destruction, resource-bar pulse, button hover / press response |
 | T13 | Biome label, minimap trees, chat/build menu layout, high-contrast bars |
 
 ## Roadmap (do in this order)
@@ -61,7 +62,6 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 | # | Task | Size | Status | Why here |
 | --- | --- | --- | --- | --- |
-| 10 | **T28a** Audio + first feedback pass | M | todo | Game feel is cheap now, expensive later |
 | 11 | **T14a** Ships as registry kinds, harbour production, crews | M | todo | Naval foundation |
 | 12 | **T14b** Wind, ship combat rules | S | todo | Needs T14a |
 | 13 | **T14c** Harbour window, multi-modal routing | M | todo | Needs T14a |
@@ -129,14 +129,22 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 * T26: progress uses lifetime counters (gather / train / donate) or live state (build / level / survive) so a step the player already satisfied resolves in one pass; an objective open for `objective_timeout_min` online minutes (20) is skipped without reward - the stuck-state exit.
 * T26: SAVE_MAGIC bumped to BW12 (objective state appended after pacing per player); old BW11 saves are moved aside like earlier formats.
 
+* T28a: sounds are driven by what the client already sees (fx events, drops, hp drops, new / destroyed entities, S_Pacing warning, objective banner) - no protocol change; nothing sounds in the first 2.5 s after the welcome so the first snapshot does not play a burst.
+* T28a: hit flash is a sprite mode (`SM_Flash`, `flash.fs`) fed by `ClientWorld::hitAt` (net id -> last hp loss); damage numbers and the hit cue are throttled to one per entity per 0.35 s so burning ticks do not spam.
+* T28a: the pause panel grew to 12x13 tiles (two volume rows); `assets/ui/pause_menu.tmj` was regenerated from `tools/gen_ui_maps.py`.
 * T19b: no protocol change - velocity / facing are derived from the buffered samples (`aim` still drives attack facing), so `PROTOCOL_VERSION` stays 2.
 * T19b: the render clock slews at most 10% towards its target instead of jumping, so jitter spikes never make units jump; delay = max(150 ms, 2 x smallest recent snapshot interval).
 
 ## Current task specs
 
-(No spec is current: T28a is next; move the next row's spec from `BACKLOG.md` here.)
+(No spec is current: T14a is next; move the next row's spec from `BACKLOG.md` here.)
 
 ## Known gaps / follow-ups
+
+* **T28a gate:** release build warning-free, all 14 selftests; clang-format applied; asan build skipped (client-only change, no server / shared code touched). No new C++ selftest (audio / visual task, per `CLAUDE.md`).
+* **T28a viewed:** only the main menu (`BW_SHOT`): the client starts, the audio device initialises (WASAPI) and shaders / sounds load. No in-game screenshot: without Steam the client cannot start a connection (`Could not start a connection`) on this machine.
+* **T28a only verified by reading:** every cue trigger in game (`PacketHandler::addFx` / `onDrop` / `onHurt` / `onBuildingDestroyed`, build thud, ship horn, raid horn, victory chime), the flash, floating damage numbers, building-destruction shake, resource pulse, button press look and the pause-menu volume sliders / new row layout. `BW_AUDIOLOG=1` logs each cue that fires (`audio cue: <name>`); use it in a Steam run to assert them. Sample loudness / taste is unjudged: listen once and tune `TABLE` in `client/AudioSystem.cpp`.
+* **T28a gaps:** no music (needs licensed tracks); no cue for chopping / mining at the moment of the swing (only on the resource drop); no ambient, defeat or UI-error sounds; volumes are saved only with "Save settings"; hover cue replays after re-entering a button.
 
 * **T26 gate:** release build warning-free, all 14 selftests (incl. `objectives`), asan build + `objectives`, `boot`, `saveload`, `pacing`, `defeat`, `net-garbage`, `net-snapshot`, `net-predict`; clang-format applied by hand (`check.sh` cannot load vcvars from git-bash); asan `raid` / `invariants` skipped as before.
 * **T26 viewed:** `BW_SHOT` client runs against a `--local` server (no Steam): tracker with goal, hint line, medium and long goal; build menu with the pulsing yellow border on the Lumber Camp row.

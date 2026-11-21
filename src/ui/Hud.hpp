@@ -51,4 +51,6 @@ class Hud
     App &app;
     std::vector<LogLine> logs;
     TMap mHud, mRoster;
+    float prevRes[R_Count]{-1, -1, -1, -1}; // last shown amounts: a rise pulses the icon
+    double pulseAt[R_Count]{-10, -10, -10, -10};
 };

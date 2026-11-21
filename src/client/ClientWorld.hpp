@@ -57,6 +57,9 @@ struct ClientWorld
     std::vector<Ripple> ripples;
     std::vector<Marker> markers;
     std::vector<DropFx> drops;
+    std::vector<DmgNum> dmgNums;
+    std::unordered_map<uint32_t, double> hitAt; // net id -> time of the last hp loss (white hit flash)
+    double quietUntil = 0; // no join-time sounds before this (the first snapshot spawns everything at once)
 
     // side tables
     std::unordered_map<uint32_t, QEntry> queues; // building uid -> training queue (S_Queue)
@@ -123,10 +126,11 @@ struct ClientWorld
     bool nearStorage(float x, float y) const;   // within reach of a Town Hall / Outpost / Storage (convoys end there)
     Pos myTH(Vector2 camTarget) const;          // own Town Hall, or the camera position
     bool affordable(const float *cost) const;
-    int thLevel() const;            // level of our completed Town Hall (0 = none)
-    int countKind(Kind k) const;    // own buildings of a kind incl. sites and sites waiting for clearing
-    int buildGateErr(Kind k) const; // GateErr for placing one more building of kind k
-    float donateWait() const;       // seconds until the donation cooldown ends (0 = ready)
+    int thLevel() const;              // level of our completed Town Hall (0 = none)
+    int countKind(Kind k) const;      // own buildings of a kind incl. sites and sites waiting for clearing
+    int buildGateErr(Kind k) const;   // GateErr for placing one more building of kind k
+    float flashOf(uint32_t id) const; // white hit-flash amount 0..~0.8 (decays within ~0.2 s)
+    float donateWait() const;         // seconds until the donation cooldown ends (0 = ready)
     const BJob *jobOf(uint32_t id) const;
     void clear();                           // reset on join / leave (keeps the side tables)
     void interpolate(float dt, double now); // sample rendered positions from the snapshot buffers, update facing
