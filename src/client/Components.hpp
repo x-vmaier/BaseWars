@@ -4,6 +4,7 @@
  */
 #pragma once
 #include "common/Interp.hpp"
+#include "common/Predict.hpp"
 #include "common/Shared.hpp"
 
 #include <cstdint>
@@ -35,6 +36,7 @@ struct Motion
 {
     PosBuffer buf;
     float vx = 0, vy = 0; // last rendered velocity, tiles/s (stutter metric)
+    PredOffset pred;      // local movement start of an unacknowledged order (T19c)
 }; // snapshot history for interpolation
 
 struct Face

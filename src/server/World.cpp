@@ -240,6 +240,15 @@ void World::say(int id, const std::string &s)
     net.send(pl[id].conn, w);
 }
 
+void World::reject(int id, uint32_t seq)
+{
+    if (id < 1 || id > MAX_PLAYERS || !pl[id].online)
+        return;
+    Writer w;
+    w.put<uint8_t>(S_CmdReject).put<uint32_t>(seq);
+    net.send(pl[id].conn, w);
+}
+
 void World::fx(EffectType t, float x, float y, float x2, float y2)
 {
     effects.push_back({t, x, y, x2, y2});

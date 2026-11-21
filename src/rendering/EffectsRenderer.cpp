@@ -20,6 +20,13 @@ namespace
 void drawMarker(const Marker &m)
 {
     float a = float(GetTime() - m.t);
+    if (m.bad) // the server refused the order: red cross
+    {
+        Color c = rgb(235, 60, 50, int(255 * std::max(0.f, 1 - a * 2)));
+        DrawLine(int(m.x) - 7, int(m.y) - 7, int(m.x) + 7, int(m.y) + 7, c);
+        DrawLine(int(m.x) - 7, int(m.y) + 7, int(m.x) + 7, int(m.y) - 7, c);
+        return;
+    }
     DrawCircleLines(int(m.x), int(m.y), 6 + a * 40, rgb(255, 255, 255, int(255 * std::max(0.f, 1 - a * 2))));
 }
 

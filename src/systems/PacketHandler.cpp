@@ -39,7 +39,10 @@ void PacketHandler::onPacket(uint64_t conn, const std::vector<uint8_t> &data)
         return; // missing, replayed or reordered envelope: commands are only accepted in increasing seq order
     p.lastInputSeq = seq;
     if (s.defeat.blocked(id) && type != C_Cam && type != C_Chat && type != C_Resettle && type != C_ResettleAccept)
-        return; // a defeated player may only look around, chat and resettle
+    {
+        world.reject(id, seq); // a defeated player may only look around, chat and resettle
+        return;
+    }
     switch (type)
     {
     case C_Cam:
@@ -498,6 +501,8 @@ void PacketHandler::onMove(int id, Reader &r)
 
     if (fail)
         world.say(id, "Some units cannot reach that spot.");
+    if (fail == n)
+        world.reject(id, world.pl[id].lastInputSeq); // nothing moved (n == 0: no commandable unit)
 }
 
 void PacketHandler::onAttackMove(int id, Reader &r)
@@ -506,12 +511,18 @@ void PacketHandler::onAttackMove(int id, Reader &r)
     float tx = r.get<float>(), ty = r.get<float>();
     if (!r.ok || !std::isfinite(tx) || !std::isfinite(ty))
         return;
+    int ok = 0;
     for (auto e : us)
     {
         reg.remove<Attack>(e);
         if (world.order(e, {tx, ty}))
+        {
             reg.emplace_or_replace<AMove>(e, AMove{{tx, ty}});
+            ok++;
+        }
     }
+    if (!ok)
+        world.reject(id, world.pl[id].lastInputSeq);
 }
 
 void PacketHandler::onAttack(int id, Profile &p, Reader &r)

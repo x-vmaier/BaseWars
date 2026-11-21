@@ -46,7 +46,8 @@ struct ClientWorld
     InterpClock clock;        // server-tick clock for entity interpolation (T19b)
     StutterStats stutter;     // BW_STUTTER=1 metric
     double lastStutterLog = 0;
-    uint32_t ackedSeq = 0; // last command seq the server had processed in that snapshot (for T19c)
+    uint32_t ackedSeq = 0; // last command seq the server had processed in that snapshot
+    PendingQueue pending;  // predicted move orders not yet acknowledged (T19c)
 
     // transient effects
     std::vector<Fx> fxs;
@@ -109,4 +110,5 @@ struct ClientWorld
     const BJob *jobOf(uint32_t id) const;
     void clear();                           // reset on join / leave (keeps the side tables)
     void interpolate(float dt, double now); // sample rendered positions from the snapshot buffers, update facing
+    void rollBack(uint32_t seq);            // S_CmdReject: forget the predicted order, turn its marker red
 };

@@ -50,6 +50,7 @@ Only the first tasks are specified in detail below. Every later task has its ful
 | T18c | Tree canopy fade: pines/oaks fade to ~38% alpha (4/s) while an own unit stands behind the canopy box; per-tree alpha map in `FeatureRenderer`, picking/draw order untouched |
 | T19a | Protocol v2: version in hello / welcome, command seq envelope, tick-numbered unreliable S_State chunks (< 1100 B, whole-tick removal rule), `snapshot_interval_ticks`, `BW_NETLAG` / `BW_NETLOSS`, selftest `net-snapshot` |
 | T19b | Entity interpolation: per-entity `PosBuffer`, `InterpClock` render clock (delay 2 snapshot intervals), clamped extrapolation, `BW_STUTTER` metric, selftest `interp` |
+| T19c | Command prediction: pending queue of move / attack-move orders, immediate marker + local movement start (bounded offset that fades), `S_CmdReject` rollback (red cross), selftest `net-predict` |
 | T13 | Biome label, minimap trees, chat/build menu layout, high-contrast bars |
 
 ## Roadmap (do in this order)
@@ -58,7 +59,6 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 | # | Task | Size | Status | Why here |
 | --- | --- | --- | --- | --- |
-| 7 | **T19c** Command prediction + reconciliation | M | todo | Removes input lag |
 | 8 | **T25a** Pacing Director v1 | M | todo | Stress/relief rhythm is the core experience |
 | 9 | **T26** Objectives, onboarding chain, central hints | M | todo | First-hour hook, always a next goal |
 | 10 | **T28a** Audio + first feedback pass | M | todo | Game feel is cheap now, expensive later |
@@ -114,16 +114,24 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 * T19a: fake lag / loss uses Steam's `FakePacketLag_Send` / `FakePacketLoss_Send` globals (env), the selftest drops chunks itself through `SteamServerNet::tap`.
 * T18b: new messages are appended after `S_Econ` (`C_Resettle`, `C_ResettleAccept`, `S_Defeat`) to keep the protocol append-only.
 
+* T19c: only move / attack-move are predicted (marker + local movement start); build / train / etc. stay server-confirmed - the existing pending-site ghosts already give instant feedback and prediction of resource spending would risk wrong state.
+* T19c: rejection is a new reliable `S_CmdReject{seq}` (append-only, no version bump); the server sends it when an order moved no unit or a command was dropped while defeated. Malformed packets get none.
+* T19c: local movement start is a visual offset (2 tiles/s, max 0.6 tile, fades at 6/s), not a simulated unit - no client pathfinding, so nothing to reconcile.
+
 * T19b: no protocol change - velocity / facing are derived from the buffered samples (`aim` still drives attack facing), so `PROTOCOL_VERSION` stays 2.
 * T19b: the render clock slews at most 10% towards its target instead of jumping, so jitter spikes never make units jump; delay = max(150 ms, 2 x smallest recent snapshot interval).
 
 ## Current task specs
 
-(No spec is current: T19c is next; move the next row's spec from `BACKLOG.md` here.)
+(No spec is current: T25a is next; move the next row's spec from `BACKLOG.md` here.)
 
 ## Known gaps / follow-ups
 
 * **Font change (owner requests, outside the roadmap):** Noto Sans body + Press Start 2P for titles / coordinates via `rendering/Text.*` (80 px `LoadFontEx` atlas, mipmapped), main menu enlarged, resource ribbon (scale .75) and name banner enlarged with content centred, side tab icons centred, side tabs moved to `SIDE_Y`. Viewed: main menu, HUD, build menu, Town Hall, social menu. Verified with `BW_SHOT` runs (menu and in-game, which also ran the T19b interpolation against a live `--local` server on Windows without Steam: units moved normally). Still small / unreviewed at scale 1 on 1920x1200: HUD sub-labels, bottom help line (overlaps the welcome line), other panels were not viewed with the new metrics; check `BW_SCALE` 1.25-1.5. `fs / 2` vertical centring elsewhere still uses unboosted sizes (`textHeight` exists).
+
+* **T19c gate:** release build warning-free, all 12 selftests, asan build + `boot`, `saveload`, `net-garbage`, `net-snapshot`, `net-predict`, `defeat`; clang-format applied by hand (`check.sh` cannot load vcvars from git-bash); asan `raid` / `invariants` skipped as before.
+* **T19c only verified by reading:** `Commands::predict` / `ClientWorld::interpolate` offset / `rollBack` / red-cross marker / `PacketHandler` ack and reject handling were built but not run in a real client (no Steam). The selftest covers the server reject rule and the `PendingQueue` / `PredOffset` logic with a 150 ms ack model. Owner playtest checkpoint now due: right-click orders should react at once without rubber-banding; an order to an unreachable spot flashes a red cross.
+* **T19c gaps:** a move that only partly fails (some units unreachable) is not rolled back; other commands show no optimistic state beyond existing ghosts; the offset speed is a constant, not the unit's real speed; SDR still untested.
 
 * **T19b gate:** release build + all 9 selftests (incl. `raid`, `interp`), asan build + `boot`, `saveload`, `economy`, `net-garbage`, `identity`, `defeat`, `net-snapshot`, `interp`; clang-format applied by hand; asan `raid` / `invariants` skipped as before.
 * **T19b only verified by reading / partly run:** no real client session (Steam client unavailable): `ClientWorld::interpolate`, the `PacketHandler` buffer pushes, facing from rendered motion and the `BW_STUTTER` log were built but not run. The selftest drives the same `PosBuffer` / `InterpClock` with simulated 120 ms +-30 ms lag and 3% loss (p99 0.30 tiles/s, 0 snaps). Needs one `BW_STUTTER=1 BW_NETLAG=120 BW_NETLOSS=3` client run to confirm; owner playtest after T19c.

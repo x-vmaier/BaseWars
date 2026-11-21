@@ -26,6 +26,13 @@ void PacketHandler::handle(const uint8_t *d, size_t n)
     case S_Fog:
         onFog(r);
         break;
+    case S_CmdReject:
+    {
+        uint32_t seq = r.get<uint32_t>();
+        if (r.ok && app.session.welcomed)
+            app.world.rollBack(seq);
+        break;
+    }
     case S_Text:
     {
         std::string text = app.session.resolveNames(r.str());
@@ -133,6 +140,7 @@ void PacketHandler::onState(Reader &r)
         w.serverTick = h.tick;
         w.clock.onSnapshot(h.tick, GetTime());
         w.ackedSeq = h.ackSeq;
+        w.pending.ack(h.ackSeq);
         w.snapPartial = true;
     }
 

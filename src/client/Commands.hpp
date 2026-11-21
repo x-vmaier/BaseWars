@@ -16,6 +16,7 @@ class Commands
 {
   public:
     explicit Commands(App &app) : app(app) {}
+    void predict(const std::vector<uint32_t> &ids, Vector2 world);
     void move(Vector2 world); // selected units; adds a click marker (and a ripple on water)
     void attackMove(Vector2 world);
     void attack(uint32_t target);

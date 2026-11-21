@@ -218,6 +218,7 @@ class World
 
     // ---- messaging
     void say(int id, const std::string &s);
+    void reject(int id, uint32_t seq); // S_CmdReject: lets the client roll back a predicted command
     void fx(EffectType t, float x, float y, float x2 = 0, float y2 = 0);
     void notifyClan(int clan, const std::string &msg);
     void sendAlert(int to, uint8_t type, Pos at, const std::string &text);

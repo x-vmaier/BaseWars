@@ -295,8 +295,18 @@ void ClientWorld::clear()
     snap.reset();
     snapPartial = false;
     serverTick = ackedSeq = 0;
+    pending.q.clear();
     clock.reset();
     stutter.reset();
+}
+
+void ClientWorld::rollBack(uint32_t seq)
+{
+    if (!pending.reject(seq))
+        return; // already acknowledged or expired
+    for (auto &mk : markers)
+        if (mk.seq == seq)
+            mk.bad = true, mk.t = GetTime(); // restart its fade as a red cross
 }
 
 void ClientWorld::interpolate(float dt, double now)
@@ -305,10 +315,16 @@ void ClientWorld::interpolate(float dt, double now)
     static const bool measure = std::getenv("BW_STUTTER") != nullptr;
     double rt = clock.advance(now, clock.delay(delayMs));
     dt = std::max(dt, 1e-4f);
+    pending.expire(now);
 
-    reg.view<RPos, Motion, Face, Info>().each([&](RPos &p, Motion &m, Face &f, const Info &in)
+    reg.view<RPos, Motion, Face, Info, NetId>().each([&](RPos &p, Motion &m, Face &f, const Info &in, const NetId &nid)
     {
         Pos np = m.buf.at(rt);
+        float tx = 0, ty = 0;
+        bool pend = in.owner == me && !pending.q.empty() && pending.targetOf(nid.id, tx, ty);
+        m.pred.step(dt, pend, np.x, np.y, tx, ty);
+        np.x += m.pred.x;
+        np.y += m.pred.y;
         float dx = np.x - p.x, dy = np.y - p.y;
         p.x = np.x;
         p.y = np.y;

@@ -71,6 +71,8 @@ struct Marker
 {
     float x, y;
     double t;
+    uint32_t seq = 0; // command that placed it (0 = none), so a rejection can turn it red
+    bool bad = false;
 }; // command click markers (world pixels)
 
 struct DropFx

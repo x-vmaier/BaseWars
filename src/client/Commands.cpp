@@ -8,6 +8,14 @@
 
 #include <cmath>
 
+// Optimistic feedback for a just-sent move order: click marker now, units start walking before the server answers.
+void Commands::predict(const std::vector<uint32_t> &ids, Vector2 w)
+{
+    uint32_t seq = app.session.cmdSeq;
+    app.world.markers.push_back({w.x, w.y, GetTime(), seq});
+    app.world.pending.push({seq, GetTime(), w.x / TILE, w.y / TILE, ids});
+}
+
 void Commands::move(Vector2 w)
 {
     auto ids = app.input.selUnits();
@@ -23,7 +31,7 @@ void Commands::move(Vector2 w)
         wr.put<uint32_t>(i);
     wr.put<float>(w.x / TILE).put<float>(w.y / TILE);
     app.session.send(wr);
-    app.world.markers.push_back({w.x, w.y, GetTime()});
+    predict(ids, w);
     if (app.world.biomeAt(int(std::floor(w.x / TILE)), int(std::floor(w.y / TILE))) == B_Ocean)
         app.world.ripples.push_back({w.x, w.y, GetTime()});
 }
@@ -42,7 +50,7 @@ void Commands::attackMove(Vector2 w)
         wr.put<uint32_t>(i);
     wr.put<float>(w.x / TILE).put<float>(w.y / TILE);
     app.session.send(wr);
-    app.world.markers.push_back({w.x, w.y, GetTime()});
+    predict(ids, w);
 }
 void Commands::attack(uint32_t target)
 {
