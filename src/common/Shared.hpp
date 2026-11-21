@@ -139,7 +139,8 @@ enum Msg : uint8_t
                   // once per second (reliable)
     S_Objectives, // [objectives] u8 doneSeq, u8 lastDone id, u8 lastRewarded, then per tier: u8 id (255 = none),
                   // u16 progress, u16 seconds until it resolves by itself; once per second (reliable)
-    C_UpgradeShip // [ships] u32 ship uid: pay and start the timed upgrade (the ship must lie at an own Harbour)
+    C_UpgradeShip, // [ships] u32 ship uid: pay and start the timed upgrade (the ship must lie at an own Harbour)
+    S_Wind // [wind] u8 direction (0..255 = 0..2pi, the way it blows), u8 strength % ; once per second (reliable)
 };
 // S_BaseInfo: u8 quota (total), u8 homeless, u8 moving, u8 move %, then u8 x4 quota per QUOTA_KINDS type and u8 x
 // R_Count storage shares %.

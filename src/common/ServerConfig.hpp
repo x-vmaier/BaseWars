@@ -45,6 +45,12 @@ struct ServerConfig
     int patrolSiegePercent = 30; // % of new patrol waypoints that march on a hostile town in range
     int patrolSiegeRange = 140;  // tiles: how far a patrol looks for a hostile town to attack
     double patrolRespawnMin = 90.0, patrolRespawnRandom = 90.0;
+    // ---- wind and ships
+    float windStrength = .3f;       // ships sail x(1 + this) with the wind and x(1 - this) against it
+    float windShiftSeconds = 180.f; // average time until the wind picks a new direction
+    float windTurnRate = .03f;      // rad/s the wind turns towards its new direction
+    float shipRange = 7.f;          // tiles: reach of a ship's archers / crossbow
+    int shipCrossbowLevel = 2;      // ship upgrade level from which a crossbow is mounted (counts as one archer)
     // ---- sheep
     float sheepDensityPlains = 1.f, sheepDensityFlowers = 1.f; // multiplier on initial and repopulated sheep (0 = none)
     int sheepMax = 900;

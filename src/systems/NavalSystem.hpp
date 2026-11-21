@@ -16,9 +16,10 @@ class NavalSystem
     void paxStats(entt::entity ship, int &troops, float &res,
                   int *kinds = nullptr); // passengers aboard (stale uids are purged)
     void shipFree(entt::entity ship, int &troopsFree, float &resFree,
-                  bool reserved = true);          // free capacity incl. units walking to embark
-    void initShip(entt::entity ship);             // empty boat at upgrade level 1
-    bool crewed(entt::entity ship);               // enough troops aboard to sail
+                  bool reserved = true); // free capacity incl. units walking to embark
+    void initShip(entt::entity ship);    // empty boat at upgrade level 1
+    bool crewed(entt::entity ship);      // enough troops aboard to sail
+    int firepower(entt::entity ship);    // archers aboard + 1 crossbow from ship_crossbow_level (0 = cannot attack)
     bool startUpgrade(int id, entt::entity ship); // pay + start the timed upgrade; false (with a message) if refused
     void embark(entt::entity e, entt::entity ship);
     std::vector<IV> freeLandTiles(Pos center, int rmax);
@@ -42,6 +43,7 @@ class NavalSystem
     void voyageSail(entt::entity ship, Voyage &v, Unit &su, Pos sp);
     void voyageLand(entt::entity ship, Voyage &v, Pos sp);
     void tickShip(entt::entity e, float dt);
+    void shipFire(entt::entity e, Ship &sh, float dt);
     bool tickUpgrade(entt::entity e, float dt);
     int dockLevel(entt::entity ship);
     void upgradePacket(int id, Reader &r);

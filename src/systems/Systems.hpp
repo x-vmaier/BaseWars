@@ -30,6 +30,7 @@
 #include "systems/TownSystem.hpp"
 #include "systems/TrainingSystem.hpp"
 #include "systems/UnitSystem.hpp"
+#include "systems/WindSystem.hpp"
 
 struct Systems
 {
@@ -38,7 +39,7 @@ struct Systems
           env(w, *this), training(w, *this), fire(w, *this), territory(w, *this), clearing(w, *this), convoy(w, *this),
           hunt(w, *this), faction(w, *this), town(w, *this), patrol(w, *this), raid(w, *this), pacing(w, *this),
           objectives(w, *this), clan(w, *this), defense(w, *this), naval(w, *this), ferry(w, *this), combat(w, *this),
-          save(w, *this), construction(w, *this), defeat(w, *this)
+          save(w, *this), construction(w, *this), defeat(w, *this), wind(w, *this)
     {
     }
     Systems(const Systems &) = delete;
@@ -71,4 +72,5 @@ struct Systems
     SaveSystem save;
     ConstructionSystem construction;
     DefeatSystem defeat;
+    WindSystem wind;
 };

@@ -21,6 +21,7 @@ void Sim::baseSecond()
     sys.clan.homelessSecond();
     sys.defeat.second();
     sys.pacing.second();
+    sys.wind.second();
     sys.objectives.second();
     sys.faction.demandSecond();
     for (int id = 1; id <= MAX_PLAYERS; id++)
@@ -28,6 +29,7 @@ void Sim::baseSecond()
         {
             sys.repl.sendBaseInfo(id);
             sys.pacing.send(id);
+            sys.wind.send(id);
             sys.objectives.send(id);
         }
 }

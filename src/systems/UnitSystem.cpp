@@ -157,6 +157,8 @@ void UnitSystem::move(const std::vector<entt::entity> &units, float dt)
         float step = KINFO[k].speed * unitSpeedMul(world.ulv(reg.get<Owner>(e).id, k)) * dt;
         Pos t = u.path[u.i];
         float dx = t.x - p.x, dy = t.y - p.y, d = std::hypot(dx, dy);
+        if (hasTag(k, KT_Naval) && d > 0)
+            step *= windSpeedMul(std::atan2(dy, dx), reg.ctx().get<Wind>().dir, cfg().windStrength);
         u.aim = uint8_t(int((std::atan2(dy, dx) + 3.14159f) / 6.28319f * 255.f));
         if (u.state == US_Idle)
             u.state = US_Move;

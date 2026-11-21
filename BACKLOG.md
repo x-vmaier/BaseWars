@@ -5,11 +5,6 @@ Roadmap order, status and the task rules live in `TODO.md`. Task ids, "Done when
 
 ## Naval (T14)
 
-### T14c Harbour window and multi-modal routing (size M)
-
-* Grid-based Harbour window in the Archery (`TrainingPanel`) style (frame `assets/ui/training_panel.tmj` from `tools/gen_ui_maps.py`): build ships / fleet / harbour upgrade. Replaces the context-panel path.
-* Multi-modal route planning (land -> boat -> land) for pawns and clan defense-quota troops whenever water is faster (generalise `FerryPlanner`; `DefenseSystem::planDefenseRoute`, pawn haul).
-* Done when: selftest `ferry-route` (a destination across water is reached via ship faster than the land detour; falls back to land when no ship; no orphan jobs after ship destroyed mid-route); screenshot of the window at scale 1 and 2.
 
 ## Unit behaviour and logistics (T15)
 

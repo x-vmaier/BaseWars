@@ -107,6 +107,45 @@ bool NavalSystem::crewed(entt::entity ship)
     return t >= shipCrewMin(reg.get<Info>(ship).kind);
 }
 
+// Ships have no weapon of their own: archers aboard shoot, and an upgraded hull carries one crossbow.
+int NavalSystem::firepower(entt::entity ship)
+{
+    if (!reg.all_of<Ship>(ship))
+        return 0;
+    int t, n = 0;
+    float r;
+    int kinds[5];
+    paxStats(ship, t, r, kinds);
+    n = kinds[K_Archer - K_Pawn];
+    if (reg.get<Info>(ship).level >= cfg().shipCrossbowLevel)
+        n++;
+    return n;
+}
+
+// One volley per second at the nearest hostile in range; every shooter adds an archer's damage.
+void NavalSystem::shipFire(entt::entity e, Ship &sh, float dt)
+{
+    sh.fireCd -= dt;
+    if (sh.fireCd > 0)
+        return;
+    int n = firepower(e);
+    if (n <= 0 || reg.all_of<ShipUpgrade>(e))
+        return;
+
+    int ow = reg.get<Owner>(e).id;
+    Pos sp = reg.get<Pos>(e);
+    auto tg = world.nearestHostile(sp, ow, cfg().shipRange, true);
+    if (tg == entt::null)
+        return;
+
+    sh.fireCd = 1.f;
+    Kind tk = reg.get<Info>(tg).kind;
+    s.combat.damage(
+        tg, float(n) * KINFO[K_Archer].dps * unitDmgMul(world.ulv(ow, K_Archer)) * damageVs(K_Archer, tk) * armorOf(tk),
+        ow, reg.get<Uid>(e).id);
+    s.fire.archerShot(ow, sp, world.posOf(tg), tg);
+}
+
 void NavalSystem::embark(entt::entity e, entt::entity ship)
 {
     auto &u = reg.get<Unit>(e);
@@ -443,6 +482,7 @@ void NavalSystem::tickShip(entt::entity e, float dt)
         if (q != entt::null && reg.all_of<Aboard>(q))
             reg.get<Pos>(q) = sp;
     }
+    shipFire(e, sh, dt);
 
     if (auto *v = reg.try_get<Voyage>(e))
     {

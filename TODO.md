@@ -56,6 +56,7 @@ Only the current task is specified in detail below. Every later task has its ful
 | T26 | Objectives: table + event bus, short / medium / long chains with one-time rewards, skipped steps resolve, timeout exit, `S_Objectives`, HUD tracker + completion banner + build-menu / world pointer, central hint table (`ui/Hints`) with settings toggle, SAVE_MAGIC BW12, selftest `objectives` |
 | T28a | Audio + feedback: `audio::` cue table (15 generated samples, per-cue cooldown / pitch variance / 3 voices, positional falloff, no device = silent), `BW_AUDIOLOG`, master / effects sliders in the pause menu, white hit-flash shader, floating damage numbers, camera shake on building destruction, resource-bar pulse, button hover / press response |
 | T14a | Ships as registry kinds (Small Boat, Longship, Cargo Cog, Galleon: `KindDef::ship` hold + crew), Harbour-level gated production, crew gate for move orders, paid timed ship upgrades (`C_UpgradeShip`, `ShipUpgrade`, saved), `ShipPanel` upgrade row, selftest `ships` |
+| T14b | Wind: server-owned singleton (slow drift, `S_Wind`, saved), wind-rose ship speed (+-`wind_strength`), HUD compass; ships fire only with archers aboard or a crossbow hull (level >= `ship_crossbow_level`), selftest `wind` |
 
 ## Roadmap (do in this order)
 
@@ -63,44 +64,43 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 | # | Task | Size | Status | Why here |
 | --- | --- | --- | --- | --- |
-| 1 | **T14b** Wind, ship combat rules | S | todo | Needs T14a |
-| 2 | **T14c** Harbour window, multi-modal routing | M | todo | Needs T14a |
-| 3 | **T15a** Auto-defense vs manual orders | S | todo | Unit behaviour correctness |
-| 4 | **T15b** Reliable caravans, relocation/donation/respawn cleanup | M | todo | Needs T14 |
-| 5 | **T15c** Clear Zone | S | todo | Pawn anti-tedium |
-| 6 | **T15d** Pawn roles and job priorities | M | todo | Needs T15c |
-| 7 | **T29a** Brain, personality, visible objective | M | todo | Needs T15d (owner idea) |
-| 8 | **T29b** Task assignment, mood, productivity | M | todo | Needs T29a |
-| 9 | **T29c** Troop AI: escort, explore, spar | M | todo | Needs T29a |
-| 10 | **T30** One Mine, underground veins decide yield | M | todo | Owner idea; may need new save data, ask first |
-| 11 | **T20a** Combat triangle: roles, armor, damage matrix | M | todo | Data model for raids |
-| 12 | **T20b** Garrisons, walls, watchtowers | M | todo | Needs T20a |
-| 13 | **T20c** Offline protection and peace shield | M | todo | Fairness in a persistent world |
-| 14 | **T20d** Scorched ruins and cheap rebuild | S | todo | Reuses `Ruin` |
-| 15 | **T25b** Pacing Director v2 (role-based raids, rewards) | S | todo | Needs T20a |
-| 16 | **T27a** Chronicle and legacy perks | M | todo | Reason to start another town |
-| 17 | **T27b** Faction personalities, optional decrees | M | todo | Every world plays differently |
-| 18 | **T21a** Parchment map art generator, style tokens | M | todo | Map redesign step 1 |
-| 19 | **T21b** Parchment terrain + animated ocean | M | todo | Needs T21a |
-| 20 | **T21c** Map icons, borders, routes | M | todo | Needs T14, T15, T21b |
-| 21 | **T21d** Map markers, minimap redesign, overlap fix | M | todo | Needs T21c |
-| 22 | **T31a** Mission instance framework | M | todo | Story mode (owner idea) |
-| 23 | **T31b** Level format, collision walls, level 1 | M | todo | Needs T31a |
-| 24 | **T31c** Mission objectives, stars, rewards | M | todo | Needs T31b |
-| 25 | **T31d** Mission map UI and loadout | M | todo | Needs T21b, T31c, T14c |
-| 26 | **T31e** Cloud transition and result screen | S | todo | Needs T31d |
-| 27 | **T16a** Rain and ocean shader | S | todo | Polish |
-| 28 | **T16b** Rebindable keys | M | todo | Polish |
-| 29 | **T22a** NPC contracts, speed-up tokens | M | todo | Calm-phase activity |
-| 30 | **T22b** World discoveries | S | todo | Calm-phase activity |
-| 31 | **T22c** Sea events | M | todo | Needs T14, T15, T19 |
-| 32 | **T23a** Command Focus (slow-motion tactics) | M | todo | Tactical feel |
-| 33 | **T23b** Anti-punishment flow | M | todo | Fairness after defeats |
-| 34 | **T23d** Stealth and ambush crits | M | todo | Existing assets |
-| 35 | **T23e** Micro-tasks, Golden Opportunities | M | todo | Existing assets |
-| 36 | **T23f** Game juice II | M | todo | Extends T28a |
-| 37 | **T23c** Enemy ecology | M | blocked: needs owner-supplied Enemy Pack in `assets/`; split into 2-3 rows when unblocked | Largest content block |
-| 38 | **T17** Cleanup | S | todo | Always last |
+| 1 | **T14c** Harbour window, multi-modal routing | M | todo | Needs T14a |
+| 2 | **T15a** Auto-defense vs manual orders | S | todo | Unit behaviour correctness |
+| 3 | **T15b** Reliable caravans, relocation/donation/respawn cleanup | M | todo | Needs T14 |
+| 4 | **T15c** Clear Zone | S | todo | Pawn anti-tedium |
+| 5 | **T15d** Pawn roles and job priorities | M | todo | Needs T15c |
+| 6 | **T29a** Brain, personality, visible objective | M | todo | Needs T15d (owner idea) |
+| 7 | **T29b** Task assignment, mood, productivity | M | todo | Needs T29a |
+| 8 | **T29c** Troop AI: escort, explore, spar | M | todo | Needs T29a |
+| 9 | **T30** One Mine, underground veins decide yield | M | todo | Owner idea; may need new save data, ask first |
+| 10 | **T20a** Combat triangle: roles, armor, damage matrix | M | todo | Data model for raids |
+| 11 | **T20b** Garrisons, walls, watchtowers | M | todo | Needs T20a |
+| 12 | **T20c** Offline protection and peace shield | M | todo | Fairness in a persistent world |
+| 13 | **T20d** Scorched ruins and cheap rebuild | S | todo | Reuses `Ruin` |
+| 14 | **T25b** Pacing Director v2 (role-based raids, rewards) | S | todo | Needs T20a |
+| 15 | **T27a** Chronicle and legacy perks | M | todo | Reason to start another town |
+| 16 | **T27b** Faction personalities, optional decrees | M | todo | Every world plays differently |
+| 17 | **T21a** Parchment map art generator, style tokens | M | todo | Map redesign step 1 |
+| 18 | **T21b** Parchment terrain + animated ocean | M | todo | Needs T21a |
+| 19 | **T21c** Map icons, borders, routes | M | todo | Needs T14, T15, T21b |
+| 20 | **T21d** Map markers, minimap redesign, overlap fix | M | todo | Needs T21c |
+| 21 | **T31a** Mission instance framework | M | todo | Story mode (owner idea) |
+| 22 | **T31b** Level format, collision walls, level 1 | M | todo | Needs T31a |
+| 23 | **T31c** Mission objectives, stars, rewards | M | todo | Needs T31b |
+| 24 | **T31d** Mission map UI and loadout | M | todo | Needs T21b, T31c, T14c |
+| 25 | **T31e** Cloud transition and result screen | S | todo | Needs T31d |
+| 26 | **T16a** Rain and ocean shader | S | todo | Polish |
+| 27 | **T16b** Rebindable keys | M | todo | Polish |
+| 28 | **T22a** NPC contracts, speed-up tokens | M | todo | Calm-phase activity |
+| 29 | **T22b** World discoveries | S | todo | Calm-phase activity |
+| 30 | **T22c** Sea events | M | todo | Needs T14, T15, T19 |
+| 31 | **T23a** Command Focus (slow-motion tactics) | M | todo | Tactical feel |
+| 32 | **T23b** Anti-punishment flow | M | todo | Fairness after defeats |
+| 33 | **T23d** Stealth and ambush crits | M | todo | Existing assets |
+| 34 | **T23e** Micro-tasks, Golden Opportunities | M | todo | Existing assets |
+| 35 | **T23f** Game juice II | M | todo | Extends T28a |
+| 36 | **T23c** Enemy ecology | M | blocked: needs owner-supplied Enemy Pack in `assets/`; split into 2-3 rows when unblocked | Largest content block |
+| 37 | **T17** Cleanup | S | todo | Always last |
 
 **Manual playtest checkpoints (owner, ~10 min):** after T19c, after T28a, after T20b, after T21d, after T29c (NPC life), after T31b (first mission level), after T31e. Agents cannot fully judge feel, prediction or map art headless.
 
@@ -146,18 +146,22 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 * T14a: ship upgrades need the ship within 6 tiles of an own, complete Harbour of at least the new level; cost = building upgrade curve of the ship's kind, time = 1.5 x train time x `upgrade_time_growth`^(level-1); the ship rests meanwhile (no orders, no boarding, no ferry job). Persisted as an extra optional `shipup` save section, so `SAVE_MAGIC` stays BW12 (older saves simply lack it).
 * T14a: `C_UpgradeShip` is appended to the `Msg` enum and `S_ShipInfo` records got one trailing byte (upgrade %); `PROTOCOL_VERSION` stays 2 because client and server ship together.
 * Owner ideas (recorded after T14a): living NPC AI with personalities and moods (T29), a single vein-driven Mine (T30), and a linear story-mode mission system with a parchment path map, stars, loadouts and a cloud transition (T31). Full specs in `BACKLOG.md`; T15d's roles become the forced-task part of T29b; they reuse T15a (orders beat AI), T20 (roles), T21a/b (parchment art), T22b (discoveries), T23b (anti-punishment) and T27a (persistence).
+* T14b: the wind is one `Wind{dir, target, shiftIn, rng}` in `registry.ctx()` with its own tiny LCG (the world rng stays untouched, other selftests keep their sequences); it re-rolls a target every ~`wind_shift_seconds` and turns towards it at <= `wind_turn_rate` rad/s, ticked in the 1 Hz base second.
+* T14b: speed factor = 1 + `wind_strength` x cos(heading - wind dir) applied to every KT_Naval step in `UnitSystem::move` (tail +30%, head -30%, cross 0). `FerryPlanner` ETAs still use the plain speed.
+* T14b: ships have no weapon of their own: archers aboard each add one archer's damage, a hull at upgrade level >= `ship_crossbow_level` (2) mounts a crossbow worth one archer; one volley per second at the nearest hostile unit or building within `ship_range` (7) tiles, automatic (no attack order for ships yet).
+* T14b: save format stays BW12: the wind is appended as the last section after the base section (optional, absent in older saves). `S_Wind` is appended to `Msg` (u8 dir, u8 strength %, 1 Hz reliable).
 * T19b: no protocol change - velocity / facing are derived from the buffered samples (`aim` still drives attack facing), so `PROTOCOL_VERSION` stays 2.
 * T19b: the render clock slews at most 10% towards its target instead of jumping, so jitter spikes never make units jump; delay = max(150 ms, 2 x smallest recent snapshot interval).
 
 ## Current task specs
 
-### T14b Wind and ship combat rules (size S)
+### T14c Harbour window and multi-modal routing (size M)
 
-* Wind direction (server-authoritative singleton in `registry.ctx()`, slowly changing, replicated, persisted) + wind-rose speed modifier per heading; compass in the HUD.
-* Ship combat only with archers aboard or a crossbow upgrade.
-* Done when: selftest `wind` (speed differs by heading as configured; ships without archers cannot attack; save/reload keeps wind); screenshot of the compass.
+* Grid-based Harbour window in the Archery (`TrainingPanel`) style (frame `assets/ui/training_panel.tmj` from `tools/gen_ui_maps.py`): build ships / fleet / harbour upgrade. Replaces the context-panel path.
+* Multi-modal route planning (land -> boat -> land) for pawns and clan defense-quota troops whenever water is faster (generalise `FerryPlanner`; `DefenseSystem::planDefenseRoute`, pawn haul).
+* Done when: selftest `ferry-route` (a destination across water is reached via ship faster than the land detour; falls back to land when no ship; no orphan jobs after ship destroyed mid-route); screenshot of the window at scale 1 and 2.
 
-(When T14b is done, replace this section with the spec of the next `todo` row from `BACKLOG.md` and delete that spec there.)
+(When T14c is done, replace this section with the spec of the next `todo` row from `BACKLOG.md` and delete that spec there.)
 
 ## Known gaps / follow-ups
 

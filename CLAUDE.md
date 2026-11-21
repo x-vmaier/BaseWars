@@ -8,7 +8,7 @@ The owner does not approve plans and does not playtest every task. You work auto
 
 ## Session protocol (one task per session)
 
-1. Take the first Roadmap row in `TODO.md` with status `todo` (currently **T14b**). Skip `blocked` rows.
+1. Take the first Roadmap row in `TODO.md` with status `todo` (currently **T14c**). Skip `blocked` rows.
 2. Read the task text (in `TODO.md`; if it is still in `BACKLOG.md`, move it into `TODO.md` and delete it from `BACKLOG.md` first) and the code it names.
    Write a plan of at most 15 lines (design, files, order, the selftest you will add) and continue immediately.
 3. Decide small things yourself and log them as one line in the Decisions log (`Txx: decision - reason`).

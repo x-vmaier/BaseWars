@@ -186,6 +186,7 @@ void SaveSystem::saveGame()
     shipsSave(w);
     shipUpgradesSave(w);
     saveBase(w);
+    s.wind.save(w); // last: the base section has no length prefix, so an older save simply ends before it
 
     writeFile(w);
 }
@@ -471,6 +472,7 @@ void SaveSystem::readOptionalSections(Reader &r)
         if (r.p < r.e)
             loadBase(r);
     });
+    optional("wind", [&] { s.wind.load(r); });
 }
 
 void SaveSystem::worldSave(Writer &w)

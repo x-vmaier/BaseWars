@@ -104,6 +104,7 @@ void App::drawUI(float dt)
 
     chat.draw();
     hud.drawBiome();
+    hud.drawCompass();
     baseMenus.draw();
     context.draw();
     hud.drawDragRect();

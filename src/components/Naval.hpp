@@ -12,6 +12,7 @@ struct Ship
 {
     std::vector<uint32_t> pax;
     double idleSince = 0;
+    float fireCd = 0; // seconds until the next volley
 };
 
 // Timed upgrade in progress: the ship cannot sail or take passengers meanwhile.

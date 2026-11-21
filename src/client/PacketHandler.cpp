@@ -6,6 +6,7 @@
 
 #include "client/App.hpp"
 #include "client/AudioSystem.hpp"
+#include "common/Wind.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -571,6 +572,9 @@ bool PacketHandler::basePacket(uint8_t type, Reader &r)
     case S_Objectives:
         onObjectives(r);
         return true;
+    case S_Wind:
+        onWind(r);
+        return true;
     default:
         return false;
     }
@@ -645,6 +649,14 @@ void PacketHandler::onBaseInfo(Reader &r)
         app.placement.buildKind = -1;
 
     w.wasHomeless = w.homeless;
+}
+
+void PacketHandler::onWind(Reader &r)
+{
+    uint8_t dir = r.get<uint8_t>(), pct = r.get<uint8_t>();
+    if (!r.ok)
+        return;
+    app.world.wind = {true, windFromByte(dir), float(std::min<int>(pct, 100)) / 100.f};
 }
 
 void PacketHandler::onPacing(Reader &r)

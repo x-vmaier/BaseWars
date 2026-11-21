@@ -87,6 +87,11 @@ struct ClientWorld
         Pos origin{0, 0}; // town the raid marches from
         bool seen = false;
     } pacing;
+    struct WindView
+    { // S_Wind: direction the wind blows towards (radians) and its effect on ship speed
+        bool seen = false;
+        float dir = 0, strength = 0;
+    } wind;
     struct ObjView
     { // S_Objectives: active goal per tier, completion banner
         bool seen = false;

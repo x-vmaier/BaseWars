@@ -30,7 +30,8 @@ class Hud
     void drawTop(); // resource ribbon + name banner
     void drawLog(); // message log, help line, command-mode banner
     void drawCoords();
-    void drawBiome(); // hovered biome name, bottom right
+    void drawBiome();   // hovered biome name, bottom right
+    void drawCompass(); // wind rose above the biome label
     void drawSocialTab();
     void drawDragRect();
     void drawHoverLabel();

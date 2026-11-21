@@ -205,6 +205,28 @@ void Hud::drawBiome()
     textShadow(name, int(r.x) + 24, int(r.y) + 3, fs, rgb(240, 235, 220));
 }
 
+// Wind rose, bottom right above the biome label: the arrow points the way the wind blows (ships sail faster that way).
+void Hud::drawCompass()
+{
+    const auto &wd = app.world.wind;
+    if (!wd.seen)
+        return;
+    const float R = 24.f;
+    Vector2 c{float(ui::screenW()) - R - 12, float(ui::screenH()) - R - 32};
+    DrawCircleV(c, R, rgb(30, 22, 16, 215));
+    DrawRing(c, R - 2, R, 0, 360, 24, rgb(255, 225, 160, 170));
+    drawText("N", int(c.x) - measureText("N", 10) / 2, int(c.y - R) + 2, 10, rgb(255, 225, 160));
+
+    Vector2 d{std::cos(wd.dir), std::sin(wd.dir)}, n{-d.y, d.x};
+    float len = 11.f + 8.f * wd.strength;
+    Vector2 tip{c.x + d.x * len, c.y + d.y * len}, tail{c.x - d.x * len, c.y - d.y * len};
+    DrawLineEx(tail, tip, 3.f, rgb(150, 220, 255));
+    DrawTriangle(tip, {tip.x - d.x * 8 + n.x * 5, tip.y - d.y * 8 + n.y * 5},
+                 {tip.x - d.x * 8 - n.x * 5, tip.y - d.y * 8 - n.y * 5}, rgb(150, 220, 255));
+    std::string pct = TextFormat("%d%%", int(std::lround(wd.strength * 100.f)));
+    drawText(pct, int(c.x) - measureText(pct, 10) / 2, int(c.y + R) - 12, 10, rgb(240, 235, 220));
+}
+
 // Camera coordinates, so players can tell each other where they are.
 void Hud::drawCoords()
 {

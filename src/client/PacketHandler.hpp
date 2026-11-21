@@ -40,6 +40,7 @@ class PacketHandler
     void onDefeat(Reader &r);
     void onPacing(Reader &r);
     void onObjectives(Reader &r);
+    void onWind(Reader &r);
     void onJobs(Reader &r);
     void onEcon(Reader &r);
     App &app;

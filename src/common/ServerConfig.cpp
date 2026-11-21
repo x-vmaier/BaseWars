@@ -103,6 +103,11 @@ void applyNpcs(ServerConfig &c, const Entry &e)
     e.F("sheep_density_plains", c.sheepDensityPlains);
     e.F("sheep_density_flowers", c.sheepDensityFlowers);
     e.I("sheep_max", c.sheepMax);
+    e.F("wind_strength", c.windStrength);
+    e.F("wind_shift_seconds", c.windShiftSeconds);
+    e.F("wind_turn_rate", c.windTurnRate);
+    e.F("ship_range", c.shipRange);
+    e.I("ship_crossbow_level", c.shipCrossbowLevel);
 }
 
 void applyEconomy(ServerConfig &c, const Entry &e)
@@ -152,6 +157,11 @@ void clampAll(ServerConfig &c)
     c.pacingMaxBaseShare = std::clamp(c.pacingMaxBaseShare, .1f, 2.f);
     c.pacingRewardPerRaider = std::max(0.f, c.pacingRewardPerRaider);
     c.objectiveTimeoutMin = std::max(.05, c.objectiveTimeoutMin);
+    c.windStrength = std::clamp(c.windStrength, 0.f, .8f);
+    c.windShiftSeconds = std::max(5.f, c.windShiftSeconds);
+    c.windTurnRate = std::clamp(c.windTurnRate, .001f, 1.f);
+    c.shipRange = std::clamp(c.shipRange, 1.f, 20.f);
+    c.shipCrossbowLevel = std::clamp(c.shipCrossbowLevel, 1, 4); // 4 (above the ship level cap 3) = never
     c.patrolMapGroups = std::max(0, c.patrolMapGroups);
     c.patrolsPerTownMin = std::max(0, c.patrolsPerTownMin);
     c.patrolsPerTownMax = std::max(c.patrolsPerTownMin, c.patrolsPerTownMax);
