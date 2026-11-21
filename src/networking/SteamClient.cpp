@@ -4,6 +4,7 @@
  */
 #include "networking/SteamClient.hpp"
 
+#include "common/Log.hpp"
 #include "networking/NetTypes.hpp"
 
 #include <steam/isteamnetworkingutils.h>
@@ -20,10 +21,11 @@ bool SteamClient::init()
 
     if (SteamAPI_InitEx(&err) != k_ESteamAPIInitResult_OK)
     {
-        std::fprintf(stderr, "SteamAPI_Init failed: %s\n", err);
+        spdlog::error("SteamAPI_Init failed: {}", static_cast<const char *>(err));
         return false;
     }
 
+    bw::log::hookSteam(false);
     ok = true;
     id = SteamUser()->GetSteamID().ConvertToUint64();
     name = SteamFriends()->GetPersonaName();

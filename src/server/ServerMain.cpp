@@ -2,6 +2,7 @@
  * @file ServerMain.cpp
  * @brief Authoritative server entry point and tick loop.
  */
+#include "common/Log.hpp"
 #include "server/SelfTests.hpp"
 #include "server/Sim.hpp"
 
@@ -33,20 +34,22 @@ class Server
             std::filesystem::rename(world.savePath, world.savePath + ".bad", ec); // never lose the old file
             if (world.loadStarted)
             {
-                std::printf("Savegame could not be read; kept as %s.bad. Restart the server to begin a fresh world.\n",
-                            world.savePath.c_str());
-                std::fflush(stdout);
-                std::_Exit(2); // no destructor: never overwrite the save with a half-loaded state
+                spdlog::critical(
+                    "Savegame could not be read; kept as {}.bad. Restart the server to begin a fresh world.",
+                    world.savePath);
+                spdlog::shutdown(); // flushes the log file; _Exit skips destructors
+                std::_Exit(2);      // no destructor: never overwrite the save with a half-loaded state
             }
-            std::printf("Old savegame kept as %s.bad; starting a fresh world.\n", world.savePath.c_str());
+            spdlog::warn("Old savegame kept as {}.bad; starting a fresh world.", world.savePath);
         }
         if (!world.net.start(port, serverName, localOnly))
         {
-            std::puts("Failed to bind port");
+            spdlog::critical("Failed to bind port {}", port);
+            spdlog::shutdown();
             std::exit(1);
         }
-        std::printf("Server listening on port %d (Steam Networking Sockets) (seed %u, %s, steam %s)\n", port,
-                    world.seed, loaded ? "savegame loaded" : "fresh world", world.net.relayActive() ? "on" : "off");
+        spdlog::info("Server listening on port {} (Steam Networking Sockets) (seed {}, {}, steam {})", port, world.seed,
+                     loaded ? "savegame loaded" : "fresh world", world.net.relayActive() ? "on" : "off");
     }
     ~Server() { sim.sys.save.saveGame(); }
     Server(const Server &) = delete;
@@ -69,7 +72,7 @@ class Server
                 next = now;
             std::this_thread::sleep_until(next);
         }
-        std::puts("Shutting down, saving world...");
+        spdlog::info("Shutting down, saving world...");
     }
 
   private:
@@ -82,7 +85,11 @@ int main(int argc, char **argv)
 {
     for (int i = 1; i + 1 < argc; i++)
         if (std::string(argv[i]) == "--selftest")
+        {
+            bw::log::init("server", false); // console only: a test run must not rotate the real server log
             return selftest::runCli(argv[i + 1]);
+        }
+    bw::log::init("server");
     int port = argc > 1 ? std::atoi(argv[1]) : DEFAULT_PORT;
     uint32_t seed = argc > 2 ? uint32_t(std::strtoul(argv[2], nullptr, 10)) : std::random_device{}();
     std::string save = argc > 3 ? argv[3] : "savegame.bin";
@@ -100,4 +107,5 @@ int main(int argc, char **argv)
         Server s(uint16_t(port), seed, save, serverName, localOnly);
         s.run();
     }
+    spdlog::shutdown();
 }

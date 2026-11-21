@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <spdlog/spdlog.h>
 
 int ClientWorld::biomeAt(int x, int y) const
 {
@@ -327,8 +328,8 @@ void ClientWorld::interpolate(float dt, double now)
 
     if (measure && now - lastStutterLog > 10.0)
     {
-        std::fprintf(stderr, "[stutter] samples=%zu max=%.2f p99=%.2f tiles/s snaps=%d interval=%d\n",
-                     stutter.jitter.size(), stutter.maxJitter, stutter.p99(), stutter.snaps, clock.interval);
+        spdlog::info("[stutter] samples={} max={:.2f} p99={:.2f} tiles/s snaps={} interval={}", stutter.jitter.size(),
+                     stutter.maxJitter, stutter.p99(), stutter.snaps, clock.interval);
         stutter.reset();
         lastStutterLog = now;
     }

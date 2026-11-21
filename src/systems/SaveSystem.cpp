@@ -16,6 +16,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <spdlog/spdlog.h>
 
 #include <string>
 
@@ -276,7 +277,7 @@ void SaveSystem::writeFile(const Writer &w)
         std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
         if (!f)
         {
-            std::printf("Could not write %s\n", tmp.c_str());
+            spdlog::error("Could not write {}", tmp);
             return;
         }
         f.write(reinterpret_cast<const char *>(w.b.data()), std::streamsize(w.b.size()));
@@ -286,7 +287,7 @@ void SaveSystem::writeFile(const Writer &w)
     std::error_code ec;
     std::filesystem::rename(tmp, world.savePath, ec);
     if (ec)
-        std::printf("Could not replace %s: %s\n", world.savePath.c_str(), ec.message().c_str());
+        spdlog::error("Could not replace {}: {}", world.savePath, ec.message());
 }
 
 bool SaveSystem::loadGame()
@@ -299,7 +300,7 @@ bool SaveSystem::loadGame()
 
     if (r.get<uint32_t>() != SAVE_MAGIC)
     {
-        std::puts("Savegame has an older or unknown format.");
+        spdlog::warn("Savegame has an older or unknown format.");
         return false;
     }
 
@@ -319,7 +320,7 @@ bool SaveSystem::loadGame()
 
     if (!r.ok)
     {
-        std::puts("Savegame is truncated.");
+        spdlog::warn("Savegame is truncated.");
         return false;
     }
     readOptionalSections(r);
@@ -456,7 +457,7 @@ void SaveSystem::readOptionalSections(Reader &r)
         load();
         if (!r.ok)
         {
-            std::printf("Ignoring damaged %s section of the savegame.\n", name);
+            spdlog::warn("Ignoring damaged {} section of the savegame.", name);
             r.ok = true;
             r.p = r.e;
         }

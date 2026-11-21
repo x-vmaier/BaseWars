@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <spdlog/spdlog.h>
 #include <string>
 
 void DefenseSystem::baseOnDamage(entt::entity e, int owner, int attacker)
@@ -48,7 +49,7 @@ DefRoute DefenseSystem::planDefenseRoute(int /*member*/, Pos from, Pos to)
     }
     float rest = std::hypot(to.x - prev.x, to.y - prev.y);
     if (std::getenv("BW_BASEDEBUG"))
-        std::printf("[route] straight %.0f path %.0f remaining %.0f\n", straight, len, rest);
+        spdlog::info("[route] straight {:.0f} path {:.0f} remaining {:.0f}", straight, len, rest);
     if (rest > 15.f && rest > straight * .6f)
         return r; // no real progress on foot: unreachable (partial paths continue while repathing)
     r.ok = true;
@@ -171,8 +172,8 @@ void DefenseSystem::dispatchDefense(int victim, Pos at, int attacker)
         world.spawnSpot(th, false, from); // the hall centre is blocked; take a free tile beside it
         DefRoute rt = planDefenseRoute(m, from, at);
         if (std::getenv("BW_BASEDEBUG"))
-            std::printf("[defense] %s -> victim %s: route ok=%d eta=%.0f need=%d\n", world.pl[m].name.c_str(),
-                        world.pl[victim].name.c_str(), int(rt.ok), rt.eta, need);
+            spdlog::info("[defense] {} -> victim {}: route ok={} eta={:.0f} need={}", world.pl[m].name,
+                         world.pl[victim].name, int(rt.ok), rt.eta, need);
 
         // Cross water by boat when clearly faster than marching around.
         TransportPlan plan = s.ferry.planTransport(m, us, at);

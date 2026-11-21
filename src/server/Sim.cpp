@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <spdlog/spdlog.h>
 
 void Sim::baseSecond()
 {
@@ -135,7 +136,7 @@ void Sim::update(float dt)
     static const bool checkLive = std::getenv("BW_INVARIANTS") != nullptr; // BW_INVARIANTS=1: log violations live
     if (checkLive && world.tick % TICK_HZ == 0)
         for (const std::string &v : world.checkInvariants())
-            std::fprintf(stderr, "[invariant] %s\n", v.c_str());
+            spdlog::error("[invariant] {}", v);
 
     if (world.clock - world.lastSave > 30)
     {

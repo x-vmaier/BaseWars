@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <spdlog/spdlog.h>
 #include <string>
 
 namespace
@@ -38,7 +39,7 @@ void DefeatSystem::defeat(int victim, int killer, IV hall)
     world.pl[victim].cam = d.ruin;
     world.reveal(victim, int(d.ruin.x), int(d.ruin.y), OFFER_REVEAL_RADIUS + 4);
     world.say(victim, "Your Town Hall fell! Your town is burning. Click Resettle to found a new one.");
-    std::printf("%s was defeated\n", world.pl[victim].name.c_str());
+    spdlog::info("{} was defeated", world.pl[victim].name);
     sendState(victim);
 }
 

@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <spdlog/spdlog.h>
 #include <string>
 
 void ClanSystem::breakAlliance(int a, int b)
@@ -84,7 +85,7 @@ bool ClanSystem::baseDefeat(int victim)
     world.sendAlert(victim, 2, hall, "Your town was destroyed. Place a new Town Hall near your clan.");
     world.notifyClan(world.pl[victim].clan,
                      world.pl[victim].name + " lost their town and is homeless. Resources were donated.");
-    std::printf("%s was defeated (clan: homeless)\n", world.pl[victim].name.c_str());
+    spdlog::info("{} was defeated (clan: homeless)", world.pl[victim].name);
     return true;
 }
 

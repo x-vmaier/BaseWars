@@ -3,6 +3,7 @@
  * @brief Server transport: Steam GameServer + Steam Networking Sockets.
  */
 #include "networking/SteamServerNet.hpp"
+#include "common/Log.hpp"
 
 #include "networking/FakeNet.hpp"
 
@@ -33,7 +34,7 @@ void onStatus(SteamNetConnectionStatusChangedCallback_t *info)
     auto *s = sockets();
     HSteamNetConnection h = info->m_hConn;
     if (std::getenv("BW_NETLOG"))
-        std::fprintf(stderr, "[net] state %d -> %d (%s)\n", int(info->m_eOldState), int(info->m_info.m_eState),
+        spdlog::info("[net] state {} -> {} ({})", int(info->m_eOldState), int(info->m_info.m_eState),
                      info->m_info.m_szEndDebug);
 
     switch (info->m_info.m_eState)
@@ -92,10 +93,11 @@ bool SteamServerNet::start(uint16_t port, const std::string &serverName, bool lo
                                localOnly ? eServerModeNoAuthentication : eServerModeAuthentication, "0.2.0",
                                &err) != k_ESteamAPIInitResult_OK)
     {
-        std::printf("SteamGameServer_Init failed: %s\n", err);
+        spdlog::error("SteamGameServer_Init failed: {}", static_cast<const char *>(err));
         return false;
     }
 
+    bw::log::hookSteam(true);
     ISteamGameServer *gs = SteamGameServer();
     gs->SetModDir("basewars");
     gs->SetProduct("BaseWars");
@@ -162,6 +164,7 @@ void SteamServerNet::publish(int players, int maxPlayers, const std::string &map
     if (!running)
         return;
 
+    bw::log::hookSteam(true);
     ISteamGameServer *gs = SteamGameServer();
     gs->SetMaxPlayerCount(maxPlayers);
     gs->SetBotPlayerCount(players); // connected players are reported as the player count in the browser

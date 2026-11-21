@@ -3,11 +3,14 @@
  * @brief Client entry point: window setup, config.txt / settings.txt / profile loading, optional auto-join.
  */
 #include "client/App.hpp"
+#include "common/Log.hpp"
 #include "rendering/Text.hpp"
 
 #include <raylib.h>
+#include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -15,6 +18,14 @@
 
 namespace
 {
+
+// Raylib formats its own messages; route them through spdlog so they land in the log file too.
+void raylibLog(int level, const char *fmt, va_list args)
+{
+    char buf[1024];
+    std::vsnprintf(buf, sizeof buf, fmt, args);
+    spdlog::log(bw::log::fromRaylibLevel(level), "[raylib] {}", buf);
+}
 
 void loadConfig(std::string &ip, int &port)
 {
@@ -26,7 +37,7 @@ void loadConfig(std::string &ip, int &port)
         f.open("config.txt");
     if (!f)
     {
-        TraceLog(LOG_WARNING, "config.txt not found next to the executable; using %s:%d", ip.c_str(), port);
+        spdlog::warn("config.txt not found next to the executable; using {}:{}", ip, port);
         return;
     }
 
@@ -57,6 +68,8 @@ void loadConfig(std::string &ip, int &port)
 
 int main(int argc, char **argv)
 {
+    bw::log::init("client");
+    SetTraceLogCallback(raylibLog);
     App app;
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
@@ -99,4 +112,5 @@ int main(int argc, char **argv)
     app.run(autoJoin);
     unloadFonts();
     CloseWindow();
+    spdlog::shutdown();
 }

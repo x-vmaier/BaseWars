@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <spdlog/spdlog.h>
 #include <string>
 
 namespace
@@ -687,7 +688,7 @@ float ClearingSystem::mineMul(entt::entity e, Kind k, Pos c)
     mineCache[uid] = {world.clearVer, m};
     static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr; // test hook
     if (logIt)
-        std::printf("[world] mine %u at %.1f,%.1f: %d gold deposits -> output x%.2f\n", uid, c.x, c.y, goldNear(wa, c),
-                    m);
+        spdlog::info("[world] mine {} at {:.1f},{:.1f}: {} gold deposits -> output x{:.2f}", uid, c.x, c.y,
+                     goldNear(wa, c), m);
     return m;
 }

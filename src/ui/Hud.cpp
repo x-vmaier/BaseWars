@@ -17,6 +17,7 @@ namespace
 // The ribbon art (title_ribbon / hud_resources): straight band between the swallow tails, as fractions of the
 // map's size, measured on the composed tilemap.
 constexpr float BAND_L = .13f, BAND_R = .87f, BAND_CY = .516f;
+constexpr float HUD_K = .85f;      // overall size of both top-left banners and their contents
 constexpr float NAME_SCALE = 1.5f; // name banner = title ribbon (scale .5) enlarged to match the resource ribbon
 } // namespace
 
@@ -36,12 +37,12 @@ void Hud::onLog(const LogEvent &e)
 Rectangle Hud::hudRect() const
 {
     Vector2 s = mHud.size();
-    return {10, 10, s.x, s.y};
+    return {10, 10, s.x * HUD_K, s.y * HUD_K};
 }
 Rectangle Hud::nameRect() const
 {
     Vector2 s = ui::titleMap().size();
-    float k = NAME_SCALE;
+    float k = NAME_SCALE * HUD_K;
     return {10, 10 + hudRect().height + 6, s.x * k, s.y * k};
 }
 Rectangle Hud::coordRect() const
@@ -69,8 +70,8 @@ void Hud::drawResources()
 
     // Each resource is one group (icon + value over name) centred in its quarter of the ribbon's straight band.
     const float bandL = h.x + h.width * BAND_L, bandW = h.width * (BAND_R - BAND_L), cy = h.y + h.height * BAND_CY;
-    const float slot = bandW / 4.f, iconPx = 32, gap = 6;
-    const int valueFs = 17, nameFs = 10;
+    const float slot = bandW / 4.f, iconPx = 32 * HUD_K, gap = 6 * HUD_K;
+    const int valueFs = int(17 * HUD_K + .5f), nameFs = std::max(9, int(10 * HUD_K + .5f));
     for (int r = 0; r < R_Count; r++)
     {
         // food (meat) pays for every unit, building, upgrade and repair
@@ -109,9 +110,10 @@ void Hud::drawNameBanner()
     });
     Texture2D av = tex(std::string("UI Elements/UI Elements/Human Avatars/Avatars_") + (W.me % 25 + 1 < 10 ? "0" : "") +
                        std::to_string(W.me % 25 + 1) + ".png");
-    float cy = nr.y + nr.height * BAND_CY, avPx = 52, ax = nr.x + nr.width * (BAND_L + .015f);
+    float cy = nr.y + nr.height * BAND_CY, avPx = 52 * HUD_K, ax = nr.x + nr.width * (BAND_L + .015f);
     DrawTexturePro(av, {0, 0, 256, 256}, {ax, cy - avPx / 2, avPx, avPx}, {0, 0}, 0, WHITE);
-    int tx = int(ax + avPx + 10), nameFs = 17, statFs = 11, nh = textHeight(nameFs), sh = textHeight(statFs);
+    int tx = int(ax + avPx + 8), nameFs = int(17 * HUD_K + .5f), statFs = std::max(9, int(11 * HUD_K + .5f)),
+        nh = textHeight(nameFs), sh = textHeight(statFs);
     int top = int(cy) - (nh + sh - 2) / 2;
     textShadow(W.myName, tx, top, nameFs, teamColor(W.me));
     textShadow(TextFormat("Units %d/%d  Buildings %d  FPS %d", units, UNIT_CAP, bld, GetFPS()), tx, top + nh - 2,

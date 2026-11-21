@@ -86,6 +86,7 @@ A contradiction between two rules is resolved in favour of the Design goals in `
 * Saves must be written in a deterministic order (sort hash sets, order entities by uid): selftest `saveload` compares bytes.
 * A player can have no Town Hall (defeated, `DefeatSystem`, or homeless): code that picks a player's hall must handle `townHallOf(id) == entt::null`. While `bp[id].defeat.phase != DF_None` the server drops every command except camera, chat and resettle.
 * Never index `KINDS`/`KINFO` with a kind read from the network before checking `k < K_Count`.
+* Logging: `spdlog::info/warn/error` (fmt syntax `{}`), never `printf` / `std::cout` / raylib `TraceLog`. `bw::log::init` runs first in each `main`; call `spdlog::shutdown()` before `std::_Exit` / `std::exit`.
 
 ## Code style
 

@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <spdlog/spdlog.h>
 #include <string>
 
 void HuntSystem::spawnChunkNpcs(int cx, int cy)
@@ -258,7 +259,7 @@ void HuntSystem::repopulateChunk(int64_t k, const std::unordered_map<int64_t, in
 
             static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;
             if (logIt)
-                std::printf("[world] sheep repopulated in chunk %d,%d (total %zu)\n", cx, cy, sheepList.size() + 1);
+                spdlog::info("[world] sheep repopulated in chunk {},{} (total {})", cx, cy, sheepList.size() + 1);
             break;
         }
     }

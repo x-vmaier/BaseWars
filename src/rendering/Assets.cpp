@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <spdlog/spdlog.h>
 #include <sstream>
 #include <unordered_map>
 
@@ -41,7 +42,7 @@ void findAssets()
     }
 
     assetRoot = "assets";
-    TraceLog(LOG_ERROR, "assets directory not found next to the executable or in a parent folder");
+    spdlog::error("assets directory not found next to the executable or in a parent folder");
 }
 
 std::string asset(const std::string &rel)
@@ -56,7 +57,7 @@ Texture2D tex(const std::string &rel)
         return it->second;
     Texture2D t = LoadTexture(asset(rel).c_str());
     if (t.id == 0)
-        TraceLog(LOG_WARNING, "missing texture %s", rel.c_str());
+        spdlog::warn("missing texture {}", rel);
     else
         SetTextureFilter(t, TEXTURE_FILTER_POINT);
     texCache[rel] = t;
@@ -263,8 +264,7 @@ void loadTilesets(const J &root, TMap &m, const std::string &name)
         auto img = t.get("image");
         if (!img)
         {
-            TraceLog(LOG_WARNING, "%s: external tilesets are not supported; use 'Embed tileset' in Tiled",
-                     name.c_str());
+            spdlog::warn("{}: external tilesets are not supported; use 'Embed tileset' in Tiled", name);
             continue;
         }
 
@@ -272,7 +272,7 @@ void loadTilesets(const J &root, TMap &m, const std::string &name)
         Texture2D tx = LoadTexture(full.c_str());
         if (tx.id == 0)
         {
-            TraceLog(LOG_WARNING, "missing tileset image %s", full.c_str());
+            spdlog::warn("missing tileset image {}", full);
             continue;
         }
 
@@ -316,7 +316,7 @@ TMap loadTMap(const std::string &name)
     std::ifstream f(path);
     if (!f)
     {
-        TraceLog(LOG_WARNING, "missing UI map %s", path.c_str());
+        spdlog::warn("missing UI map {}", path);
         return m;
     }
 
@@ -327,7 +327,7 @@ TMap loadTMap(const std::string &name)
     J root = p.parse();
     if (!p.ok || root.t != J::Obj)
     {
-        TraceLog(LOG_WARNING, "bad UI map %s", path.c_str());
+        spdlog::warn("bad UI map {}", path);
         return m;
     }
 
@@ -343,7 +343,7 @@ TMap loadTMap(const std::string &name)
     std::sort(m.sets.begin(), m.sets.end(), [](const TMap::TS &a, const TMap::TS &b) { return a.first > b.first; });
 
     m.ok = m.w > 0 && m.h > 0 && !m.sets.empty() && !m.data.empty();
-    TraceLog(LOG_INFO, "UI map %s: %dx%d tiles, scale %.2f, ok=%d", name.c_str(), m.w, m.h, m.scale, int(m.ok));
+    spdlog::info("UI map {}: {}x{} tiles, scale {:.2f}, ok={}", name, m.w, m.h, m.scale, int(m.ok));
     return m;
 }
 

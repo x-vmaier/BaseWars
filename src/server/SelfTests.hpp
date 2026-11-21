@@ -7,6 +7,7 @@
 #include "server/Sim.hpp"
 
 #include <cstdio>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -49,7 +50,7 @@ class Ctx
     void check(bool ok, const std::string &what);
     // Runs World::checkInvariants and records every violation.
     void invariants(Fixture &f, const char *when);
-    void log(const std::string &s) const { std::printf("  [%s] %s\n", name.c_str(), s.c_str()); }
+    void log(const std::string &s) const { spdlog::info("  [{}] {}", name, s); }
     int failures = 0;
     std::string name;
 };
@@ -72,6 +73,7 @@ void identityTest(Ctx &);
 void defeatTest(Ctx &);
 void netSnapshotTest(Ctx &);
 void interpTest(Ctx &);
+void logRotateTest(Ctx &);
 
 int runCli(const std::string &what);
 

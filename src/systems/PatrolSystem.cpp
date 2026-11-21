@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iterator>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <unordered_set>
 
@@ -85,7 +86,7 @@ void PatrolSystem::spawnPatrol(uint32_t gid, PatGroup &g)
 
     static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;
     if (logIt)
-        std::printf("[world] patrol %u of town %u spawned with %d units\n", gid, g.town, n);
+        spdlog::info("[world] patrol {} of town {} spawned with {} units", gid, g.town, n);
 
     g.hasWp = false;
     g.wait = world.clock + 2.0;
@@ -132,7 +133,7 @@ void PatrolSystem::worldOnKill(entt::entity e, Kind k, int owner, int killer, Po
 
     static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;
     if (told && logIt)
-        std::printf("[world] retaliation against player %d started (patrol unit killed)\n", killer);
+        spdlog::info("[world] retaliation against player {} started (patrol unit killed)", killer);
     if (told)
         world.say(killer, std::string("The ") + FACTION_NAME[owner - FACTION_BASE] + " patrol is hunting you!");
 }
@@ -236,8 +237,8 @@ bool PatrolSystem::pickSiege(PatGroup &g, Pos from, int owner)
 
     static const bool logIt = std::getenv("BW_WORLDLOG") != nullptr;
     if (logIt)
-        std::printf("[world] patrol of %s marches on the town hall of %s at %.0f,%.0f\n",
-                    FACTION_NAME[owner - FACTION_BASE], world.ownerName(to).c_str(), c.x, c.y);
+        spdlog::info("[world] patrol of {} marches on the town hall of {} at {:.0f},{:.0f}",
+                     FACTION_NAME[owner - FACTION_BASE], world.ownerName(to), c.x, c.y);
 
     return true;
 }

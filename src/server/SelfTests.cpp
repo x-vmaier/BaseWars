@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <spdlog/spdlog.h>
 
 namespace selftest
 {
@@ -25,6 +26,7 @@ const Scenario SCENARIOS[] = {
     {"net-snapshot", "chunked unreliable snapshots, lost chunks, command seq ack, protocol version", netSnapshotTest},
     {"defeat", "defeat: burning ruin, resettle offers, blocked commands, timeouts", defeatTest},
     {"interp", "client interpolation: no snaps, low jitter under latency + loss, stops, teleports", interpTest},
+    {"log-rotate", "log files: previous run archived into logs/, archive capped", logRotateTest},
     {"invariants", "invariant checker catches an orphaned job", invariantsTest},
 };
 
@@ -111,7 +113,7 @@ void Ctx::check(bool ok, const std::string &what)
     if (ok)
         return;
     failures++;
-    std::printf("  [%s] FAIL: %s\n", name.c_str(), what.c_str());
+    spdlog::error("  [{}] FAIL: {}", name, what);
 }
 
 void Ctx::invariants(Fixture &f, const char *when)
@@ -142,14 +144,12 @@ namespace
 {
 bool runOne(const Scenario &s)
 {
-    std::printf("[ RUN  ] %s - %s\n", s.name, s.about);
-    std::fflush(stdout);
+    spdlog::info("[ RUN  ] {} - {}", s.name, s.about);
     auto t0 = std::chrono::steady_clock::now();
     Ctx ctx(s.name);
     s.run(ctx);
     double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    std::printf("[ %s ] %s (%.1fs)\n", ctx.failures ? "FAIL" : " OK ", s.name, sec);
-    std::fflush(stdout);
+    spdlog::info("[ {} ] {} ({:.1f}s)", ctx.failures ? "FAIL" : " OK ", s.name, sec);
     return ctx.failures == 0;
 }
 } // namespace
@@ -171,10 +171,10 @@ int runCli(const std::string &what)
         }
     if (!ran)
     {
-        std::printf("Unknown selftest '%s' (try: --selftest list)\n", what.c_str());
+        spdlog::error("Unknown selftest '{}' (try: --selftest list)", what);
         return 1;
     }
-    std::printf("%d/%d selftests passed\n", ran - failed, ran);
+    spdlog::info("{}/{} selftests passed", ran - failed, ran);
     return failed ? 1 : 0;
 }
 

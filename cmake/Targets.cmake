@@ -18,7 +18,7 @@ bw_collect_sources(BW_COMMON_SOURCES common)
 
 add_library(bw_common STATIC ${BW_COMMON_SOURCES})
 target_include_directories(bw_common PUBLIC "${BW_SRC}")
-target_link_libraries(bw_common PUBLIC EnTT::EnTT steamworks)
+target_link_libraries(bw_common PUBLIC EnTT::EnTT spdlog::spdlog steamworks)
 bw_apply_compiler_policy(bw_common)
 
 if(WIN32)

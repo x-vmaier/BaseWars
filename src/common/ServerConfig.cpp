@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <spdlog/spdlog.h>
 #include <string>
 
 ServerConfig &ServerConfig::get()
@@ -182,6 +183,6 @@ bool ServerConfig::load(const std::string &path)
     }
     clampAll(*this);
 
-    std::printf("Loaded server config %s\n", path.c_str());
+    spdlog::info("Loaded server config {}", path);
     return true;
 }

@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <spdlog/spdlog.h>
 #include <string>
 
 void NetSession::bindConnection(uint64_t conn, int id, uint64_t steamId, const std::vector<uint64_t> &friends)
@@ -161,7 +162,7 @@ void NetSession::finishHello(uint64_t conn, uint64_t steamId, const std::vector<
     if (fresh || world.bp[id].defeat.phase == DF_None)
         world.say(id, fresh ? "Welcome, " + p.name + "! Press B to open the building menu."
                             : "Welcome back, " + p.name + "! Your base is just as you left it.");
-    std::printf("%llu (slot %d) %s\n", static_cast<unsigned long long>(steamId), id, fresh ? "joined" : "rejoined");
+    spdlog::info("{} (slot {}) {}", steamId, id, fresh ? "joined" : "rejoined");
 }
 
 int NetSession::claimSlot()
@@ -256,6 +257,6 @@ void NetSession::onDisconnect(uint64_t conn)
     world.pl[id].online = false;
     world.pl[id].conn = 0;
     world.pl[id].lastSeen = nowSec();
-    std::printf("%llu (slot %d) left\n", static_cast<unsigned long long>(world.pl[id].steamId), id);
+    spdlog::info("{} (slot {}) left", world.pl[id].steamId, id);
     s.repl.sendRoster();
 }

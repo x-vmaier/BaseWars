@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <spdlog/spdlog.h>
 #include <string>
 
 void FerryPlanner::shoreTiles(Pos around, int maxR, size_t want, std::vector<IV> &out)
@@ -285,8 +286,9 @@ TransportPlan FerryPlanner::planTransport(int owner, const std::vector<entt::ent
 
     static const bool dbg = std::getenv("BW_SHIPDEBUG") != nullptr;
     if (dbg)
-        std::printf("[ferry] plan owner %d group %d from %.0f,%.0f to %.0f,%.0f: land %.1fs boat %.1fs -> %s\n", owner,
-                    gi.n, from.x, from.y, to.x, to.y, plan.etaLand, plan.etaBoat, plan.useBoat ? "BOAT" : "walk");
+        spdlog::info(
+            "[ferry] plan owner {} group {} from {:.0f},{:.0f} to {:.0f},{:.0f}: land {:.1f}s boat {:.1f}s -> {}",
+            owner, gi.n, from.x, from.y, to.x, to.y, plan.etaLand, plan.etaBoat, plan.useBoat ? "BOAT" : "walk");
 
     return plan;
 }

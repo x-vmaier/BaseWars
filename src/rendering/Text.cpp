@@ -7,6 +7,7 @@
 #include "rendering/Assets.hpp"
 
 #include <algorithm>
+#include <spdlog/spdlog.h>
 #include <sstream>
 #include <vector>
 
@@ -74,7 +75,7 @@ struct FontCache
                 SetTextureFilter(font[i].texture, TEXTURE_FILTER_TRILINEAR);
             }
             else
-                TraceLog(LOG_WARNING, "game font %s missing: falling back to the raylib default font", FACES[i].path);
+                spdlog::warn("game font {} missing: falling back to the raylib default font", FACES[i].path);
         }
         return loaded(i) ? font[i] : fallback();
     }

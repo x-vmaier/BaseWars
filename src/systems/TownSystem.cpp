@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <spdlog/spdlog.h>
 #include <string>
 
 bool TownSystem::townSiteOk(int cx, int cy)
@@ -117,7 +118,7 @@ void TownSystem::processRegion(int rx, int ry)
 
         world.towns.push_back(t);
         buildTown(world.towns.back());
-        std::printf("Town %d (%s) founded at %d,%d\n", t.id, FACTION_NAME[t.faction], x, y);
+        spdlog::info("Town {} ({}) founded at {},{}", t.id, FACTION_NAME[t.faction], x, y);
         return;
     }
 }

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <spdlog/spdlog.h>
 
 namespace selftest
 {
@@ -81,8 +82,8 @@ void interpTest(Ctx &t)
     // Walking, 120 ms latency, 3% loss: smooth.
     Run lossy = simulate(3.f, 40, 1e9);
     float p99 = lossy.stats.p99();
-    std::printf("  interp: p99 jitter %.3f tiles/s, max %.3f, snaps %d\n", p99, lossy.stats.maxJitter,
-                lossy.stats.snaps);
+    spdlog::info("  interp: p99 jitter {:.3f} tiles/s, max {:.3f}, snaps {}", p99, lossy.stats.maxJitter,
+                 lossy.stats.snaps);
     t.check(lossy.stats.snaps == 0, "no snaps (> 1 tile per frame) under latency, jitter and loss");
     t.check(p99 < 0.6f, "p99 velocity jitter below 0.6 tiles/s");
 

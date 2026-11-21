@@ -6,6 +6,7 @@
 
 #include "networking/FakeNet.hpp"
 
+#include <spdlog/spdlog.h>
 #include <steam/isteamnetworkingutils.h>
 #include <steam/steam_api.h>
 
@@ -23,7 +24,7 @@ void onStatus(SteamNetConnectionStatusChangedCallback_t *info)
 {
     auto *s = SteamNetworkingSockets();
     if (std::getenv("BW_NETLOG"))
-        std::fprintf(stderr, "[net] state %d -> %d (%s)\n", int(info->m_eOldState), int(info->m_info.m_eState),
+        spdlog::info("[net] state {} -> {} ({})", int(info->m_eOldState), int(info->m_info.m_eState),
                      info->m_info.m_szEndDebug);
 
     switch (info->m_info.m_eState)
