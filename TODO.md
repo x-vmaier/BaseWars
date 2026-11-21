@@ -1,8 +1,8 @@
 # Status and remaining work
 
-Branch `feature/prompt-implementation`. T1-T13b are implemented and committed.
+Branch `feature/prompt-implementation`. Everything in the Done table is implemented and committed.
 **Do the first Roadmap row with status `todo`** (row order counts). One coherent task per session (see `CLAUDE.md`).
-Only the first tasks are specified in detail below. Every later task has its full spec in `BACKLOG.md`: when a task becomes current, move its spec here.
+Only the current task is specified in detail below. Every later task has its full spec in `BACKLOG.md`: when a task becomes current, move its spec here (and delete it from `BACKLOG.md`).
 
 ## Design goals (every task is judged against these)
 
@@ -43,6 +43,7 @@ Only the first tasks are specified in detail below. Every later task has its ful
 | T10 | Level cap 10, cost/time curves, Town Hall gating (`Progression.hpp`) |
 | T11 | Donation cooldown, shifting faction demand, diminishing gift returns |
 | T12 | `ui::CostRow` everywhere; tabbed Town Hall window with per-type defense quotas |
+| T13 | Biome label, minimap trees, chat/build menu layout, high-contrast bars |
 | T13b | Maintainability refactor: `.clang-format`, draw queue, kind registry (`KindDefs.hpp`), Doxygen headers. A new building + troop needs 2 files, 0 `switch` edits |
 | T24a | `server --selftest` (boot, saveload, economy, raid, net-garbage, invariants) on a shared `Sim`; `World::checkInvariants()`; asan preset, `/W4` warnings policy, `tools/check.sh`, `tools/shot.sh`; saves now byte-stable; fixed OOB kind in `C_UpgradeUnit` |
 | T18a | Identity: verified SteamID is the only owner key (Steam auth tickets, `--local` dev ids), names resolved client-side from Steam, no name editing, SAVE_MAGIC BWS9, selftest `identity` |
@@ -51,14 +52,13 @@ Only the first tasks are specified in detail below. Every later task has its ful
 | T19a | Protocol v2: version in hello / welcome, command seq envelope, tick-numbered unreliable S_State chunks (< 1100 B, whole-tick removal rule), `snapshot_interval_ticks`, `BW_NETLAG` / `BW_NETLOSS`, selftest `net-snapshot` |
 | T19b | Entity interpolation: per-entity `PosBuffer`, `InterpClock` render clock (delay 2 snapshot intervals), clamped extrapolation, `BW_STUTTER` metric, selftest `interp` |
 | T19c | Command prediction: pending queue of move / attack-move orders, immediate marker + local movement start (bounded offset that fades), `S_CmdReject` rollback (red cross), selftest `net-predict` |
-| T25a | Pacing Director v1: per-player Calm -> Warning -> Siege -> Aftermath (`PacingSystem`), raids only from the director (sized from a defense score, adaptive factor, caps), survivor reward, `S_Pacing` + HUD badge / edge arrow, SAVE_MAGIC BW11, selftest `pacing` |
+| T25a | Pacing Director v1: per-player Calm -> Warning -> Siege -> Aftermath (`PacingSystem`), raids only from the director (sized from a defense score, adaptive factor, caps), survivor reward, `S_Pacing` + edge arrow / chat telegraph (the phase badge was removed again, see Decisions), SAVE_MAGIC BW11, selftest `pacing` |
 | T26 | Objectives: table + event bus, short / medium / long chains with one-time rewards, skipped steps resolve, timeout exit, `S_Objectives`, HUD tracker + completion banner + build-menu / world pointer, central hint table (`ui/Hints`) with settings toggle, SAVE_MAGIC BW12, selftest `objectives` |
 | T28a | Audio + feedback: `audio::` cue table (15 generated samples, per-cue cooldown / pitch variance / 3 voices, positional falloff, no device = silent), `BW_AUDIOLOG`, master / effects sliders in the pause menu, white hit-flash shader, floating damage numbers, camera shake on building destruction, resource-bar pulse, button hover / press response |
-| T13 | Biome label, minimap trees, chat/build menu layout, high-contrast bars |
 
 ## Roadmap (do in this order)
 
-Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs for rows after #3 are in `BACKLOG.md`.
+Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs of rows after the current one are in `BACKLOG.md`.
 
 | # | Task | Size | Status | Why here |
 | --- | --- | --- | --- | --- |
@@ -137,42 +137,19 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 ## Current task specs
 
-(No spec is current: T14a is next; move the next row's spec from `BACKLOG.md` here.)
+### T14a Ships as registry kinds, harbour production, crews (size M)
+
+* Replace `SHIP_TROOP_CAP` / `SHIP_RES_CAP` in `Shared.hpp` with ship entries in `KindDefs.hpp` (troop-focused and cargo-focused types, larger tiers at higher harbour levels with own speed / troop / cargo capacity).
+* Harbours produce standalone ships (queue + cost rows, `TrainingSystem` queue + `canTrain`); a ship cannot move without crew aboard; timed, paid ship upgrades.
+* Done when: selftest `ships` (train ship, crew, move only with crew, upgrade costs and times, save/reload keeps ships and crews); screenshot of a ship at sea.
+* Code: `NavalSystem.*`, `components/Naval.hpp`, `TrainingSystem`, `ShipRenderer.*`, `Progression.hpp`. Replicated ship state rides `S_State` (`Info.level`=tier, `prog`=troops, `stock`=cargo) and `S_ShipInfo`.
+
+(When T14a is done, replace this section with the spec of the next `todo` row from `BACKLOG.md` and delete that spec there.)
 
 ## Known gaps / follow-ups
 
-* **T28a gate:** release build warning-free, all 14 selftests; clang-format applied; asan build skipped (client-only change, no server / shared code touched). No new C++ selftest (audio / visual task, per `CLAUDE.md`).
-* **T28a viewed:** only the main menu (`BW_SHOT`): the client starts, the audio device initialises (WASAPI) and shaders / sounds load. No in-game screenshot: without Steam the client cannot start a connection (`Could not start a connection`) on this machine.
-* **T28a only verified by reading:** every cue trigger in game (`PacketHandler::addFx` / `onDrop` / `onHurt` / `onBuildingDestroyed`, build thud, ship horn, raid horn, victory chime), the flash, floating damage numbers, building-destruction shake, resource pulse, button press look and the pause-menu volume sliders / new row layout. `BW_AUDIOLOG=1` logs each cue that fires (`audio cue: <name>`); use it in a Steam run to assert them. Sample loudness / taste is unjudged: listen once and tune `TABLE` in `client/AudioSystem.cpp`.
-* **T28a gaps:** no music (needs licensed tracks); no cue for chopping / mining at the moment of the swing (only on the resource drop); no ambient, defeat or UI-error sounds; volumes are saved only with "Save settings"; hover cue replays after re-entering a button.
+* **Per-task gate notes, "only verified by reading" lists and gaps of T18a-T28a** (still open verification debt) live in `HISTORY.md`. Read the entry of a task before touching its area; new tasks append theirs there.
 
-* **T26 gate:** release build warning-free, all 14 selftests (incl. `objectives`), asan build + `objectives`, `boot`, `saveload`, `pacing`, `defeat`, `net-garbage`, `net-snapshot`, `net-predict`; clang-format applied by hand (`check.sh` cannot load vcvars from git-bash); asan `raid` / `invariants` skipped as before.
-* **T26 viewed:** `BW_SHOT` client runs against a `--local` server (no Steam): tracker with goal, hint line, medium and long goal; build menu with the pulsing yellow border on the Lumber Camp row.
-* **T26 only verified by reading:** the completion banner (`Hud::drawObjectiveBanner`, needs a real goal completion in a client run), the world pointer arrow (`drawObjectivePointer`, shown for Town Hall goals), the build-menu tab pulse while the menu is closed, the pause-menu "Hints" button click, the tracker at UI scale != 1 and in narrow windows (it hides when it would touch the resource ribbon). Rewards, chain, timeout and persistence are covered by `objectives`.
-* **T26 gaps:** the spec's "first house / farm / expedition" steps do not exist in the game yet, so the chain uses Lumber Camp, Mine, Pawn, Campfire, Town Hall 2, Storage House, Archery, soldier (add expedition when T14 lands); hints are show-once per session (not saved); the "survive first raid" goal waits for the director's first raid (>= 4 min grace) or its 20 min timeout; rewards ignore storage caps (like the raid reward); lifetime counters are not reset on resettle / clan changes (progress is kept on purpose).
-
-* **Font change (owner requests, outside the roadmap):** Noto Sans body + Press Start 2P for titles / coordinates via `rendering/Text.*` (80 px `LoadFontEx` atlas, mipmapped), main menu enlarged, resource ribbon (scale .75) and name banner enlarged with content centred, side tab icons centred, side tabs moved to `SIDE_Y`. Viewed: main menu, HUD, build menu, Town Hall, social menu. Verified with `BW_SHOT` runs (menu and in-game, which also ran the T19b interpolation against a live `--local` server on Windows without Steam: units moved normally). Still small / unreviewed at scale 1 on 1920x1200: HUD sub-labels, bottom help line (overlaps the welcome line), other panels were not viewed with the new metrics; check `BW_SCALE` 1.25-1.5. `fs / 2` vertical centring elsewhere still uses unboosted sizes (`textHeight` exists).
-
-* **T25a gate:** release build warning-free, all 13 selftests (incl. `pacing`, adapted `raid`), asan build + `boot`, `saveload`, `pacing`, `defeat`, `net-garbage`, `net-snapshot`, `net-predict`; clang-format applied by hand (`check.sh` cannot load vcvars from git-bash); asan `raid` / `invariants` skipped as before.
-* **T25a only verified by reading:** the client side (`PacketHandler::onPacing`, `Hud::drawPacing` badge, `Hud::drawRaidArrow` edge arrow) was built but not run: no Steam client here, so no Calm / Warning screenshots. Run `BW_PACING=warning` (server) + `BW_SHOT` to judge them. The raid fights themselves (hall loss during a siege) are only covered by `raid`, which does not assert the outcome.
-* **T25a gaps:** no horn sound (T28a) - the warning is a chat line + HUD; no minimap marker for the raid origin (T21d); the siege ends only when all raiders are dead or expire (a stuck raider is recalled after 660 s); offline players' bases are paused for new raids but raiders already on the way keep fighting (T20c); the reward is added straight to the player's resources (ignores storage caps); hostile patrols that meet a player town still attack it (only their deliberate sieges were removed).
-* **T19c gate:** release build warning-free, all 12 selftests, asan build + `boot`, `saveload`, `net-garbage`, `net-snapshot`, `net-predict`, `defeat`; clang-format applied by hand (`check.sh` cannot load vcvars from git-bash); asan `raid` / `invariants` skipped as before.
-* **T19c only verified by reading:** `Commands::predict` / `ClientWorld::interpolate` offset / `rollBack` / red-cross marker / `PacketHandler` ack and reject handling were built but not run in a real client (no Steam). The selftest covers the server reject rule and the `PendingQueue` / `PredOffset` logic with a 150 ms ack model. Owner playtest checkpoint now due: right-click orders should react at once without rubber-banding; an order to an unreachable spot flashes a red cross.
-* **T19c gaps:** a move that only partly fails (some units unreachable) is not rolled back; other commands show no optimistic state beyond existing ghosts; the offset speed is a constant, not the unit's real speed; SDR still untested.
-
-* **T19b gate:** release build + all 9 selftests (incl. `raid`, `interp`), asan build + `boot`, `saveload`, `economy`, `net-garbage`, `identity`, `defeat`, `net-snapshot`, `interp`; clang-format applied by hand; asan `raid` / `invariants` skipped as before.
-* **T19b only verified by reading / partly run:** no real client session (Steam client unavailable): `ClientWorld::interpolate`, the `PacketHandler` buffer pushes, facing from rendered motion and the `BW_STUTTER` log were built but not run. The selftest drives the same `PosBuffer` / `InterpClock` with simulated 120 ms +-30 ms lag and 3% loss (p99 0.30 tiles/s, 0 snaps). Needs one `BW_STUTTER=1 BW_NETLAG=120 BW_NETLOSS=3` client run to confirm; owner playtest after T19c.
-* **T19b gaps:** rendered positions now lag the server by ~150-200 ms (own units too until T19c prediction); entities that appear mid-snapshot start at their first position (no fade-in); attack facing still reads `aim`.
-
-* **T19a gate:** release build + all 9 selftests, asan build + `boot`, `saveload`, `economy`, `net-garbage`, `identity`, `defeat`, `net-snapshot` passed; asan `raid` / `invariants` skipped (as before, `raid` takes 15+ min); clang-format applied by hand (`check.sh` cannot load vcvars from git-bash).
-* **T19a only verified by reading / partly run:** no real client session after the break (Steam client unavailable here; the server binary boots with `BW_NETLAG` / `BW_NETLOSS` set); the client chunk handling (`PacketHandler::onState`), version check on `S_Welcome`, `Session::send` stamping and the Steam fake-lag settings were built but not run end to end. Selftest covers the server side and a mirror of the client rule. Needs one scripted `BW_SHOT` run and one with `BW_NETLAG=120 BW_NETLOSS=3`.
-* **T19a gaps:** effects (explosions, arrows) in a lost chunk are never shown; a huge view needs many chunks per snapshot (255 chunk cap, ~11k entities, extra entities dropped); `lastInputSeq` is not persisted across reconnects (restarts at 0 with the new connection).
-* **T18c only verified by reading / build:** no `BW_SHOT` before/after was taken (needs a Steam client); the canopy boxes (pine 200x124 px, oak 140x132 px above the foot) and the 0.38 min alpha are guesses to eyeball. Visual task: no new selftest. Own ships/aboard units are excluded. `tools/check.sh` cannot start vcvars from git-bash (quoting of `BW_VCVARS`); its steps were run by hand (release+asan build, all selftests in release, clang-format).
-* **T18b only verified by reading:** the cause of the "endless" damage vignette (it was only re-triggered by HP drops of own entities; the client now ignores them and zeroes `damage` / `shake` while defeated - not reproduced before the fix); `Resettle` / `Accept` mouse clicks (the screenshots show banner and offer, the clicks were exercised only through the packets in `defeat`); the UI at scale != 1 (offer footprint is converted to the UI scale, never viewed); banner with a named conqueror (screenshot run used `BW_DEFEAT` = unknown attacker); ruin art is procedural (Tiny Swords has no ruin sprite) and looks rough.
-* **T18b gaps:** a clan member who leaves the clan while homeless (`ClanSystem::respawnNormally`) still respawns instantly; offers do not check `clearingOk` again on Accept (only footprint free + land); the offered site is revealed to the player (their explored area grows).
-
-* **T18a gate:** release `check.sh` steps, clang-format and asan `boot`, `saveload`, `economy`, `net-garbage`, `identity` passed; asan `raid` and `invariants` were skipped on the owner's instruction (asan `raid` takes 15+ minutes).
-* **T18a only verified by reading:** the real Steam path (`GetAuthSessionTicket`, `BeginAuthSession`, `ValidateAuthTicketResponse_t`, eServerModeAuthentication) and persona-name resolution were never run (selftests use the dev ticket / injected verifier); the client main-menu label ("Playing as") was not viewed. Needs one real Steam login against a non-`--local` server. Persona names of strangers may show as `Player<digits>` until Steam delivers them (re-resolved once per second for the roster, not for past chat lines).
 * **T24a only verified by reading:** `tools/shot.sh` (never run), the non-MSVC branches of `cmake/Compiler.cmake` (UBSan on gcc/clang), the clang-format step of `check.sh` on Linux. asan on MSVC has no UBSan. The asan `raid` scenario (700 simulated seconds) takes 15+ minutes: the owner told us not to wait for it, so the asan runs of `raid` and `invariants` were never completed (asan `boot`, `saveload`, `economy`, `net-garbage` passed). Consider shortening `raid` under asan.
 * **Observed by `raid`:** a forced raid kills and respawns the player repeatedly (7 defeats in 700 s: raiders keep targeting the new hall for 600 s). Since T18b a defeated player stays defeated (banner, then resettle) so raiders no longer chain-kill a respawned hall; T25a still owns real relief after a raid.
 * **Invariants not yet checked:** `Attack.target`, `Support`, `Convoy` endpoints, `Voyage.destUid` (may legitimately dangle until the owning system notices).

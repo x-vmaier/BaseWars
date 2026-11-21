@@ -1,15 +1,15 @@
 # Base Wars - agent handoff
 
 C++23 RTS (EnTT + Raylib + Steamworks). One authoritative `server`, one `client`. Branch: `feature/prompt-implementation`.
-Read order: this file, then `TODO.md` (status, roadmap, current task specs), then `ARCHITECTURE.md` (layout, conventions, recipes, tests, hooks).
-Specs of tasks that are not yet current live in `BACKLOG.md`; open it only when a task becomes current.
+Read order: this file, then `TODO.md` (status, roadmap, current task spec), then `ARCHITECTURE.md` (layout, conventions, recipes, tests, hooks).
+Specs of tasks that are not yet current live in `BACKLOG.md`; open it only when a task becomes current. `HISTORY.md` holds the gate notes and verification debt of finished tasks; read the entry of the area you touch.
 
 The owner does not approve plans and does not playtest every task. You work autonomously and prove correctness with automated checks.
 
 ## Session protocol (one task per session)
 
 1. Take the first Roadmap row in `TODO.md` with status `todo` (currently **T14a**). Skip `blocked` rows.
-2. Read the task text (in `TODO.md`, or in `BACKLOG.md` if it is not listed there; move its spec into `TODO.md` first) and the code it names.
+2. Read the task text (in `TODO.md`; if it is still in `BACKLOG.md`, move it into `TODO.md` and delete it from `BACKLOG.md` first) and the code it names.
    Write a plan of at most 15 lines (design, files, order, the selftest you will add) and continue immediately.
 3. Decide small things yourself and log them as one line in the Decisions log (`Txx: decision - reason`).
    **Ask the owner only before irreversible choices** (protocol format, save format, deleting player data) when the task text does not already decide it.
@@ -26,7 +26,7 @@ split the remainder into new Roadmap rows (same id + suffix) and say so in the r
 ### Close-out (short)
 
 * `tools/check.sh` is green.
-* `TODO.md`: task moved to Done (one row), next row is current, "only verified by reading" and new Known gaps listed, Decisions added.
+* `TODO.md`: task moved to Done (one row), next row is current and its spec moved in from `BACKLOG.md` (deleted there), Decisions added. Gate result, "only verified by reading" and task gaps go into a new block in `HISTORY.md`; only cross-cutting gaps go to `TODO.md` Known gaps.
 * `ARCHITECTURE.md` updated **only if** layout, protocol, save format, config keys, registries, selftests or env hooks changed.
 * `CLAUDE.md`: add a rule under "Rules that bit us" only for a genuinely new trap; update the "currently Txx" pointer.
 * Commit `Txx: <summary>`. No push, no history rewrite, no force operations.

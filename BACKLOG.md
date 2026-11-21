@@ -1,58 +1,9 @@
 # Backlog: specs of tasks that are not current yet
 
-Open this file only when a task becomes the current one. Then **move its spec into `TODO.md`** ("Current task specs") and delete it here.
+Open this file only when a task becomes the current one. Then **move its spec into `TODO.md`** ("Current task specs") and **delete it here** (part of the close-out: this file must only hold tasks that are not done).
 Roadmap order, status and the task rules live in `TODO.md`. Task ids, "Done when" criteria and code pointers below are unchanged from the original plan.
 
-## Networking (three steps; T19a is the single deliberate protocol break)
-
-### T19b Client entity interpolation buffer (size M)
-
-* Per-entity ring buffer of timestamped snapshots (client component); render time = `estimatedServerTime - interpolationDelay` (100-150 ms or ~2x snapshot interval; client setting); interpolate between the two bracketing snapshots every frame;
-  short velocity-clamped extrapolation on gaps; never freeze and restart. Snapshots carry velocity, facing and action state (idle / moving / attacking) so animations and stops stay in sync.
-  Server-time estimate from tick + RTT (`GetConnectionRealTimeStatus`). Replaces the exponential chase in `ClientWorld::interpolate`.
-* Done when: a client-side metric (`BW_STUTTER=1` logs max and p99 frame-to-frame position delta jitter and snap count) shows with fake latency 120 ms / 3% loss: no snaps > 1 tile, p99 jitter below a threshold you record in `ARCHITECTURE.md`; screenshot run unchanged.
-* Code: `ClientWorld::interpolate`, `client/PacketHandler.cpp`, rendering position reads.
-
-### T19c Command prediction and reconciliation (size M)
-
-* Pending queue of unacknowledged commands; immediate optimistic local feedback (order marker, movement start, placement ghost -> pending site); on each snapshot drop commands up to `lastProcessedInputSeq`, reconcile to authoritative state and replay the rest without rubber-banding.
-  The server stays authoritative for combat, health, collisions, pathfinding, resource validation. Rejected commands roll back visibly (marker fades with a short "cannot" cue).
-  Decide in the plan what exactly is predicted for RTS orders; keep it minimal (markers + local movement start) and log it in Decisions.
-* Done when: selftest `net-predict` (simulated 150 ms latency: ack arrives, pending queue drains, a rejected command is rolled back, no pending command leaks after disconnect); update the "Known gaps" list (SDR still untested).
-
-## Core experience (rhythm, goals, feel)
-
-### T25a Pacing Director v1 (size M)
-
-Goal: the stress / relief rhythm. Build it on the existing raid / patrol systems so it pays off immediately.
-
-* `Pacing` singleton in `registry.ctx()` (per player-town context; persisted, real-time timers): phases **Calm -> Warning -> Siege -> Aftermath**. Defaults in `server.cfg` (`pacing_calm_min`, `pacing_warning_s`, `pacing_aftermath_min`, `pacing_first_raid_grace_min`).
-* Existing raid / patrol-siege code asks the director when and how strong; it no longer rolls its own timers. Warning: horn + HUD countdown + direction arrow on the minimap / screen edge; the player can prepare.
-* Strength scaling: from a defense-value score (buildings, garrison-less troops, Town Hall level), clamped by `pacing_max_raid_factor`; adaptive: heavy losses lower the next raid, a flawless defense raises it a little. A raid can never exceed what would destroy more than a configured share of the base.
-* Aftermath: no new raids for `pacing_aftermath_min`; short survivor reward (resources scaled to raid strength). Offline owner: director paused (T20c extends).
-* HUD: phase badge with timer, tension indicator; calm shown as relaxed (soft colour), warning / siege as urgent.
-* Done when: selftest `pacing` (with fast timers: phases cycle in order, no raid inside aftermath or grace, strength <= cap, adaptive rule moves strength in the right direction, state survives save/reload, offline pause); screenshot of the HUD in Calm and Warning.
-* Hook: `BW_PACING=<phase>` forces a phase. Code: `PatrolSystem`, `FactionSystem`, raid code, `Replication.cpp`, `src/ui/Hud.*`.
-
-### T28a Audio system and first feedback pass (size M)
-
-Currently there is no audio and little feedback; this is the cheapest large gain in game feel.
-
-* Client `AudioSystem` (raylib audio): sound table keyed by event / effect type (UI click, chop, mine, build thud, hit, horn, victory chime, coin pickup, ship horn), volume + pitch variance, per-cue cooldown, master / sfx volume in settings. No audio device = silently disabled, never a crash or block.
-* `tools/gen_sounds.py` generates the samples (procedural, CC0 / self-made, noted in `assets/README.md`; no downloaded content).
-* Feedback pass: white hit-flash shader on damaged sprites, floating damage / loot numbers (`EffectsRenderer`), camera shake on explosions / building destruction (`PostFx`), resource pickup pulse in the resource bar, button press / hover response.
-* Done when: client run with `BW_SHOT` shows flash / floating numbers (screenshot judged by you); a `BW_AUDIOLOG=1` mode logs each played cue so a scripted run can assert the expected cues; headless run without audio device passes.
-
-## Correctness (small)
-
 ## Naval (T14)
-
-### T14a Ships as registry kinds, harbour production, crews (size M)
-
-* Replace `SHIP_TROOP_CAP` / `SHIP_RES_CAP` in `Shared.hpp` with ship entries in `KindDefs.hpp` (troop-focused and cargo-focused types, larger tiers at higher harbour levels with own speed / troop / cargo capacity).
-* Harbours produce standalone ships (queue + cost rows, `TrainingSystem` queue + `canTrain`); a ship cannot move without crew aboard; timed, paid ship upgrades.
-* Done when: selftest `ships` (train ship, crew, move only with crew, upgrade costs and times, save/reload keeps ships and crews); screenshot of a ship at sea.
-* Code: `NavalSystem.*`, `components/Naval.hpp`, `TrainingSystem`, `ShipRenderer.*`, `Progression.hpp`. Replicated ship state rides `S_State` (`Info.level`=tier, `prog`=troops, `stock`=cargo) and `S_ShipInfo`.
 
 ### T14b Wind and ship combat rules (size S)
 

@@ -107,7 +107,7 @@ Client `BW_DEV_ID=<n>` (n < 2^32): identity for `--local` servers without Steam 
 
 ## Planned architecture
 
-The design of each upcoming system is in its task spec (`TODO.md` / `BACKLOG.md`), which is the single source of truth. Principles that apply to all of them:
+The design of each upcoming system is in its task spec (`TODO.md` for the current one, `BACKLOG.md` for later ones), which is the single source of truth. Gate notes of finished tasks: `HISTORY.md`. Principles that apply to all of them:
 
 * Server owns state; the client renders, predicts (T19c) and sends commands.
 * Threats come from one place, the Pacing Director (`PacingSystem`, per-player `BaseProf::pacing`, persisted timers, offline pause); patrol, faction and raid code ask it instead of rolling their own timers.
