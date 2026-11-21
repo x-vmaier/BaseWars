@@ -1,6 +1,6 @@
 /**
  * @file ShipPanel.hpp
- * @brief Ship panel (right-click an own ship without troops selected): load, cargo, disembark.
+ * @brief Ship panel (right-click an own ship without troops selected): load, cargo, crew, upgrade, disembark.
  */
 #pragma once
 #include "client/Components.hpp"
@@ -27,8 +27,9 @@ class ShipPanel
   private:
     Rectangle rect() const;
     Rectangle btn(int i) const;
-    void drawHold(const Info &in, Rectangle r, int tier);
-    void drawCargo(const Info &in, Rectangle r, int tier);
+    void drawHold(const Info &in, Rectangle r);
+    void drawCargo(const Info &in, Rectangle r);
+    void drawUpgrade(const Info &in, Rectangle r);
     void drawActions(const Info &in, const RPos &rp, Vector2 m);
     App &app;
 };

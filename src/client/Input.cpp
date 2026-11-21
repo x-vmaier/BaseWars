@@ -371,9 +371,9 @@ uint32_t Input::pick(Vector2 mouse, bool includeBuildings)
     {
         if (isBuilding(i.kind) || aboardUnit(i))
             return;
-        float cy = p.y * TILE - (i.kind == K_Sheep ? 14.f : (i.kind == K_Ship ? 20.f : 28.f)), cx = p.x * TILE;
+        float cy = p.y * TILE - (i.kind == K_Sheep ? 14.f : (hasTag(i.kind, KT_Naval) ? 20.f : 28.f)), cx = p.x * TILE;
         float d = std::hypot(w.x - cx, w.y - cy);
-        if (d < (i.kind == K_Ship ? 54.f : 34.f) && d < bd)
+        if (d < (hasTag(i.kind, KT_Naval) ? 54.f : 34.f) && d < bd)
         {
             bd = d;
             best = n.id;

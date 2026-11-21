@@ -123,7 +123,7 @@ struct QEntry
 
 struct ShipDetail
 {
-    int tier = 1, kinds[5]{}, res[R_Count]{}, voyage = 0;
+    int level = 1, kinds[5]{}, res[R_Count]{}, voyage = 0, upgradePct = 0; // upgradePct 0 = idle, else 1..100
 };
 
 struct ChatLine

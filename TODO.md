@@ -55,6 +55,7 @@ Only the current task is specified in detail below. Every later task has its ful
 | T25a | Pacing Director v1: per-player Calm -> Warning -> Siege -> Aftermath (`PacingSystem`), raids only from the director (sized from a defense score, adaptive factor, caps), survivor reward, `S_Pacing` + edge arrow / chat telegraph (the phase badge was removed again, see Decisions), SAVE_MAGIC BW11, selftest `pacing` |
 | T26 | Objectives: table + event bus, short / medium / long chains with one-time rewards, skipped steps resolve, timeout exit, `S_Objectives`, HUD tracker + completion banner + build-menu / world pointer, central hint table (`ui/Hints`) with settings toggle, SAVE_MAGIC BW12, selftest `objectives` |
 | T28a | Audio + feedback: `audio::` cue table (15 generated samples, per-cue cooldown / pitch variance / 3 voices, positional falloff, no device = silent), `BW_AUDIOLOG`, master / effects sliders in the pause menu, white hit-flash shader, floating damage numbers, camera shake on building destruction, resource-bar pulse, button hover / press response |
+| T14a | Ships as registry kinds (Small Boat, Longship, Cargo Cog, Galleon: `KindDef::ship` hold + crew), Harbour-level gated production, crew gate for move orders, paid timed ship upgrades (`C_UpgradeShip`, `ShipUpgrade`, saved), `ShipPanel` upgrade row, selftest `ships` |
 
 ## Roadmap (do in this order)
 
@@ -62,7 +63,6 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 
 | # | Task | Size | Status | Why here |
 | --- | --- | --- | --- | --- |
-| 11 | **T14a** Ships as registry kinds, harbour production, crews | M | todo | Naval foundation |
 | 12 | **T14b** Wind, ship combat rules | S | todo | Needs T14a |
 | 13 | **T14c** Harbour window, multi-modal routing | M | todo | Needs T14a |
 | 14 | **T15a** Auto-defense vs manual orders | S | todo | Unit behaviour correctness |
@@ -132,19 +132,22 @@ Status: `todo`, `blocked: <reason>` (skip it). Finished rows move to Done. Specs
 * T28a: sounds are driven by what the client already sees (fx events, drops, hp drops, new / destroyed entities, S_Pacing warning, objective banner) - no protocol change; nothing sounds in the first 2.5 s after the welcome so the first snapshot does not play a burst.
 * T28a: hit flash is a sprite mode (`SM_Flash`, `flash.fs`) fed by `ClientWorld::hitAt` (net id -> last hp loss); damage numbers and the hit cue are throttled to one per entity per 0.35 s so burning ticks do not spam.
 * T28a: the pause panel grew to 12x13 tiles (two volume rows); `assets/ui/pause_menu.tmj` was regenerated from `tools/gen_ui_maps.py`.
+* T14a: ship kinds are appended registry ids (`K_Longship`, `K_Cog`, `K_Galleon` after `K_Ruin`); `K_Ship` stays as the Small Boat so old saves load unchanged. `Info.level` is now the ship's upgrade level (was the Harbour tier), hold = registry value x (1 + .35 per level), hull x (1 + .3 per level).
+* T14a: the crew is troops of any kind (a pawn counts) aboard; the minimum is `ShipDef::crew`. Only player orders (`readUnits`) need it: ferry voyages (`NavalSystem` / `FerryPlanner`) sail empty to pick their haulers up, otherwise supply runs could never start. A moving ship whose crew leaves stops.
+* T14a: ship upgrades need the ship within 6 tiles of an own, complete Harbour of at least the new level; cost = building upgrade curve of the ship's kind, time = 1.5 x train time x `upgrade_time_growth`^(level-1); the ship rests meanwhile (no orders, no boarding, no ferry job). Persisted as an extra optional `shipup` save section, so `SAVE_MAGIC` stays BW12 (older saves simply lack it).
+* T14a: `C_UpgradeShip` is appended to the `Msg` enum and `S_ShipInfo` records got one trailing byte (upgrade %); `PROTOCOL_VERSION` stays 2 because client and server ship together.
 * T19b: no protocol change - velocity / facing are derived from the buffered samples (`aim` still drives attack facing), so `PROTOCOL_VERSION` stays 2.
 * T19b: the render clock slews at most 10% towards its target instead of jumping, so jitter spikes never make units jump; delay = max(150 ms, 2 x smallest recent snapshot interval).
 
 ## Current task specs
 
-### T14a Ships as registry kinds, harbour production, crews (size M)
+### T14b Wind and ship combat rules (size S)
 
-* Replace `SHIP_TROOP_CAP` / `SHIP_RES_CAP` in `Shared.hpp` with ship entries in `KindDefs.hpp` (troop-focused and cargo-focused types, larger tiers at higher harbour levels with own speed / troop / cargo capacity).
-* Harbours produce standalone ships (queue + cost rows, `TrainingSystem` queue + `canTrain`); a ship cannot move without crew aboard; timed, paid ship upgrades.
-* Done when: selftest `ships` (train ship, crew, move only with crew, upgrade costs and times, save/reload keeps ships and crews); screenshot of a ship at sea.
-* Code: `NavalSystem.*`, `components/Naval.hpp`, `TrainingSystem`, `ShipRenderer.*`, `Progression.hpp`. Replicated ship state rides `S_State` (`Info.level`=tier, `prog`=troops, `stock`=cargo) and `S_ShipInfo`.
+* Wind direction (server-authoritative singleton in `registry.ctx()`, slowly changing, replicated, persisted) + wind-rose speed modifier per heading; compass in the HUD.
+* Ship combat only with archers aboard or a crossbow upgrade.
+* Done when: selftest `wind` (speed differs by heading as configured; ships without archers cannot attack; save/reload keeps wind); screenshot of the compass.
 
-(When T14a is done, replace this section with the spec of the next `todo` row from `BACKLOG.md` and delete that spec there.)
+(When T14b is done, replace this section with the spec of the next `todo` row from `BACKLOG.md` and delete that spec there.)
 
 ## Known gaps / follow-ups
 

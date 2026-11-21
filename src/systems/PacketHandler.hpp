@@ -21,6 +21,7 @@ class PacketHandler
     void baseCommand(int id, uint8_t type, Reader &r);
     std::vector<entt::entity> readUnits(int id, Reader &r, bool combatOnly);
 
+    bool shipMayObey(int id, entt::entity e, Kind k);
     void onCam(Profile &p, Reader &r);
     void onBuild(int id, Profile &p, Reader &r);
     void onTrain(int id, Reader &r);

@@ -135,10 +135,11 @@ enum Msg : uint8_t
     S_Defeat,         // [defeat] u8 phase (DefeatPhase), then if phase != 0: str conqueror, str clan, f32 ruin x,y,
                       // f32 site x,y, u16 seconds left of the offer
     S_CmdReject,      // [predict] u32 seq: the server refused / could not carry out that predicted command (reliable)
-    S_Pacing,    // [pacing] u8 phase, u16 seconds left, u16 total, u8 raiders, u8 faction, u8 hasOrigin, f32 x, f32 y,
-                 // once per second (reliable)
-    S_Objectives // [objectives] u8 doneSeq, u8 lastDone id, u8 lastRewarded, then per tier: u8 id (255 = none),
-                 // u16 progress, u16 seconds until it resolves by itself; once per second (reliable)
+    S_Pacing,     // [pacing] u8 phase, u16 seconds left, u16 total, u8 raiders, u8 faction, u8 hasOrigin, f32 x, f32 y,
+                  // once per second (reliable)
+    S_Objectives, // [objectives] u8 doneSeq, u8 lastDone id, u8 lastRewarded, then per tier: u8 id (255 = none),
+                  // u16 progress, u16 seconds until it resolves by itself; once per second (reliable)
+    C_UpgradeShip // [ships] u32 ship uid: pay and start the timed upgrade (the ship must lie at an own Harbour)
 };
 // S_BaseInfo: u8 quota (total), u8 homeless, u8 moving, u8 move %, then u8 x4 quota per QUOTA_KINDS type and u8 x
 // R_Count storage shares %.
@@ -198,29 +199,35 @@ struct IV
 inline constexpr float START_RES[R_Count] = {300, 200, 150, 200};
 // Building level cap, Town Hall gates, cost / time curves and storage capacity: common/Progression.hpp
 
-// naval transport (ships are empty boats; the Harbour level at build time is the tier)
-// Strict capacities per tier (1..3). Ship state fields in S_State: Info.level = tier (aux), prog = troops aboard, stock
-// = resources aboard. Units aboard a ship are sent to allies with prog == UNIT_ABOARD_PROG (clients hide them) and are
+// Naval transport. Every ship type is a KT_Naval registry kind (KindDefs.hpp, KindDef::ship); Info.level is the ship's
+// upgrade level 1..SHIP_MAX_LEVEL. Ship state fields in S_State: aux = upgrade level, prog = troops aboard, stock =
+// resources aboard. Units aboard a ship are sent to allies with prog == UNIT_ABOARD_PROG (clients hide them) and are
 // not sent to anyone else.
-inline constexpr int SHIP_TROOP_CAP[3] = {6, 12, 20};
-inline constexpr int SHIP_RES_CAP[3] = {400, 900, 1600};
-inline constexpr const char *SHIP_NAME[3] = {"Small Boat", "Longship", "Galleon"};
 inline constexpr uint8_t UNIT_ABOARD_PROG = 255;
-inline int shipTier(int level)
+inline constexpr int SHIP_MAX_LEVEL = 3;
+inline int shipLevel(int level)
 {
-    return std::clamp(level, 1, 3);
+    return std::clamp(level, 1, SHIP_MAX_LEVEL);
 }
-inline int shipTroopCap(int level)
+inline float shipLevelMul(int level)
 {
-    return SHIP_TROOP_CAP[shipTier(level) - 1];
+    return 1.f + .35f * float(shipLevel(level) - 1);
 }
-inline int shipResCap(int level)
+inline int shipTroopCap(Kind k, int level)
 {
-    return SHIP_RES_CAP[shipTier(level) - 1];
+    return int(std::lround(float(KINDS[k].ship.troops) * shipLevelMul(level)));
+}
+inline int shipResCap(Kind k, int level)
+{
+    return int(std::lround(float(KINDS[k].ship.cargo) * shipLevelMul(level)));
+}
+inline int shipCrewMin(Kind k)
+{
+    return KINDS[k].ship.crew;
 }
 inline float shipHpMul(int level)
 {
-    return 1.f + .6f * float(shipTier(level) - 1);
+    return 1.f + .3f * float(shipLevel(level) - 1);
 }
 
 // Troop types with a per-type clan defense quota (C_SetQuotas / S_BaseInfo order).

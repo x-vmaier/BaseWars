@@ -192,6 +192,9 @@ void ContextPanel::trainActs(const Info &in)
         if (locked)
             addAct({TextFormat("%s: requires Town Hall Lv%d", KINFO[u].name, unitThLevel(Kind(u))), 1, target,
                     uint32_t(u), false, false});
+        else if (hasTag(Kind(u), KT_Naval) && in.aux < unitUnlockLevel(Kind(u)))
+            addAct({TextFormat("%s: requires %s Lv%d", KINFO[u].name, KINFO[in.kind].name, unitUnlockLevel(Kind(u))), 1,
+                    target, uint32_t(u), false, false});
         else
             addAct({std::string(KINDS[u].verb) + " " + KINFO[u].name, 1, target, uint32_t(u), W.affordable(c), false},
                    c);

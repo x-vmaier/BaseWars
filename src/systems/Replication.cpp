@@ -368,12 +368,14 @@ void Replication::sendShipInfo(int id)
             if (auto *h = reg.try_get<Haul>(q))
                 for (int r = 0; r < R_Count; r++)
                     res[r] += h->cargo[r];
-        w.put<uint32_t>(uid.id).put<uint8_t>(uint8_t(shipTier(in.level)));
+        w.put<uint32_t>(uid.id).put<uint8_t>(uint8_t(shipLevel(in.level)));
         for (int k : kinds)
             w.put<uint8_t>(uint8_t(k));
         for (float v : res)
             w.put<uint16_t>(uint16_t(std::min(v, 65000.f)));
         w.put<uint8_t>(reg.all_of<Voyage>(e) ? 1 : 0);
+        const auto *up = reg.try_get<ShipUpgrade>(e);
+        w.put<uint8_t>(up ? uint8_t(std::clamp(1 + int(99.f * up->t / up->total), 1, 100)) : 0); // upgrade %
         n++;
     });
     w.b[cp] = n;

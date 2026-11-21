@@ -4,6 +4,7 @@
  */
 #include "systems/NavalSystem.hpp"
 
+#include "common/Progression.hpp"
 #include "systems/Systems.hpp"
 
 #include <algorithm>
@@ -13,6 +14,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+
+namespace
+{
+constexpr float UPGRADE_DOCK = 6.f; // tiles from the Harbour at which a ship counts as docked
+}
 
 float NavalSystem::cargoTotal(entt::entity e) const
 {
@@ -61,9 +67,9 @@ void NavalSystem::shipFree(entt::entity ship, int &troopsFree, float &resFree, b
     float r;
     paxStats(ship, t, r);
 
-    int lvl = reg.get<Info>(ship).level;
-    troopsFree = shipTroopCap(lvl) - t;
-    resFree = float(shipResCap(lvl)) - r;
+    const Info &in = reg.get<Info>(ship);
+    troopsFree = shipTroopCap(in.kind, in.level) - t;
+    resFree = float(shipResCap(in.kind, in.level)) - r;
     if (!reserved)
         return;
 
@@ -77,17 +83,28 @@ void NavalSystem::shipFree(entt::entity ship, int &troopsFree, float &resFree, b
     });
 }
 
-// Called when a Harbour builds a ship: empty boat, tier = harbour level.
-void NavalSystem::initShip(entt::entity ship, int harbourLevel)
+// Called when a Harbour builds a ship: empty boat at upgrade level 1.
+void NavalSystem::initShip(entt::entity ship)
 {
     auto &in = reg.get<Info>(ship);
-    in.level = uint8_t(shipTier(harbourLevel));
+    in.level = 1;
 
     auto &h = reg.get<Health>(ship);
-    h.hp = h.maxhp = KINFO[K_Ship].hp * shipHpMul(in.level);
+    h.hp = h.maxhp = KINFO[in.kind].hp * shipHpMul(in.level);
 
     if (!reg.all_of<Ship>(ship))
         reg.emplace<Ship>(ship, Ship{{}, world.clock});
+}
+
+// A ship sails only with its minimum crew (troops of any kind) aboard.
+bool NavalSystem::crewed(entt::entity ship)
+{
+    if (!reg.all_of<Ship>(ship))
+        return false;
+    int t;
+    float r;
+    paxStats(ship, t, r);
+    return t >= shipCrewMin(reg.get<Info>(ship).kind);
 }
 
 void NavalSystem::embark(entt::entity e, entt::entity ship)
@@ -376,11 +393,34 @@ void NavalSystem::shipsTick(float dt)
     });
 
     for (auto e : ships)
-        tickShip(e);
-    (void)dt;
+        tickShip(e, dt);
 }
 
-void NavalSystem::tickShip(entt::entity e)
+// Upgrade timer: the ship rests until it is done; hull points keep their fraction.
+bool NavalSystem::tickUpgrade(entt::entity e, float dt)
+{
+    auto *up = reg.try_get<ShipUpgrade>(e);
+    if (!up)
+        return false;
+
+    reg.get<Unit>(e).path.clear();
+    up->t += dt * baseTestSpeed();
+    if (up->t < up->total)
+        return true;
+
+    auto &in = reg.get<Info>(e);
+    auto &h = reg.get<Health>(e);
+    float frac = h.hp / std::max(1.f, h.maxhp);
+    in.level = uint8_t(shipLevel(in.level + 1));
+    h.maxhp = KINFO[in.kind].hp * shipHpMul(in.level);
+    h.hp = h.maxhp * frac;
+    reg.remove<ShipUpgrade>(e);
+    world.say(reg.get<Owner>(e).id,
+              std::string(KINFO[in.kind].name) + " upgraded to level " + std::to_string(in.level) + ".");
+    return false;
+}
+
+void NavalSystem::tickShip(entt::entity e, float dt)
 {
     if (!reg.valid(e) || world.dying.count(reg.get<Uid>(e).id))
         return;
@@ -392,6 +432,10 @@ void NavalSystem::tickShip(entt::entity e)
     Pos sp = reg.get<Pos>(e);
     if (!su.path.empty() || reg.all_of<Voyage>(e))
         sh.idleSince = world.clock;
+    if (tickUpgrade(e, dt))
+        sh.idleSince = world.clock;
+    else if (!su.path.empty() && !reg.all_of<Voyage>(e) && !crewed(e))
+        su.path.clear(); // the crew left a moving ship
 
     for (uint32_t uid : sh.pax)
     {
@@ -447,6 +491,11 @@ bool NavalSystem::shipPacket(int id, uint8_t type, Reader &r)
         disembarkPacket(id, r);
         return true;
     }
+    if (type == C_UpgradeShip)
+    {
+        upgradePacket(id, r);
+        return true;
+    }
     return false;
 }
 
@@ -465,11 +514,17 @@ void NavalSystem::boardPacket(int id, Reader &r)
         world.say(id, "That ship is busy on a supply run.");
         return;
     }
+    if (reg.all_of<ShipUpgrade>(ship))
+    {
+        world.say(id, "That ship is being upgraded.");
+        return;
+    }
 
     int tf;
     float rf;
     shipFree(ship, tf, rf);
-    int lvl = reg.get<Info>(ship).level, taken = 0, over = 0;
+    const Info &sin = reg.get<Info>(ship);
+    int taken = 0, over = 0;
     Pos sp = reg.get<Pos>(ship);
 
     for (uint32_t uid : ids)
@@ -487,8 +542,9 @@ void NavalSystem::boardPacket(int id, Reader &r)
     }
 
     if (over)
-        world.say(id, std::string("The ") + SHIP_NAME[shipTier(lvl) - 1] + " only carries " +
-                          std::to_string(shipTroopCap(lvl)) + " troops: " + std::to_string(over) + " could not board.");
+        world.say(id, std::string("The ") + KINFO[sin.kind].name + " only carries " +
+                          std::to_string(shipTroopCap(sin.kind, sin.level)) + " troops: " + std::to_string(over) +
+                          " could not board.");
 }
 
 bool NavalSystem::canBoard(entt::entity e, int owner)
@@ -542,6 +598,62 @@ void NavalSystem::disembarkPacket(int id, Reader &r)
         world.say(id, std::to_string(placed.size()) + " unit(s) disembarked.");
 }
 
+// Own, complete Harbour (any building that trains this ship kind) at most UPGRADE_DOCK tiles away: its level, else 0.
+int NavalSystem::dockLevel(entt::entity ship)
+{
+    Pos sp = reg.get<Pos>(ship);
+    int owner = reg.get<Owner>(ship).id, best = 0;
+    Kind sk = reg.get<Info>(ship).kind;
+    reg.view<Building, Info, Owner>().each([&](entt::entity b, const Building &, const Info &bi, const Owner &o)
+    {
+        if (o.id != owner || !canTrain(bi.kind, sk) || !world.complete(b) || world.inactive(b))
+            return;
+        Pos bp = world.posOf(b);
+        if (std::hypot(bp.x - sp.x, bp.y - sp.y) <= UPGRADE_DOCK)
+            best = std::max(best, int(bi.level));
+    });
+    return best;
+}
+
+void NavalSystem::upgradePacket(int id, Reader &r)
+{
+    auto ship = world.find(r.get<uint32_t>());
+    if (!r.ok || ship == entt::null || !reg.all_of<Ship>(ship) || reg.get<Owner>(ship).id != id)
+        return;
+    startUpgrade(id, ship);
+}
+
+bool NavalSystem::startUpgrade(int id, entt::entity ship)
+{
+    const Info &in = reg.get<Info>(ship);
+    if (reg.all_of<ShipUpgrade>(ship) || reg.all_of<Voyage>(ship))
+    {
+        world.say(id, "That ship is busy.");
+        return false;
+    }
+    std::string why = shipUpgradeBlock(in.level, dockLevel(ship));
+    if (!why.empty())
+    {
+        world.say(id, why + ".");
+        return false;
+    }
+
+    float cost[R_Count];
+    upgradeCost(in.kind, in.level, cost);
+    if (!world.afford(id, cost))
+    {
+        world.say(id, "Not enough resources.");
+        return false;
+    }
+
+    world.spend(id, cost);
+    float secs = cfg().instantTrain ? .05f : shipUpgradeSeconds(in.kind, in.level);
+    reg.emplace<ShipUpgrade>(ship, ShipUpgrade{0.f, secs});
+    reg.get<Unit>(ship).path.clear();
+    world.say(id, std::string(KINFO[in.kind].name) + " upgrade started.");
+    return true;
+}
+
 // Called from sendState for every record: false hides it. Fills the ship/boarded fields.
 bool NavalSystem::shipStateHook(int viewer, entt::entity e, int ownerId, const Info &in, uint8_t &aux, uint8_t &prog,
                                 uint16_t &stock)
@@ -554,13 +666,13 @@ bool NavalSystem::shipStateHook(int viewer, entt::entity e, int ownerId, const I
         return true;
     }
 
-    if (in.kind == K_Ship && reg.all_of<Ship>(e))
+    if (hasTag(in.kind, KT_Naval) && reg.all_of<Ship>(e))
     {
         int t;
         float rs;
         paxStats(e, t, rs);
 
-        aux = uint8_t(shipTier(in.level));
+        aux = uint8_t(shipLevel(in.level));
         prog = uint8_t(std::min(t, 254));
         stock = uint16_t(std::min(rs, 65000.f));
 

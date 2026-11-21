@@ -69,6 +69,7 @@ void economyTest(Ctx &);
 void raidTest(Ctx &);
 void pacingTest(Ctx &);
 void objectivesTest(Ctx &);
+void shipsTest(Ctx &);
 void netGarbageTest(Ctx &);
 void invariantsTest(Ctx &);
 void identityTest(Ctx &);

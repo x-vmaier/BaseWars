@@ -190,6 +190,12 @@ void Commands::board(uint32_t ship, const std::vector<uint32_t> &us)
     w.put<uint32_t>(ship);
     app.session.send(w);
 }
+void Commands::upgradeShip(uint32_t ship)
+{
+    Writer w;
+    w.put<uint8_t>(C_UpgradeShip).put<uint32_t>(ship);
+    app.session.send(w);
+}
 void Commands::disembark(uint32_t ship)
 {
     Writer w;

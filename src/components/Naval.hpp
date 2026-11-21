@@ -1,6 +1,6 @@
 /**
  * @file Naval.hpp
- * @brief Naval components: Ship, Aboard, Boarding and Voyage.
+ * @brief Naval components: Ship, ShipUpgrade, Aboard, Boarding and Voyage.
  */
 #pragma once
 #include "common/Shared.hpp"
@@ -12,6 +12,12 @@ struct Ship
 {
     std::vector<uint32_t> pax;
     double idleSince = 0;
+};
+
+// Timed upgrade in progress: the ship cannot sail or take passengers meanwhile.
+struct ShipUpgrade
+{
+    float t = 0, total = 1;
 };
 
 struct Aboard

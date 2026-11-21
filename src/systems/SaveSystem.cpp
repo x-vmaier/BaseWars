@@ -184,6 +184,7 @@ void SaveSystem::saveGame()
 
     worldSave(w);
     shipsSave(w);
+    shipUpgradesSave(w);
     saveBase(w);
 
     writeFile(w);
@@ -464,6 +465,7 @@ void SaveSystem::readOptionalSections(Reader &r)
     };
     optional("world", [&] { worldLoad(r); });
     optional("ship", [&] { shipsLoad(r); });
+    optional("shipup", [&] { shipUpgradesLoad(r); });
     optional("base", [&]
     {
         if (r.p < r.e)
@@ -504,11 +506,38 @@ void SaveSystem::shipsSave(Writer &w)
     }
 }
 
+// Running ship upgrades (appended after the ship section; absent in older saves).
+void SaveSystem::shipUpgradesSave(Writer &w)
+{
+    std::vector<entt::entity> ups = byUid([&](entt::entity e) { return reg.all_of<ShipUpgrade>(e); });
+    w.put<uint32_t>(uint32_t(ups.size()));
+    for (auto e : ups)
+    {
+        const auto &u = reg.get<ShipUpgrade>(e);
+        w.put<uint32_t>(reg.get<Uid>(e).id).put<float>(u.t).put<float>(u.total);
+    }
+}
+
+void SaveSystem::shipUpgradesLoad(Reader &r)
+{
+    if (r.p >= r.e)
+        return;
+    uint32_t n = r.get<uint32_t>();
+    for (uint32_t i = 0; i < n && r.ok; i++)
+    {
+        uint32_t uid = r.get<uint32_t>();
+        float t = r.get<float>(), total = r.get<float>();
+        auto e = world.find(uid);
+        if (r.ok && e != entt::null && reg.all_of<Ship>(e) && std::isfinite(t) && std::isfinite(total) && total > 0)
+            reg.emplace_or_replace<ShipUpgrade>(e, ShipUpgrade{std::clamp(t, 0.f, total), total});
+    }
+}
+
 void SaveSystem::shipsLoad(Reader &r)
 {
     reg.view<Info>().each([&](entt::entity e, const Info &in)
     {
-        if (in.kind == K_Ship && !reg.all_of<Ship>(e))
+        if (hasTag(in.kind, KT_Naval) && !reg.all_of<Ship>(e))
             reg.emplace<Ship>(e, Ship{{}, world.clock});
     });
     if (r.p >= r.e)

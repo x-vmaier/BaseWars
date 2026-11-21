@@ -37,6 +37,9 @@ enum Kind : uint8_t
     K_Ship,
     K_Sheep,
     K_Ruin,
+    K_Longship,
+    K_Cog,
+    K_Galleon,
     K_Count
 };
 
@@ -84,6 +87,15 @@ struct BuildGate
     int count[MAX_LEVEL]{};
 };
 
+// Ships only: hold sizes at level 1 (upgrades scale them, see shipTroopCap) and the crew needed to sail.
+struct ShipDef
+{
+    uint8_t look = 0;   // hull drawn: 1 small boat .. 3 galleon
+    uint8_t troops = 0; // troop slots (the crew counts as troops aboard)
+    uint8_t crew = 1;   // troops aboard needed before the ship accepts a move order
+    uint16_t cargo = 0; // resource units
+};
+
 struct KindDef
 {
     KindInfo stats;
@@ -100,6 +112,7 @@ struct KindDef
     float trainSeconds = 8.f;
     const char *role = ""; // short description in the training panel
     const char *blurb = "";
+    ShipDef ship{}; // KT_Naval kinds only
 };
 
 constexpr uint32_t kindBit(Kind k)
@@ -186,15 +199,48 @@ inline constexpr KindDef KINDS[K_Count] = {
      .role = "Healer",
      .blurb = "Automatically heals the most wounded friendly unit nearby. Cannot attack, so escort them. Higher levels "
               "heal faster."},
-    {.stats = {"Ship", false, 1, 1, {80, 30, 0, 20}, 220, 4.2f, 0, 0, 0, 10},
+    {.stats = {"Small Boat", false, 1, 1, {80, 30, 0, 20}, 220, 4.2f, 0, 0, 0, 10},
      .tags = KT_Naval | KT_NonCombat,
      .verb = "Build",
      .trainedAt = kindBit(K_Harbour),
      .thLevel = 4,
-     .trainSeconds = 18.f},
+     .trainSeconds = 18.f,
+     .role = "Light transport",
+     .blurb = "Cheap and fast. Needs one troop aboard to sail.",
+     .ship = {1, 6, 1, 400}},
     {.stats = {"Sheep", false, 1, 1, {0, 0, 0, 0}, 12, 0.9f, 0, 0, 0, 0}, .tags = KT_Animal},
     {.stats = {"Burning Ruin", true, 4, 3, {0, 0, 0, 0}, 1, 0, 0, 0, 0, 0},
      .tags = KT_Ruin | KT_Fireproof | KT_Freestanding | KT_SingleLevel | KT_NonCombat},
+    {.stats = {"Longship", false, 1, 1, {140, 60, 20, 30}, 300, 4.8f, 0, 0, 0, 10},
+     .tags = KT_Naval | KT_NonCombat,
+     .verb = "Build",
+     .trainedAt = kindBit(K_Harbour),
+     .archeryLevel = 2,
+     .thLevel = 5,
+     .trainSeconds = 24.f,
+     .role = "Troop carrier",
+     .blurb = "Fast raiding ship with a big troop hold. Needs two troops aboard to sail.",
+     .ship = {2, 14, 2, 300}},
+    {.stats = {"Cargo Cog", false, 1, 1, {160, 40, 30, 25}, 280, 3.6f, 0, 0, 0, 10},
+     .tags = KT_Naval | KT_NonCombat,
+     .verb = "Build",
+     .trainedAt = kindBit(K_Harbour),
+     .archeryLevel = 2,
+     .thLevel = 5,
+     .trainSeconds = 26.f,
+     .role = "Cargo hauler",
+     .blurb = "Slow, with a huge hold for resources. Needs two troops aboard to sail.",
+     .ship = {2, 6, 2, 1800}},
+    {.stats = {"Galleon", false, 1, 1, {260, 120, 60, 50}, 520, 4.f, 0, 0, 0, 11},
+     .tags = KT_Naval | KT_NonCombat,
+     .verb = "Build",
+     .trainedAt = kindBit(K_Harbour),
+     .archeryLevel = 3,
+     .thLevel = 6,
+     .trainSeconds = 40.f,
+     .role = "Flagship",
+     .blurb = "The largest ship: big hold for troops and cargo. Needs three troops aboard to sail.",
+     .ship = {3, 24, 3, 1400}},
 };
 
 // Build menu order (hotkeys 1..): the kinds with a menuSlot, by slot.

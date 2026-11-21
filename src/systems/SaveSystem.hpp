@@ -38,6 +38,8 @@ class SaveSystem
     void worldLoad(Reader &r);
     void shipsSave(Writer &w); // [u32 nShips]{u32 shipUid, u16 n, u32 passengerUid * n}
     void shipsLoad(Reader &r);
+    void shipUpgradesSave(Writer &w); // [u32 n]{u32 shipUid, f32 t, f32 total}
+    void shipUpgradesLoad(Reader &r);
     void saveBase(Writer &w); // "BSE2": per-player base state, building / unit base components
     void loadBase(Reader &r);
     void writeBasePlayers(Writer &w);

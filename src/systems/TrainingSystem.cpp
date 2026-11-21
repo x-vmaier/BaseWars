@@ -74,8 +74,8 @@ void TrainingSystem::enqueueTrain(int id, entt::entity be, Kind k)
     }
     if (reg.get<Info>(be).level < unitUnlockLevel(k))
     {
-        world.say(id,
-                  std::string(KINFO[k].name) + "s unlock at Archery level " + std::to_string(unitUnlockLevel(k)) + ".");
+        world.say(id, std::string(KINFO[k].name) + "s unlock at " + KINFO[reg.get<Info>(be).kind].name + " level " +
+                          std::to_string(unitUnlockLevel(k)) + ".");
         return;
     }
     auto &tq = reg.get_or_emplace<TrainQ>(be);

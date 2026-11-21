@@ -23,6 +23,7 @@ class Commands
     void ally(int to, int act);
     void train(uint32_t building, Kind k);
     void upgrade(uint32_t building);
+    void upgradeShip(uint32_t ship);
     void clanCreate(const std::string &name);
     void clanJoin(int clan);
     void clanLeave();

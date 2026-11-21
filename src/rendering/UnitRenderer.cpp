@@ -90,7 +90,7 @@ void UnitRenderer::drawLabels(const UnitView &v) const
 void UnitRenderer::drawShip(const UnitView &v) const
 {
     ShipRenderer &ships = app.worldRenderer.ships;
-    ships.drawShip(v.px, v.py, v.i.owner, v.left, v.hover, v.t, v.id, v.i.aux, v.i.prog);
+    ships.drawShip(v.px, v.py, v.i.owner, v.left, v.hover, v.t, v.id, KINDS[v.i.kind].ship.look, v.i.prog);
     ships.drawLabel(v.px, v.py, v.i, v.selected, v.hover);
     if (v.selected)
         DrawEllipseLines(int(v.px), int(v.py + 4), 56, 18, rgb(255, 235, 90));
@@ -125,8 +125,12 @@ const UnitDrawer &UnitRenderer::drawerOf(Kind k)
     {
         std::array<UnitDrawer, K_Count> t{};
 
-        t[K_Ship].body = &UnitRenderer::drawShip;
-        t[K_Ship].extras = &UnitRenderer::queueShipWake;
+        for (int k = 0; k < K_Count; k++)
+            if (hasTag(Kind(k), KT_Naval))
+            {
+                t[k].body = &UnitRenderer::drawShip;
+                t[k].extras = &UnitRenderer::queueShipWake;
+            }
         t[K_Monk].overlay = &UnitRenderer::drawHealAura;
         t[K_Sheep].healthBar = false;
         t[K_Sheep].fixedOutline = true;

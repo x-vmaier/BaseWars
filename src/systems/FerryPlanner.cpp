@@ -166,9 +166,10 @@ std::vector<FerryPlanner::ShipCand> FerryPlanner::idleShips(int owner, const Gro
         int tf;
         float rf;
         s.naval.shipFree(e, tf, rf);
-        if (reg.get<Ship>(e).pax.size() || tf < gi.n || rf + 1e-3f < gi.cargo || tf < shipTroopCap(in.level))
+        if (reg.get<Ship>(e).pax.size() || tf < gi.n || rf + 1e-3f < gi.cargo || tf < shipTroopCap(in.kind, in.level) ||
+            reg.all_of<ShipUpgrade>(e))
             return; // fully empty, unreserved ships only
-        ships.push_back({e, p, KINFO[K_Ship].speed});
+        ships.push_back({e, p, KINFO[in.kind].speed});
     });
 
     return ships;

@@ -21,10 +21,10 @@ void attachHealer(World &w, entt::entity e, bool)
     w.reg.emplace<Healer>(e);
 }
 
-// Empty boat; its tier is the level of the harbour that built it.
-void shipTrained(Systems &s, World &w, entt::entity unit, entt::entity building, Pos at)
+// Empty boat at upgrade level 1.
+void shipTrained(Systems &s, World &w, entt::entity unit, entt::entity, Pos at)
 {
-    s.naval.initShip(unit, w.reg.get<Info>(building).level);
+    s.naval.initShip(unit);
     w.fx(E_Splash, at.x, at.y);
 }
 } // namespace
@@ -37,7 +37,9 @@ const KindFactory &kindFactory(Kind k)
 
         t[K_Sheep].attach = attachWander;
         t[K_Monk].attach = attachHealer;
-        t[K_Ship].onTrained = shipTrained;
+        for (int k = 0; k < K_Count; k++)
+            if (hasTag(Kind(k), KT_Naval))
+                t[k].onTrained = shipTrained;
         return t;
     }();
     return table[k];

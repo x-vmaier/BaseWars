@@ -16,8 +16,10 @@ class NavalSystem
     void paxStats(entt::entity ship, int &troops, float &res,
                   int *kinds = nullptr); // passengers aboard (stale uids are purged)
     void shipFree(entt::entity ship, int &troopsFree, float &resFree,
-                  bool reserved = true);                // free capacity incl. units walking to embark
-    void initShip(entt::entity ship, int harbourLevel); // empty boat, tier = harbour level
+                  bool reserved = true);          // free capacity incl. units walking to embark
+    void initShip(entt::entity ship);             // empty boat at upgrade level 1
+    bool crewed(entt::entity ship);               // enough troops aboard to sail
+    bool startUpgrade(int id, entt::entity ship); // pay + start the timed upgrade; false (with a message) if refused
     void embark(entt::entity e, entt::entity ship);
     std::vector<IV> freeLandTiles(Pos center, int rmax);
     std::vector<entt::entity> landUnits(entt::entity ship, const std::vector<entt::entity> &us, Pos center, int rmax);
@@ -39,7 +41,10 @@ class NavalSystem
     bool voyageGather(entt::entity ship, Voyage &v, Unit &su, Pos sp);
     void voyageSail(entt::entity ship, Voyage &v, Unit &su, Pos sp);
     void voyageLand(entt::entity ship, Voyage &v, Pos sp);
-    void tickShip(entt::entity e);
+    void tickShip(entt::entity e, float dt);
+    bool tickUpgrade(entt::entity e, float dt);
+    int dockLevel(entt::entity ship);
+    void upgradePacket(int id, Reader &r);
     void offloadOrphans(entt::entity e, Ship &sh, Pos sp);
     void boardPacket(int id, Reader &r);
     void disembarkPacket(int id, Reader &r);

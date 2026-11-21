@@ -216,7 +216,8 @@ bool PacketHandler::readEntity(Reader &r)
         reg.emplace<Info>(e, inf);
         reg.emplace<Seen>(e, Seen{w.stamp});
         if (ow == w.me && GetTime() > w.quietUntil)
-            audio::playAt(isBuilding(k) ? audio::C_Build : (k == K_Ship ? audio::C_ShipHorn : audio::C_Count), x, y);
+            audio::playAt(isBuilding(k) ? audio::C_Build : (hasTag(k, KT_Naval) ? audio::C_ShipHorn : audio::C_Count),
+                          x, y);
         return true;
     }
 
@@ -412,7 +413,7 @@ void PacketHandler::onMap(Reader &r)
     app.world.facTowns = v;
 }
 
-// Ships: aux = tier, prog = troops aboard, stock = resources aboard (S_State); S_ShipInfo: passenger and cargo
+// Ships: aux = upgrade level, prog = troops aboard, stock = resources aboard (S_State); S_ShipInfo: passenger and cargo
 // breakdown of our own ships; S_Paths: path lines (owner + clan / allies only).
 void PacketHandler::onShipsInfo(Reader &r)
 {
@@ -422,12 +423,13 @@ void PacketHandler::onShipsInfo(Reader &r)
     {
         uint32_t id = r.get<uint32_t>();
         ShipDetail d;
-        d.tier = r.get<uint8_t>();
+        d.level = r.get<uint8_t>();
         for (int &k : d.kinds)
             k = r.get<uint8_t>();
         for (int &v : d.res)
             v = r.get<uint16_t>();
         d.voyage = r.get<uint8_t>();
+        d.upgradePct = r.get<uint8_t>();
         if (!r.ok)
             return;
         m[id] = d;

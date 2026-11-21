@@ -5,12 +5,6 @@ Roadmap order, status and the task rules live in `TODO.md`. Task ids, "Done when
 
 ## Naval (T14)
 
-### T14b Wind and ship combat rules (size S)
-
-* Wind direction (server-authoritative singleton in `registry.ctx()`, slowly changing, replicated, persisted) + wind-rose speed modifier per heading; compass in the HUD.
-* Ship combat only with archers aboard or a crossbow upgrade.
-* Done when: selftest `wind` (speed differs by heading as configured; ships without archers cannot attack; save/reload keeps wind); screenshot of the compass.
-
 ### T14c Harbour window and multi-modal routing (size M)
 
 * Grid-based Harbour window in the Archery (`TrainingPanel`) style (frame `assets/ui/training_panel.tmj` from `tools/gen_ui_maps.py`): build ships / fleet / harbour upgrade. Replaces the context-panel path.

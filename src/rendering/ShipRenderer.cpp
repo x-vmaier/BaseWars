@@ -172,14 +172,15 @@ void ShipRenderer::drawLabel(float px, float py, const Info &i, bool selected, b
     const ClientWorld &W = app.world;
     if (!(i.owner == W.me || W.alliedWith(i.owner)) || (!selected && !hover && i.prog == 0))
         return;
-    int tier = shipTier(i.aux ? i.aux : 1);
+    int tcap = shipTroopCap(i.kind, i.aux ? i.aux : 1), rcap = shipResCap(i.kind, i.aux ? i.aux : 1);
+    int tier = std::clamp(int(KINDS[i.kind].ship.look), 1, 3);
     float s = tier == 1 ? 1.f : (tier == 2 ? 1.3f : 1.6f);
-    std::string t = TextFormat("%d/%d", int(i.prog), shipTroopCap(tier));
+    std::string t = TextFormat("%d/%d", int(i.prog), tcap);
     textShadow(t, int(px) - measureText(t.c_str(), 14) / 2, int(py - 78 * s), 14,
-               i.prog >= shipTroopCap(tier) ? rgb(255, 170, 120) : rgb(235, 245, 255));
+               i.prog >= tcap ? rgb(255, 170, 120) : rgb(235, 245, 255));
     // Troops aboard, then cargo when carrying any.
     float y = py - 78 * s + 18;
-    drawBar({px, y}, 56, float(i.prog) / float(std::max(1, shipTroopCap(tier))), BAR_TROOPS);
+    drawBar({px, y}, 56, float(i.prog) / float(std::max(1, tcap)), BAR_TROOPS);
     if (i.stock > 0)
-        drawBar({px, y + 10}, 56, float(i.stock) / float(std::max(1, shipResCap(tier))), BAR_CARGO);
+        drawBar({px, y + 10}, 56, float(i.stock) / float(std::max(1, rcap)), BAR_CARGO);
 }

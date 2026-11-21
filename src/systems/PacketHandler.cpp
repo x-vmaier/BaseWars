@@ -165,17 +165,32 @@ std::vector<entt::entity> PacketHandler::readUnits(int id, Reader &r, bool comba
         Kind k = reg.get<Info>(e).kind;
         if (combatOnly && hasTag(k, KT_NonCombat))
             continue;
+        if (hasTag(k, KT_Naval) && !shipMayObey(id, e, k))
+            continue;
 
         // Any manual order ends patrols, firefighting, hunting, embarking and supply runs.
         world.releaseUnit(e);
         if (hasTag(k, KT_Worker))
             s.hunt.huntPause(e);
         reg.remove<Boarding>(e);
-        if (k == K_Ship)
+        if (hasTag(k, KT_Naval))
             s.naval.cancelVoyage(e);
         us.push_back(e);
     }
     return us;
+}
+
+// A ship obeys only with its minimum crew aboard and while it is not being upgraded.
+bool PacketHandler::shipMayObey(int id, entt::entity e, Kind k)
+{
+    if (reg.all_of<ShipUpgrade>(e))
+        world.say(id, std::string("The ") + KINFO[k].name + " is being upgraded.");
+    else if (!s.naval.crewed(e))
+        world.say(id, std::string("The ") + KINFO[k].name + " needs " + std::to_string(shipCrewMin(k)) +
+                          " troop(s) aboard to sail: select them and right-click the ship.");
+    else
+        return true;
+    return false;
 }
 
 void PacketHandler::onCam(Profile &p, Reader &r)

@@ -106,6 +106,22 @@ inline std::string upgradeBlock(Kind k, int level, int th)
     return "";
 }
 
+// Ship upgrades (level -> level + 1): paid up front, timed, only while the ship lies at an own Harbour whose level is
+// at least the new ship level. Same cost curve as buildings.
+inline float shipUpgradeSeconds(Kind k, int level)
+{
+    return KINDS[k].trainSeconds * 1.5f * std::pow(cfg().upgradeTimeGrowth, float(level - 1));
+}
+
+inline std::string shipUpgradeBlock(int level, int harbourLevel)
+{
+    if (level >= SHIP_MAX_LEVEL)
+        return "Already at the maximum level";
+    if (harbourLevel < level + 1)
+        return "Needs a Harbour of level " + std::to_string(level + 1) + " nearby";
+    return "";
+}
+
 // costs (wood, gold, stone + a food share)
 inline float foodShare(const float *c, float mul)
 {

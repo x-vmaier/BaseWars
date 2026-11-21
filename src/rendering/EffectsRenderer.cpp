@@ -48,7 +48,7 @@ void drawGhost(const Ghost &gh, float prog)
         drawSprite(bt, {0, 0, s.artW, s.artH}, {cx - dw / 2, bottom - 6 - s.artBottom * s.scale, dw, dh}, WHITE, 2,
                    WHITE, prog, seedv);
     }
-    else if (gh.kind != K_Ship)
+    else if (!hasTag(gh.kind, KT_Naval))
     {
         Anim a = unitAnim(gh.kind, gh.owner, US_Idle, 0, 0, false, 1, 0);
         drawAnim(a, 0, gh.x * TILE, gh.y * TILE + 6, gh.left, 1.f, WHITE, 2, WHITE, prog, seedv);

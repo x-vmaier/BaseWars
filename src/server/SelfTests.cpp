@@ -28,6 +28,7 @@ const Scenario SCENARIOS[] = {
      pacingTest},
     {"objectives", "objectives: chains advance on events / state, skipped steps resolve, rewards once, timeout, save",
      objectivesTest},
+    {"ships", "ships: Harbour trains every ship kind, crew gate, paid timed upgrades, save / reload", shipsTest},
     {"defeat", "defeat: burning ruin, resettle offers, blocked commands, timeouts", defeatTest},
     {"net-predict", "command prediction: reject message, pending queue ack / rollback / expiry, bounded local offset",
      netPredictTest},
